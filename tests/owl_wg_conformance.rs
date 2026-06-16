@@ -915,8 +915,14 @@ fn owl_wg_conformance() {
     );
     eprintln!("=============================================================================================\n");
 
+    // `<=` (not `==`) is deliberate: BASELINE_WRONG is a ratchet that may be set
+    // above 0 to tolerate known failures, and conformance fixes should never make
+    // the assertion fail. Allow the lint for the case where the baseline is at its
+    // minimum (0).
+    #[allow(clippy::absurd_extreme_comparisons)]
+    let within_baseline = wrong <= BASELINE_WRONG;
     assert!(
-        wrong <= BASELINE_WRONG,
+        within_baseline,
         "conformance regression: {wrong} WRONG cases exceeds BASELINE_WRONG={BASELINE_WRONG}. \
          See the WRONG list above and {results_path}."
     );
