@@ -11,7 +11,9 @@
 // are its foundation.
 #![allow(dead_code)]
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::model::{Concept, DLClause, DLPredicate, Term};
 use crate::tableau::ground_disjunction_header::GroundDisjunctionHeader;
@@ -40,7 +42,15 @@ pub(crate) fn predicate_to_stored_label(predicate: &DLPredicate) -> TableauObjec
 
 /// Port of DLClauseEvaluator.ValuesBufferManager.
 pub struct ValuesBufferManager {
-    pub values_buffer: Vec<Option<TableauObject>>,
+    /// The single, shared values buffer. HermiT keeps **one** `Object[] m_valuesBuffer`
+    /// in the manager and hands every compiled `DLClauseEvaluator` a *reference* to
+    /// it (the evaluators run sequentially over one tableau, so the scratch
+    /// variable slots are simply overwritten per run and the ground predicate/term
+    /// slots are read-only constants). Sharing via `Rc<RefCell<…>>` reproduces that:
+    /// without it, each of the (tens of thousands of) evaluators cloned the whole
+    /// global-width buffer — ~1.8 MB each on EFO — which alone exhausted memory
+    /// before any reasoning began.
+    pub values_buffer: Rc<RefCell<Vec<Option<TableauObject>>>>,
     pub body_dl_predicates_to_indexes: HashMap<DLPredicate, usize>,
     pub max_number_of_variables: usize,
     pub body_nonvariable_terms_to_indexes: HashMap<Term, usize>,
@@ -110,7 +120,7 @@ impl ValuesBufferManager {
         }
 
         Ok(ValuesBufferManager {
-            values_buffer,
+            values_buffer: Rc::new(RefCell::new(values_buffer)),
             body_dl_predicates_to_indexes,
             max_number_of_variables,
             body_nonvariable_terms_to_indexes,

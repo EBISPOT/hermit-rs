@@ -863,7 +863,15 @@ fn connect_all_automata(
             properties_to_start.push(prop.clone());
         }
     }
-
+    // HermiT iterates `propertiesToStartRecursion` as a `HashSet`. Java's hashing
+    // is content-based and so stable across runs; our `std::HashSet` randomises its
+    // iteration order per run. The order is NOT answer-neutral here: building a
+    // property `R` finalises (and caches the mirror of) `Inv(R)`, so processing
+    // `Inv(R)` before any super-property `S ⊒ R` (whose recursion descends into `R`)
+    // means that descent hits the cached, correctly-built automaton for `R` instead
+    // of re-building it directly and wrongly embedding `R`'s complex sub-property
+    // chains (which would make `∀S.C` over-propagate — an order-dependent
+    // unsoundness). A fixed order reproduces Java's stable, sound behaviour.
     // successors in this graph = sub-properties.
     let inverse_dependency_graph = property_dependency_graph.get_inverse();
 
@@ -1200,13 +1208,16 @@ fn apply_inverse_and_finalize(
                 symmetric_properties,
                 transitive_properties,
             );
-        } else {
-            // Java 509-512: finalize is skipped, but the increase above ran on
-            // the same object that is stored in `completeAutomata`, so its
-            // mutation persists; reproduce that by writing the mutated automaton
-            // back over the stored entry (`biggerPropertyAutomaton=get(R)`).
-            complete_automata.insert(property.clone(), automaton);
         }
+        // Java 509-512: when `R` is ALREADY in completeAutomata (cached, typically
+        // as the bare mirror written by the inverse's `finalizeConstruction` at
+        // Java 539 during the `buildCompleteAutomataForProperties(Inv(R))` call
+        // above), Java DISCARDS the locally built automaton and adopts the cached
+        // one (`biggerPropertyAutomaton = completeAutomata.get(R)`). The local
+        // `increaseAutomatonWithInversePropertyAutomaton` mutated a SEPARATE object,
+        // so its effect is thrown away. We must NOT write `automaton` back over the
+        // cached entry — doing so reinstates a chain-embedded automaton that Java
+        // deliberately drops (the EFO_0000784 over-classification bug).
     } else {
         increase_with_defined_inverse_if_necessary(
             property,
@@ -1222,10 +1233,8 @@ fn apply_inverse_and_finalize(
                 symmetric_properties,
                 transitive_properties,
             );
-        } else {
-            // Java 516-519: see above; persist the in-place mutation.
-            complete_automata.insert(property.clone(), automaton);
         }
+        // Java 516-519: same as above — adopt the cached automaton, discard the local.
     }
     complete_automata[property].clone()
 }

@@ -288,16 +288,11 @@ impl ExtensionTable {
             .map(|&column| binding_positions[column] as usize)
             .collect();
         // The trie walk only reads the bound-prefix buffer slots, all of which
-        // are `Some`; fill the rest with an arbitrary (never-read) bound value.
-        let filler = bindings_buffer[selection_indices[0]]
-            .clone()
-            .expect("bound prefix slot is set");
-        let buffer: Vec<TableauObject> = bindings_buffer
-            .iter()
-            .map(|slot| slot.clone().unwrap_or_else(|| filler.clone()))
-            .collect();
+        // are `Some`, so the retrieval borrows `bindings_buffer` directly rather
+        // than cloning it into an owned per-call buffer.
         let (first, after_last) = self.view_range(view);
-        let mut retrieval = TupleIndexRetrieval::new(tuple_index, buffer, selection_indices);
+        let mut retrieval =
+            TupleIndexRetrieval::new(tuple_index, bindings_buffer, selection_indices);
         retrieval.open();
         let mut result = Vec::new();
         while !retrieval.after_last() {

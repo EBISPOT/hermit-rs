@@ -17,7 +17,6 @@ use std::hash::Hash;
 
 const NONE: i32 = -1;
 
-#[derive(Clone)]
 struct TrieNode<T> {
     parent: i32,
     first_child: i32,
@@ -25,6 +24,11 @@ struct TrieNode<T> {
     next_sibling: i32,
     object: Option<T>,
     tuple_index: i32,
+    /// Child trie nodes keyed by their edge object (HermiT's per-`TrieNode`
+    /// bucket hash). Keeping the map on the node lets child lookup borrow the
+    /// query object instead of cloning it into a global `(parent, object)` key
+    /// -- the per-trie-edge `Arc` clone/drop was ~50% of saturation time.
+    children: HashMap<T, usize>,
 }
 
 impl<T> TrieNode<T> {
@@ -36,6 +40,7 @@ impl<T> TrieNode<T> {
             next_sibling: NONE,
             object: None,
             tuple_index: NONE,
+            children: HashMap::new(),
         }
     }
 }
@@ -44,7 +49,6 @@ pub struct TupleIndex<T> {
     indexing_sequence: Vec<usize>,
     nodes: Vec<TrieNode<T>>,
     free: Vec<usize>,
-    children: HashMap<(usize, T), usize>,
     root: usize,
 }
 
@@ -54,7 +58,6 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
             indexing_sequence,
             nodes: Vec::new(),
             free: Vec::new(),
-            children: HashMap::new(),
             root: 0,
         };
         index.clear();
@@ -68,7 +71,6 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.free.clear();
-        self.children.clear();
         self.root = self.new_trie_node();
     }
 
@@ -83,14 +85,14 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
     }
 
     fn get_child_node(&self, parent: usize, object: &T) -> i32 {
-        match self.children.get(&(parent, object.clone())) {
+        match self.nodes[parent].children.get(object) {
             Some(&child) => child as i32,
             None => NONE,
         }
     }
 
     fn get_child_node_add_if_necessary(&mut self, parent: usize, object: &T) -> usize {
-        if let Some(&child) = self.children.get(&(parent, object.clone())) {
+        if let Some(&child) = self.nodes[parent].children.get(object) {
             return child;
         }
         let child = self.new_trie_node();
@@ -105,13 +107,14 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
         self.nodes[child].next_sibling = next_sibling;
         self.nodes[child].object = Some(object.clone());
         self.nodes[child].tuple_index = NONE;
-        self.children.insert((parent, object.clone()), child);
+        self.nodes[parent].children.insert(object.clone(), child);
         child
     }
 
     pub fn add_tuple(&mut self, tuple: &[T], potential_tuple_index: i32) -> i32 {
         let mut trie_node = self.root;
-        for &column in &self.indexing_sequence.clone() {
+        for seq_index in 0..self.indexing_sequence.len() {
+            let column = self.indexing_sequence[seq_index];
             let object = tuple[column].clone();
             trie_node = self.get_child_node_add_if_necessary(trie_node, &object);
         }
@@ -170,7 +173,7 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
             self.nodes[next_sibling as usize].previous_sibling = previous_sibling;
         }
         if let (Some(object), true) = (object, parent != NONE) {
-            self.children.remove(&(parent as usize, object));
+            self.nodes[parent as usize].children.remove(&object);
         }
         self.free.push(trie_node);
     }
@@ -194,7 +197,7 @@ impl<T: Clone + Eq + Hash> TupleIndex<T> {
 /// (the Java `TupleIndex.TupleIndexRetrieval`).
 pub struct TupleIndexRetrieval<'a, T: Clone + Eq + Hash> {
     tuple_index: &'a TupleIndex<T>,
-    bindings_buffer: Vec<T>,
+    bindings_buffer: &'a [Option<T>],
     selection_indices: Vec<usize>,
     indexing_sequence_length: usize,
     current_trie_node: i32,
@@ -203,7 +206,7 @@ pub struct TupleIndexRetrieval<'a, T: Clone + Eq + Hash> {
 impl<'a, T: Clone + Eq + Hash> TupleIndexRetrieval<'a, T> {
     pub fn new(
         tuple_index: &'a TupleIndex<T>,
-        bindings_buffer: Vec<T>,
+        bindings_buffer: &'a [Option<T>],
         selection_indices: Vec<usize>,
     ) -> TupleIndexRetrieval<'a, T> {
         let indexing_sequence_length = tuple_index.indexing_sequence.len();
@@ -220,7 +223,11 @@ impl<'a, T: Clone + Eq + Hash> TupleIndexRetrieval<'a, T> {
         let selection_len = self.selection_indices.len();
         self.current_trie_node = self.tuple_index.root as i32;
         for position in 0..selection_len {
-            let object = &self.bindings_buffer[self.selection_indices[position]];
+            // The selected columns are always bound (`Some`) -- the retrieval is
+            // only built over a bound prefix -- so read the slot directly.
+            let object = self.bindings_buffer[self.selection_indices[position]]
+                .as_ref()
+                .expect("selected binding slot is set");
             self.current_trie_node = self
                 .tuple_index
                 .get_child_node(self.current_trie_node as usize, object);

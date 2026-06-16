@@ -23,7 +23,9 @@
 // case.
 #![allow(dead_code)]
 
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use crate::model::{Atom, DLClause, DLPredicate, Term, Variable};
 use crate::tableau::dependency_set::{DependencySet, PermanentDependencySet, UnionDependencySet};
@@ -124,7 +126,9 @@ impl VmRetrieval {
 pub struct DLClauseEvaluator {
     workers: Vec<Worker>,
     retrievals: Vec<VmRetrieval>,
-    values_buffer: Vec<Option<TableauObject>>,
+    /// Shared with the `ValuesBufferManager` and every sibling evaluator (HermiT's
+    /// single `m_valuesBuffer`); see `ValuesBufferManager::values_buffer`.
+    values_buffer: Rc<RefCell<Vec<Option<TableauObject>>>>,
     core_variables: Vec<bool>,
     union_constituents: Vec<Option<PermanentDependencySet>>,
 }
@@ -156,7 +160,7 @@ impl DLClauseEvaluator {
         DLClauseEvaluator {
             workers: compiler.workers,
             retrievals: compiler.retrievals,
-            values_buffer: values_buffer_manager.values_buffer.clone(),
+            values_buffer: Rc::clone(&values_buffer_manager.values_buffer),
             core_variables,
             union_constituents,
         }
@@ -193,7 +197,7 @@ impl DLClauseEvaluator {
         match worker {
             Worker::CopyValues { from_retrieval, from_column, to_index } => {
                 let value = self.retrievals[from_retrieval].current().objects[from_column].clone();
-                self.values_buffer[to_index] = Some(value);
+                self.values_buffer.borrow_mut()[to_index] = Some(value);
                 program_counter + 1
             }
             Worker::CopyDependencySet { from_retrieval, target_index } => {
@@ -239,7 +243,9 @@ impl DLClauseEvaluator {
                 }
             }
             Worker::OpenRetrieval { retrieval } => {
-                materialize(&mut self.retrievals[retrieval], &self.values_buffer, tableau);
+                let vb = Rc::clone(&self.values_buffer);
+                let vb_ref = vb.borrow();
+                materialize(&mut self.retrievals[retrieval], &vb_ref, tableau);
                 program_counter + 1
             }
             Worker::NextRetrieval { retrieval } => {
@@ -318,7 +324,7 @@ impl DLClauseEvaluator {
                 // shallowest tree node; everything strictly below it cannot be core.
                 let mut potential_non_core: Option<NodeId> = None;
                 for variable_index in (0..variable_count).rev() {
-                    let Some(node) = self.values_buffer[variable_index]
+                    let Some(node) = self.values_buffer.borrow()[variable_index]
                         .as_ref()
                         .and_then(|o| o.as_node())
                     else {
@@ -338,7 +344,7 @@ impl DLClauseEvaluator {
                 if let Some(potential_non_core) = potential_non_core {
                     let root_depth = tableau.nodes[potential_non_core].get_tree_depth();
                     for variable_index in (0..variable_count).rev() {
-                        let Some(node) = self.values_buffer[variable_index]
+                        let Some(node) = self.values_buffer.borrow()[variable_index]
                             .as_ref()
                             .and_then(|o| o.as_node())
                         else {
@@ -358,7 +364,7 @@ impl DLClauseEvaluator {
     }
 
     fn node_at(&self, variable_index: usize) -> NodeId {
-        self.values_buffer[variable_index]
+        self.values_buffer.borrow()[variable_index]
             .as_ref()
             .and_then(|o| o.as_node())
             .expect("variable bound to a node")
