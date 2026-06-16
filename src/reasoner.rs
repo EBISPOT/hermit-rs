@@ -1110,9 +1110,9 @@ pub(crate) fn is_entailed_core(
             is_subsumed_by_core(ontology, data_some_literal(&ax.dp), ax.ce.clone())
         }
         Component::InverseObjectProperties(ax) => {
-            use horned_owl::model::ObjectPropertyExpression as OPE;
-            let first = OPE::ObjectProperty(ax.0.clone());
-            let second = OPE::ObjectProperty(ax.1.clone());
+            // horned-owl models both operands as ObjectPropertyExpression already.
+            let first = ax.0.clone();
+            let second = ax.1.clone();
             let inv_first = invert_ope(&first);
             Ok(is_object_property_subsumed_by(ontology, inv_first.clone(), second.clone())?
                 && is_object_property_subsumed_by(ontology, second, inv_first)?)

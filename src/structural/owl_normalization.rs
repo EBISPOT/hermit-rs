@@ -553,8 +553,9 @@ impl OWLNormalization {
                 self.axioms.disjoint_object_properties.push(properties);
             }
             Component::InverseObjectProperties(ax) => {
-                let first = OPE::ObjectProperty(ax.0.clone());
-                let second = OPE::ObjectProperty(ax.1.clone());
+                // horned-owl models both operands as ObjectPropertyExpression already.
+                let first = ax.0.clone();
+                let second = ax.1.clone();
                 self.add_object_inclusion(first.clone(), inverse_property(&second));
                 self.add_object_inclusion(second.clone(), inverse_property(&first));
                 self.note_object_property(&first);

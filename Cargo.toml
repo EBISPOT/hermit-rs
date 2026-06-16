@@ -34,3 +34,9 @@ indexmap = "2"
 # manifest (tests/owl_wg/all.rdf). The embedded premise/conclusion ontologies are
 # parsed by horned-owl, not by this crate.
 quick-xml = "0.37"
+
+# horned-owl widened to the OWL 2 spec-correct
+# InverseObjectProperties(ObjectPropertyExpression, ObjectPropertyExpression).
+[patch.crates-io]
+horned-owl = { path = "deps/horned-owl" }
+
