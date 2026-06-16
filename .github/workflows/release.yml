@@ -1,0 +1,107 @@
+name: Release
+
+# Cross-build the `hermit` binary for Linux, macOS, and Windows (amd64 + arm64)
+# entirely on cheap `ubuntu-latest` runners using cargo-zigbuild, which uses Zig
+# as the C compiler/linker so every target links from a single Linux host.
+#
+# hermit-rs has no C/asm or platform-specific dependencies (only horned-owl and
+# regex), so all six targets cross-compile with no extra setup:
+#   * macOS needs no Apple SDK -- the binary links only against libSystem, whose
+#     stubs Zig ships itself, so the build stays license-clean.
+#   * Windows binaries use the gnullvm ABI (the cross-from-Linux flavour); they
+#     are standalone .exe files, fine for a CLI.
+#
+# Triggers:
+#   * pushing a tag `v*`  -> build all targets AND publish a GitHub Release.
+#   * manual dispatch     -> build all targets, upload as artifacts only.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,     os: linux,   arch: amd64, ext: ""     }
+          - { target: aarch64-unknown-linux-gnu,    os: linux,   arch: arm64, ext: ""     }
+          - { target: x86_64-apple-darwin,          os: macos,   arch: amd64, ext: ""     }
+          - { target: aarch64-apple-darwin,         os: macos,   arch: arm64, ext: ""     }
+          - { target: x86_64-pc-windows-gnullvm,    os: windows, arch: amd64, ext: ".exe" }
+          - { target: aarch64-pc-windows-gnullvm,   os: windows, arch: arm64, ext: ".exe" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo zigbuild --release --locked --bin hermit --target ${{ matrix.target }}
+
+      # Ship the bare binary (named per OS/arch) plus a checksum, so installing
+      # is a single download with no archive to unpack.
+      - name: Package
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="hermit-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+          cp "target/${{ matrix.target }}/release/hermit${{ matrix.ext }}" "$out"
+          sha256sum "$out" > "$out.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermit-${{ matrix.os }}-${{ matrix.arch }}
+          path: hermit-${{ matrix.os }}-${{ matrix.arch }}*
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

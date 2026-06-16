@@ -1,0 +1,36 @@
+[package]
+name = "hermit-rs"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust port of the HermiT OWL 2 DL reasoner, built on horned-owl. Logic is translated faithfully from the original Java sources."
+license = "LGPL-3.0-or-later"
+
+[dependencies]
+horned-owl = "1.4.0"
+regex = "1"
+# SCOPE-OUT 1: the XSD-Schema regex `\p{...}` / `\P{...}` Unicode general-category
+# and `Is<Block>` properties are resolved to their exact (char,char) range sets via
+# regex-syntax's HIR parse of `[\p{Name}]`, rather than hand-rolling Unicode tables.
+# The `unicode` features are on by default and supply the general-category, script
+# and block class data.
+regex-syntax = "0.8"
+# F-2/F-1: HermiT represents owl:real values with java.math.BigInteger/BigDecimal/
+# BigRational (unbounded). num-bigint + num-integer give us the same unbounded
+# integer/rational arithmetic so a syntactically valid integer/decimal/rational
+# that overflows i128 is NOT declared ill-typed, and ordering facets compare
+# exactly rather than via lossy f64.
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+# F-6: HermiT's OWLClausification collects DL clauses in a LinkedHashSet, so rule
+# compilation and firing order are deterministic. IndexSet gives the same
+# insertion-ordered set semantics (deduplicating like a HashSet, iterating in
+# insertion order) for the DL-clause container.
+indexmap = "2"
+
+[dev-dependencies]
+# OWL 2 WG conformance harness (tests/owl_wg_conformance.rs): a small streaming
+# XML reader used only to walk the test-vocabulary elements of the committed
+# manifest (tests/owl_wg/all.rdf). The embedded premise/conclusion ontologies are
+# parsed by horned-owl, not by this crate.
+quick-xml = "0.37"
