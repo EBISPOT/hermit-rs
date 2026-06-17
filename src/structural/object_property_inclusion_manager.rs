@@ -507,8 +507,6 @@ fn create_automata(
             }
         }
     }
-    automata_by_property.extend(equivalent_automata);
-
     Ok(())
 }
 
@@ -888,6 +886,21 @@ fn connect_all_automata(
             properties_to_start.push(prop.clone());
         }
     }
+    // Also seed the recursion with every property in the graph (not just the
+    // sinks). The sink-only seeding can leave a forward property `R` (e.g. a
+    // transitive super-role with a chain-carrying sub-role) unbuilt when an
+    // inverse-property inclusion gives it an outgoing edge: it is then derived by
+    // the mirror-fill pass from its inverse, whose automaton lacks the
+    // (un-mirrored) sub-chains, silently dropping them. Building every property
+    // directly — combined with the guard that forbids the "mirror of complete
+    // inverse" shortcut for a property that has its own sub-properties — keeps both
+    // directions complete regardless of which representation is reached first.
+    // Builds are memoised, so the extra seeds are no-ops once a property is done.
+    for prop in trans_closed.get_elements() {
+        if !properties_to_start.contains(prop) {
+            properties_to_start.push(prop.clone());
+        }
+    }
     // Iterate in a fixed order (see `prop_sort_key`): the recursion start order is
     // not answer-neutral, so a stable order reproduces Java's deterministic result.
     properties_to_start.sort_by_key(prop_sort_key);
@@ -1011,7 +1024,15 @@ fn build_complete_automaton(
     // `completeAutomata.containsKey(Inv(R)) && !individualAutomata.containsKey(R)`.
     if complete_automata.contains_key(&inverse_property(property))
         && !individual_automata.contains_key(property)
+        && inverse_dependency_graph.get_successors(property).is_empty()
     {
+        // Only take the "R is the mirror of its complete inverse" shortcut when R
+        // has no forward sub-properties of its own. Otherwise R's sub-chains would
+        // be silently dropped: the shortcut relies on the inverse's automaton
+        // already containing the mirrored sub-chains, but the inverse dependency
+        // graph does not carry the inverse sub-property edges (Inv(a) ⊑ Inv(R) for
+        // a ⊑ R), so the mirror omits them. Building R from its own sub-chains
+        // (with the inverse enrichment applied afterwards) keeps both directions.
         let mirrored = mirrored_copy(&complete_automata[&inverse_property(property)]);
         complete_automata.insert(property.clone(), mirrored.clone());
         return mirrored;
