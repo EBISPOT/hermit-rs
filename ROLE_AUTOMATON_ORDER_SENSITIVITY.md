@@ -1,5 +1,16 @@
 # Role-automaton construction is order-sensitive (a divergence rooted in Java HermiT)
 
+> **UPDATE (resolved).** The residual divergence this note discusses as a possible
+> *unsoundness* was later shown to be the opposite — an order-dependent
+> *incompleteness* in the port, and the `MONDO_* ⊑ EFO_0000524` subsumptions it
+> surfaced are **valid entailments** (the disorder's location is part-of head/neck
+> via the part-of chain). Java HermiT/ROBOT is itself order-sensitive and *misses*
+> them on the OBO IRIs (it flips to deriving them once the IRIs are renamed). Both
+> the determinism fix described here and the completeness fix that resolves the
+> divergence are now applied; see `ROLE_AUTOMATON_EFO_BIG_INVESTIGATION.md` for the
+> full resolution. The "Residual divergence" framing below is kept for the record
+> but is superseded by that note.
+
 This documents a non-determinism / soundness issue found while classifying **EFO**
 with the Rust port, the fix that has been applied, and — importantly — direct
 evidence that the underlying fragility is in **Java HermiT itself**, not just the
