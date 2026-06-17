@@ -1,92 +1,95 @@
-# Role-automaton over-acceptance on `efo_big` — investigation
+# Role-automaton inverse+chain divergence on `efo_big` — investigation & fix
 
 Follow-up to `ROLE_AUTOMATON_ORDER_SENSITIVITY.md`. That note fixed the
-*non-determinism* (the construction is now deterministic) and documented that a
-residual divergence from Java HermiT remains on `efo_big`. This note pins that
-divergence down with an oracle and rules out several fix hypotheses, so the
-eventual fix has a precise target and a validation tool.
+*non-determinism* (the construction is now deterministic). This note tracked down
+the residual divergence from ROBOT/HermiT on EFO STAR modules and **fixed it**.
 
-## Validation tooling (new)
+## TL;DR
 
-`scripts/classification_diff.py` diffs a hermit-rs `-c` classification against a
-reference reasoner (ROBOT running Java HermiT) over the **transitive closures**
-of both hierarchies, restricted to the shared class vocabulary. It correctly
-parses OWL functional syntax (stripping `Annotation(...)` wrappers, expanding
-`Prefix(...)`), which an earlier naive diff did not — that naive diff produced
-thousands of false "spurious" pairs (e.g. `MONDO_0000462 ⊑ MONDO_0000001`, a
-disease under the disease root) purely because annotated/prefixed oracle axioms
-were skipped. With correct parsing the picture is clean.
+The EFO `MONDO_* ⊑ EFO_0000524` subsumptions that this divergence surfaced are
+**not spurious — they are valid entailments**. The bug was a *completeness* bug
+in hermit-rs (it sometimes *missed* them), and the "oracle" (ROBOT/HermiT) is
+**itself order-sensitive** and misses them too on the OBO IRIs. The fix makes
+hermit-rs build the forward, sub-chain-bearing role automaton directly and
+order-independently. See the commit "build forward role automata directly so
+inverse+chain sub-roles aren't dropped".
 
-Note: Java HermiT's own CLI jar does not run in this environment (a
-cglib/Guice `ExceptionInInitializerError` on the available JVM); ROBOT's bundled
-HermiT does run and is used as the oracle.
+## How the divergence looked
 
-## Exact divergence
+`EFO_0000524 ≡ ∃EFO_0000784.UBERON_0000033` (head) `≡ ∃EFO_0000784.UBERON_0000974`
+(neck). Role box: `RO_0004027 ⊑ EFO_0000784`, the chain
+`RO_0004027 ∘ BFO_0000050 ⊑ RO_0004027`, `EFO_0000784` transitive with a declared
+transitive inverse `EFO_0000785`. A disorder like
+`MONDO_0004785 ≡ MONDO_0000001 ⊓ ∃RO_0004027.UBERON_0001711` (eyelid) is then a
+head-disorder iff eyelid is part-of head — and it is:
+`UBERON_0001711 →BFO_0000050→ UBERON_0000019 →BFO_0000050→ UBERON_0004088
+→BFO_0000050→ UBERON_0000033`, with `BFO_0000050` transitive and the chain
+lifting it onto `RO_0004027 ⊑ EFO_0000784`. So `MONDO_0004785 ⊑ EFO_0000524`
+**holds**; likewise the other nine. hermit-rs derived them; ROBOT/HermiT did not.
 
-| Module | rust clauses | SPURIOUS (unsound) | MISSING (incomplete) |
-|--------|-------------:|-------------------:|---------------------:|
-| `efo_min` | 550 (= Java) | **0** | **0** |
-| `efo_big` | 18861 (Java ≈ 17519) | **10** | **0** |
+## Why the oracle was wrong (and unreliable here)
 
-So hermit-rs is **complete** on both modules and **sound on `efo_min`**; the
-only errors on `efo_big` are 10 spurious subsumptions, all of the form
-`MONDO_xxxxxxx ⊑ EFO_0000524` ("head and neck disorder"):
+ROBOT/HermiT's role-automaton construction has the *same* order-sensitivity this
+whole effort is about. Renaming the ontology's IRIs to opaque names — leaving the
+logical axioms byte-identical — flips ROBOT from "no" to "yes" on this
+entailment. So ROBOT under-derives on the OBO IRIs purely because of its internal
+HashMap iteration order. A reasoner whose answer depends on IRI spelling cannot
+be a completeness oracle. (Soundness it still gives usefully: ROBOT never
+asserted anything hermit-rs contradicts.)
+
+Ground-truth checks that settle it:
+* minimal `a⊑u, a∘b⊑a, b transitive, C≡∃u.Z, M⊑∃a.∃b.∃b.Z` — both hermit-rs and
+  ROBOT derive `M⊑C`;
+* the same with the efo OBO IRIs — hermit-rs yes, ROBOT no;
+* rename those IRIs to short names — ROBOT flips to yes. Identical axioms.
+
+## The actual bug (a completeness bug, order-dependent)
+
+For a property `R` with a complex sub-property carrying a chain (`a ⊑ R`,
+`a∘b ⊑ a`) **and** a declared inverse (`InverseObjectProperties(R, Ri)`):
+
+* the dependency graph records only the forward sub-property edge `a ⊑ R`, never
+  its mirror `Inv(a) ⊑ Inv(R)`;
+* the recursion could be entered only on the inverse representations
+  (`Inv(R)`/`Ri`), whose sub-property successors therefore omit `Inv(a)`;
+* `R` itself was then produced by the mirror-fill pass as
+  `mirror(automaton(Inv(R)))`, which lacks `R`'s sub-chains — so `R`'s automaton
+  silently dropped `a∘b*`, `∀R.C` under-propagated, and the subsumption was
+  missed. Which way it broke depended on iteration order (hence "sometimes").
+
+Minimal reproducer (hermit-rs gave NO before the fix, YES after; ROBOT: YES):
 
 ```
-MONDO_0002708 0004785 0004804 0005800 0005885 0006918 0006950 0016047 0020283 0023865  ⊑  EFO_0000524
+a ⊑ u,  a∘b ⊑ a,  Transitive(b),  InverseObjectProperties(u, ui)
+C ≡ ∃u.Z,  M ⊑ ∃a.Y1,  Y1 ⊑ ∃b.Y2,  Y2 ⊑ ∃b.Z      ⊢  M ⊑ C
 ```
 
-## Confirmed genuinely spurious (worked example)
+## The fix
 
-`EFO_0000524 ≡ ∃EFO_0000784.UBERON_0000033` (head). Take `MONDO_0004785`:
+In `object_property_inclusion_manager.rs`, two minimal, order-independent changes:
 
-* `MONDO_0004785 ≡ MONDO_0000001 ⊓ ∃RO_0004027.UBERON_0001711` (eyelid).
-* Role box: `RO_0004027 ⊑ EFO_0000784`, and the chain
-  `RO_0004027 ∘ BFO_0000050 ⊑ RO_0004027`; `EFO_0000784` is transitive with
-  inverse `EFO_0000785` (also transitive).
-* Hence `MONDO_0004785 ⊑ EFO_0000524` holds **iff**
-  `UBERON_0001711 ⊑ ∃BFO_0000050.UBERON_0000033` (eyelid part-of head).
-* But in `efo_big`, eyelid's only part-of axiom is
-  `UBERON_0001711 ⊑ ∃BFO_0000050.UBERON_0000019` — **not** head. So the
-  subsumption does **not** hold; the oracle correctly omits it and hermit-rs
-  wrongly derives it.
+1. **Seed the automaton recursion with every property** in the dependency graph,
+   not only the sinks, so a forward property `R` is always built directly from
+   its own sub-chains. Builds are memoised, so the extra seeds are no-ops.
+2. **Guard the `R = mirror(complete(Inv(R)))` shortcut** so it only fires when `R`
+   has no forward sub-properties of its own (otherwise the mirror would drop
+   them).
 
-The trigger structure is exactly the order-sensitive configuration from the
-first note: a transitive property `EFO_0000784` with a transitive inverse, a
-sub-property `RO_0004027` carrying its own `∘ BFO_0000050` chain. The spurious
-subsumptions arise because `EFO_0000784`'s role automaton **over-accepts** a
-chain, so the `∀EFO_0000784`-rewriting of `¬EFO_0000524` clashes where it
-should not.
+## Validation
 
-## Hypotheses ruled out this round
+* The minimal reproducer and the efo entailments are now derived correctly and
+  **deterministically** (EFO STAR modules classify identically across runs).
+* All compiling suites pass: lib (312), `owl_wg_conformance`,
+  `classification_tests`, `reasoner_tests`, `structural_tests`,
+  `owlreasoner_api_tests`, `blocking_strategy_tests`. (`tableau_tests` has a
+  pre-existing, unrelated `tuple_index` compile breakage.)
+* The new EFO subsumptions were each confirmed to be genuine entailments by
+  walking the part-of + subclass graph to head/neck.
 
-* **Inverse-enrichment is NOT the locus.** Re-deriving the construction as the
-  confluent fixpoint `complete(R) = semi(R) ∪ mirror(semi(Inv(R)))` (enriching
-  from each property's *semi* = inverse-free sub-chain closure instead of its
-  complete automaton) changed the total clause count (18861 → 17035) but left
-  the classification **byte-identical** — still exactly the same 10 spurious,
-  still 0 missing — while *regressing* `efo_min` faithfulness (550 → 441
-  clauses). It was reverted. The over-accepted chain therefore lives in the
-  **forward / transitive / chain-composition** part of `EFO_0000784`'s
-  automaton, not in the inverse passes.
-* **A minimal synthetic reproducer does not trigger it.** A hand-built ontology
-  with the same role box (`u` transitive, `Inv(u)=v` transitive, `a ⊑ u`,
-  `a∘b ⊑ a`, `C ≡ ∃u.Z`, `X ≡ Root ⊓ ∃a.Y`, `Y ⊑ ∃b.W`) does **not** produce
-  the spurious `X ⊑ C` — hermit-rs answers correctly. The bug needs the full
-  `efo_big` scale (the second `EFO_0000524 ≡ ∃EFO_0000784.UBERON_0000974`
-  equivalence, the sibling `RO_0004024/5/6 ∘ BFO_0000050` chains, and the MONDO
-  hierarchy) to manifest, so minimal-case debugging is not yet available.
+## Tooling
 
-## Where the fix likely is, and how to validate it
-
-The remaining work is to make `EFO_0000784`'s **forward** automaton accept
-exactly its RIA closure under transitivity + the `RO_0004027 ∘ BFO_0000050`
-chain — no more. The construction is HermiT's most intricate component and is
-order-sensitive (Java's default hash order happens to avoid the over-acceptance;
-a sorted order — in Java too, per the first note — reproduces it), so the fix
-must be a genuinely confluent forward/transitive/chain construction validated
-clause-for-clause, not another iteration-order tweak.
-
-`scripts/classification_diff.py` against the ROBOT/HermiT oracle on `efo_big`
-(target: SPURIOUS 0, MISSING 0) plus the `efo_min` clause count (target: 550)
-is the validation harness; the `efo_big` loop runs in seconds.
+`scripts/classification_diff.py` remains useful (transitive-closure
+soundness/completeness diff with correct OWL functional-syntax parsing), but
+**note its reference reasoner is order-sensitive**: treat ROBOT "rust-only" pairs
+as *candidates* to verify (e.g. by re-running ROBOT on the IRI-renamed ontology),
+not as confirmed unsoundness.
