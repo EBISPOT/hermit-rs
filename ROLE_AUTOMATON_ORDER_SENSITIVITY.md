@@ -93,14 +93,28 @@ complex inverse/chain hierarchies. Options:
 1. **Reproduce Java's exact `HashMap` iteration order** — not robustly feasible
    (depends on OWLAPI's `OWLObjectPropertyExpression.hashCode()` and `HashMap`
    bucketing/resize history; would not generalize across OWLAPI versions).
-2. **Confluent re-derivation** of the inverse enrichment so the construction
-   computes the correct RIA closure regardless of order. A first attempt (enrich
-   `R` with the inverse's *forward* sub-chain closure instead of its live
-   mutually-enriched automaton) removes the over-enrichment but **under-enriches**
-   (`efo_min` 445 < 550, dropping required inverse-propagation clauses) — the full
-   inverse contribution is more than the sub-chain closure, so a correct confluent
-   construction is more involved. This is the recommended direction but warrants
-   careful design + validation against Java's `--dump-clauses`.
+2. **Confluent re-derivation** of the construction so it computes the correct RIA
+   closure regardless of order. Two attempts were made and both failed, which
+   *localises* the problem precisely:
+   * **(a) forward-closure** — enrich `R` with the inverse's *forward* sub-chain
+     closure rather than its live mutually-enriched automaton: removes some
+     over-enrichment but **under-enriches** (`efo_min` 445 < 550).
+   * **(b) semi/complete fixpoint** — enrich with the inverse's *semi* automaton
+     (sub-chains splicing each sub-property's *complete* automaton, no inverse
+     enrichment), per `complete(R) = semi(R) ∪ mirror(semi(Inv(R)))`: still
+     **under-enriches** (`efo_min` 441, `efo_big` 17035) **and the `efo_big` 5
+     spurious persist**.
+   * The fact that the 5 spurious survive *both* re-routings of the
+     inverse-enrichment passes — combined with sorted-order *Java* reproducing
+     them by reordering **only** `propertiesToStartRecursion` + the sub-property
+     iteration — proves the over-enrichment originates in the **recursion's
+     mutual-inverse build order** (which member of a `{R, Inv(R)}` pair is built
+     and cached first), *not* in the standalone inverse-enrichment passes. A
+     correct confluent fix must therefore build a **canonical representative** of
+     each `{R, Inv(R)}` pair and derive the other strictly as its mirror, so the
+     representative's automaton does not depend on build order. This is the
+     recommended direction; it needs careful design and clause-for-clause
+     validation against Java's `--dump-clauses`.
 3. **Report upstream**: the order-fragility is arguably a latent bug in HermiT's
    automaton construction; its soundness on a given ontology depends on JVM/OWLAPI
    `HashMap` iteration order.
