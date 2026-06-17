@@ -174,7 +174,7 @@ fn tuple_index_add_get_remove_and_retrieval() {
 
     // Retrieve all tuples whose column 0 == 1 (selection on the first column).
     // bindings buffer holds the value to match at position 0.
-    let mut retrieval = TupleIndexRetrieval::new(&index, vec![1, 0, 0], vec![0]);
+    let mut retrieval = TupleIndexRetrieval::new(&index, &[Some(1), None, None], vec![0]);
     retrieval.open();
     let mut found = Vec::new();
     while !retrieval.after_last() {
@@ -413,7 +413,7 @@ fn values_buffer_manager_layout() {
     assert_eq!(manager.max_number_of_variables, 2);
     assert_eq!(manager.body_dl_predicates_to_indexes.len(), 2);
     // Buffer length = 2 variables + 2 predicates + 0 nonvariable terms.
-    assert_eq!(manager.values_buffer.len(), 4);
+    assert_eq!(manager.values_buffer.borrow().len(), 4);
 }
 
 #[test]

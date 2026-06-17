@@ -55,6 +55,27 @@ use super::{
 const OWL_THING: &str = "http://www.w3.org/2002/07/owl#Thing";
 const OWL_NOTHING: &str = "http://www.w3.org/2002/07/owl#Nothing";
 
+/// A canonical, run-stable ordering key for an object-property expression.
+///
+/// HermiT's role-automaton construction (`ObjectPropertyInclusionManager`) keeps
+/// its working automata in `java.util.HashMap`/`HashSet`s and is *order-sensitive*:
+/// `automataConnector` disjoint-unions states on every inverse-enrichment, so the
+/// automaton a property ends up with depends on the order in which the maps are
+/// iterated. Java's hashing is content-based and unseeded, so that order is stable
+/// across runs and the construction is reproducible; Rust's `RandomState` reseeds
+/// per process, so the unsorted iteration produced a *different* automaton each run
+/// (under-enriched -> incomplete, or over-enriched -> unsound). We therefore iterate
+/// every such collection in this fixed order, which makes the construction
+/// deterministic and confluent. Named properties sort before their inverses, then
+/// by IRI -- a total order on the property expressions actually built.
+fn prop_sort_key(ope: &ObjectPropExpr) -> (u8, String) {
+    use horned_owl::model::ObjectPropertyExpression as OPE;
+    match ope {
+        OPE::ObjectProperty(p) => (0, p.0.to_string()),
+        OPE::InverseObjectProperty(p) => (1, p.0.to_string()),
+    }
+}
+
 pub struct ObjectPropertyInclusionManager {
     automata_by_property: HashMap<ObjectPropExpr, Automaton>,
     build: Build<super::A>,
@@ -397,10 +418,11 @@ fn create_automata(
     // guard (line 351's first conjunct is always true while iterating the map):
     // for each entry whose inverse has no automaton, stage `getMirroredCopy`.
     for _ in 0..2 {
-        let existing: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
+        let mut existing: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        existing.sort_by_key(|(k, _)| prop_sort_key(k));
         let mut extra_inverse: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
         for (property, automaton) in existing {
             let inverse = inverse_property(&property);
@@ -429,19 +451,19 @@ fn create_automata(
         // earlier iterations. The else-branch mirrors are staged with `put`
         // (overwrite) and only merged into the live map at the closing `putAll`, so
         // they are not visible to the in-loop live-map reads.
-        let keys: Vec<ObjectPropExpr> = automata_by_property.keys().cloned().collect();
+        let mut keys: Vec<ObjectPropExpr> = automata_by_property.keys().cloned().collect();
+        keys.sort_by_key(prop_sort_key);
         let mut extra: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
         for property in keys {
             let Some(inverses) = inverse_map.get(&property) else { continue };
+            let mut inverses: Vec<&ObjectPropExpr> = inverses.iter().collect();
+            inverses.sort_by_key(|p| prop_sort_key(p));
             for inverse_prop in inverses {
                 if let Some(inverse_automaton) = automata_by_property.get(inverse_prop).cloned() {
-                    // Java line 363-364: enrich the live entry in place, then
-                    // `put` it into the staged map (a no-op re-put of the same ref).
+                    // Java line 363-364: enrich the live entry in place.
                     let automaton = automata_by_property.get_mut(&property).unwrap();
                     increase_automaton_with_inverse(automaton, &inverse_automaton);
                 } else {
-                    // Java line 366-369: stage the mirrored automaton for the
-                    // declared inverse with `put` (overwrite), merged at the end.
                     let mirrored = mirrored_copy(&automata_by_property[&property]);
                     extra.insert(inverse_prop.clone(), mirrored);
                 }
@@ -454,13 +476,16 @@ fn create_automata(
     // with an automaton gets a clone of it (and its inverse the mirror), porting
     // `individualAutomataForEquivRoles`. Runs AFTER the inverse-map pass so that
     // cloning sees inverse-enriched automata (Java: line ~207-228 after connectAllAutomata).
-    let snapshot: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
+    let mut snapshot: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
+    snapshot.sort_by_key(|(k, _)| prop_sort_key(k));
     let mut equivalent_automata: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
     for (property, automaton) in snapshot {
         if let Some(equiv_set) = equivalent.get(&property) {
+            let mut equiv_set: Vec<&ObjectPropExpr> = equiv_set.iter().collect();
+            equiv_set.sort_by_key(|p| prop_sort_key(p));
             for equiv_property in equiv_set {
                 if *equiv_property != property
                     && !automata_by_property.contains_key(equiv_property)
@@ -482,8 +507,6 @@ fn create_automata(
             }
         }
     }
-    automata_by_property.extend(equivalent_automata);
-
     Ok(())
 }
 
@@ -863,6 +886,24 @@ fn connect_all_automata(
             properties_to_start.push(prop.clone());
         }
     }
+    // Also seed the recursion with every property in the graph (not just the
+    // sinks). The sink-only seeding can leave a forward property `R` (e.g. a
+    // transitive super-role with a chain-carrying sub-role) unbuilt when an
+    // inverse-property inclusion gives it an outgoing edge: it is then derived by
+    // the mirror-fill pass from its inverse, whose automaton lacks the
+    // (un-mirrored) sub-chains, silently dropping them. Building every property
+    // directly — combined with the guard that forbids the "mirror of complete
+    // inverse" shortcut for a property that has its own sub-properties — keeps both
+    // directions complete regardless of which representation is reached first.
+    // Builds are memoised, so the extra seeds are no-ops once a property is done.
+    for prop in trans_closed.get_elements() {
+        if !properties_to_start.contains(prop) {
+            properties_to_start.push(prop.clone());
+        }
+    }
+    // Iterate in a fixed order (see `prop_sort_key`): the recursion start order is
+    // not answer-neutral, so a stable order reproduces Java's deterministic result.
+    properties_to_start.sort_by_key(prop_sort_key);
     // HermiT iterates `propertiesToStartRecursion` as a `HashSet`. Java's hashing
     // is content-based and so stable across runs; our `std::HashSet` randomises its
     // iteration order per run. The order is NOT answer-neutral here: building a
@@ -894,7 +935,10 @@ fn connect_all_automata(
     // enrich the property's automaton with the (mirror of the) inverse's
     // automaton before storing it, so `∀property.C` propagates along the
     // inverse of a complex role even when the property is only a leftover leaf.
-    for (property, automaton) in individual_automata {
+    let mut individual_keys: Vec<&ObjectPropExpr> = individual_automata.keys().collect();
+    individual_keys.sort_by_key(|p| prop_sort_key(p));
+    for property in individual_keys {
+        let automaton = &individual_automata[property];
         if complete_automata.contains_key(property) {
             continue;
         }
@@ -980,7 +1024,15 @@ fn build_complete_automaton(
     // `completeAutomata.containsKey(Inv(R)) && !individualAutomata.containsKey(R)`.
     if complete_automata.contains_key(&inverse_property(property))
         && !individual_automata.contains_key(property)
+        && inverse_dependency_graph.get_successors(property).is_empty()
     {
+        // Only take the "R is the mirror of its complete inverse" shortcut when R
+        // has no forward sub-properties of its own. Otherwise R's sub-chains would
+        // be silently dropped: the shortcut relies on the inverse's automaton
+        // already containing the mirrored sub-chains, but the inverse dependency
+        // graph does not carry the inverse sub-property edges (Inv(a) ⊑ Inv(R) for
+        // a ⊑ R), so the mirror omits them. Building R from its own sub-chains
+        // (with the inverse enrichment applied afterwards) keeps both directions.
         let mirrored = mirrored_copy(&complete_automata[&inverse_property(property)]);
         complete_automata.insert(property.clone(), mirrored.clone());
         return mirrored;
