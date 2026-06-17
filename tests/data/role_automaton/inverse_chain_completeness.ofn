@@ -1,0 +1,13 @@
+Prefix(:=<http://ex.org/>)
+Ontology(<http://ex.org/inverse-chain-completeness>
+Declaration(Class(:C)) Declaration(Class(:M)) Declaration(Class(:Y1)) Declaration(Class(:Y2)) Declaration(Class(:Z))
+Declaration(ObjectProperty(:u)) Declaration(ObjectProperty(:a)) Declaration(ObjectProperty(:b)) Declaration(ObjectProperty(:ui))
+TransitiveObjectProperty(:b)
+SubObjectPropertyOf(:a :u)
+SubObjectPropertyOf(ObjectPropertyChain(:a :b) :a)
+InverseObjectProperties(:u :ui)
+EquivalentClasses(:C ObjectSomeValuesFrom(:u :Z))
+SubClassOf(:M ObjectSomeValuesFrom(:a :Y1))
+SubClassOf(:Y1 ObjectSomeValuesFrom(:b :Y2))
+SubClassOf(:Y2 ObjectSomeValuesFrom(:b :Z))
+)
