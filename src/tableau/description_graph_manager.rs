@@ -23,7 +23,7 @@
 // concept/role assertions and the per-graph table for the graph tuple itself.
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::model::{Concept, DescriptionGraph, ExistsDescriptionGraph, Role};
 use crate::tableau::dependency_set::{
@@ -74,7 +74,7 @@ impl DescriptionGraphManager {
     /// ontology's description graphs. An empty slice (an ontology without
     /// description graphs) yields an empty, no-op manager.
     pub fn new(graphs: &[DescriptionGraph], needs_dependency_sets: bool) -> DescriptionGraphManager {
-        let mut graph_indices = HashMap::new();
+        let mut graph_indices = HashMap::default();
         let mut tables = Vec::with_capacity(graphs.len());
         for (index, graph) in graphs.iter().enumerate() {
             graph_indices.insert(graph.clone(), index);
@@ -95,7 +95,7 @@ impl DescriptionGraphManager {
             graph_indices,
             tables,
             occurrences: OccurrenceManager::new(),
-            occurrence_head: HashMap::new(),
+            occurrence_head: HashMap::default(),
         }
     }
 
@@ -697,7 +697,7 @@ mod tests {
             "http://example.org/G",
             vec![c0.clone(), c1.clone()],
             vec![Edge::new(r.clone(), 0, 1)],
-            HashSet::new(),
+            HashSet::default(),
         );
         // Expand for an anchor node playing vertex 0.
         let anchor = tableau.create_new_named_node(&empty);
@@ -794,7 +794,7 @@ mod tests {
                 AtomicConcept::create("http://example.org/V1"),
             ],
             Vec::new(),
-            HashSet::new(),
+            HashSet::default(),
         )
     }
 
@@ -844,7 +844,7 @@ mod tests {
             "http://example.org/G",
             vec![c0.clone(), c1.clone()],
             vec![Edge::new(r.clone(), 0, 1)],
-            HashSet::new(),
+            HashSet::default(),
         );
         (graph, c0, c1, r)
     }

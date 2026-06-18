@@ -94,7 +94,7 @@ pub struct Tableau {
     /// `ni_roots_log` records insertion order and `ni_roots_by_branching_point`
     /// the per-level watermark so `backtrack_to` can drop the same entries; without
     /// this a recurring NI key would resolve to a destroyed/reused node id.
-    pub(crate) ni_roots: std::collections::HashMap<
+    pub(crate) ni_roots: rustc_hash::FxHashMap<
         (NodeId, crate::model::AnnotatedEquality, i32),
         NodeId,
     >,
@@ -160,18 +160,18 @@ pub struct Tableau {
     /// `validationInfoChanged`). `None` means "validate from the first node".
     pub(crate) last_validated_unchanged_node: Option<NodeId>,
     pub(crate) blockers_cache_by_signature:
-        std::collections::HashMap<crate::blocking::CachedSignature, NodeId>,
+        rustc_hash::FxHashMap<crate::blocking::CachedSignature, NodeId>,
     pub(crate) blockers_cache_node_signature:
-        std::collections::HashMap<NodeId, crate::blocking::CachedSignature>,
+        rustc_hash::FxHashMap<NodeId, crate::blocking::CachedSignature>,
     /// The validated strategy's persistent `ValidatedBlockersCache` (keyed by the
     /// core-label signature). Unlike the anywhere cache it keeps *all* candidate
     /// blockers per signature (`getPossibleBlockers`), since validation tries each
     /// in turn. The reverse map removes a node by identity.
-    pub(crate) validated_blockers_by_signature: std::collections::HashMap<
+    pub(crate) validated_blockers_by_signature: rustc_hash::FxHashMap<
         crate::tableau::blocking_strategy::ValidatedSignature,
         Vec<NodeId>,
     >,
-    pub(crate) validated_blockers_node_signature: std::collections::HashMap<
+    pub(crate) validated_blockers_node_signature: rustc_hash::FxHashMap<
         NodeId,
         crate::tableau::blocking_strategy::ValidatedSignature,
     >,
@@ -229,7 +229,7 @@ pub struct Tableau {
     /// default, so without population every role is treated as non-functional and
     /// existential expansion is byte-for-byte the old normal-expansion behaviour.
     pub(crate) functional_roles:
-        std::collections::HashMap<crate::model::Role, Vec<crate::model::Role>>,
+        rustc_hash::FxHashMap<crate::model::Role, Vec<crate::model::Role>>,
 
     /// The description-graph manager, port of `Tableau.m_descriptionGraphManager`.
     /// Built (empty) by the constructor and populated by `set_description_graphs`
@@ -364,11 +364,11 @@ impl Tableau {
             expanded_existentials_by_branching_point: Vec::new(),
             first_changed_node: None,
             last_validated_unchanged_node: None,
-            validated_blockers_by_signature: std::collections::HashMap::new(),
-            validated_blockers_node_signature: std::collections::HashMap::new(),
-            blockers_cache_by_signature: std::collections::HashMap::new(),
-            blockers_cache_node_signature: std::collections::HashMap::new(),
-            ni_roots: std::collections::HashMap::new(),
+            validated_blockers_by_signature: rustc_hash::FxHashMap::default(),
+            validated_blockers_node_signature: rustc_hash::FxHashMap::default(),
+            blockers_cache_by_signature: rustc_hash::FxHashMap::default(),
+            blockers_cache_node_signature: rustc_hash::FxHashMap::default(),
+            ni_roots: rustc_hash::FxHashMap::default(),
             ni_roots_log: Vec::new(),
             ni_roots_by_branching_point: Vec::new(),
             annotated_equalities: Vec::new(),
@@ -389,7 +389,7 @@ impl Tableau {
             existential_strategy_type:
                 crate::configuration::ExistentialStrategyType::CreationOrder,
             individual_reuse_strategy: None,
-            functional_roles: std::collections::HashMap::new(),
+            functional_roles: rustc_hash::FxHashMap::default(),
             description_graph_manager:
                 crate::tableau::description_graph_manager::DescriptionGraphManager::default(),
         }
@@ -640,12 +640,12 @@ impl Tableau {
     ) {
         use crate::graph::Graph;
         use crate::model::Role;
-        use std::collections::HashSet;
+        use rustc_hash::FxHashSet as HashSet;
 
         // loadDLClausesIntoGraph: build the super-role graph and the set of
         // (directly) functional roles from the clauses.
         let mut super_role_graph: Graph<Role> = Graph::new();
-        let mut functional_roles: HashSet<Role> = HashSet::new();
+        let mut functional_roles: HashSet<Role> = HashSet::default();
         for dl_clause in dl_clauses {
             if dl_clause.is_atomic_role_inclusion() {
                 let subrole = Self::body_atomic_role(dl_clause, 0);
@@ -687,7 +687,7 @@ impl Tableau {
         // super-role; if non-empty, the role gets an entry in the functional map.
         self.functional_roles.clear();
         for role in super_role_graph.get_elements().clone() {
-            let mut relevant_roles: HashSet<Role> = HashSet::new();
+            let mut relevant_roles: HashSet<Role> = HashSet::default();
             for superrole in super_role_graph.get_successors(&role) {
                 if functional_roles.contains(&superrole) {
                     for subrole in sub_role_graph.get_successors(&superrole) {

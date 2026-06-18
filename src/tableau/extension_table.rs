@@ -256,12 +256,18 @@ impl ExtensionTable {
     /// leading column, signalling the caller to fall back to the ascending
     /// unindexed scan. `binding_positions[c]` is the index into `bindings_buffer`
     /// holding the value bound to column `c` (or -1 if column `c` is free).
-    pub fn indexed_tuple_indices(
+    /// Appends the view-windowed tuple indices selected by the best tuple index
+    /// for `binding_positions` into `out`, returning `true` if an index was used.
+    /// Returns `false` (leaving `out` untouched) when no index has a bound leading
+    /// prefix, in which case the caller falls back to a scan. Filling the caller's
+    /// reused buffer avoids allocating a `Vec` per retrieval.
+    pub fn indexed_tuple_indices_into(
         &self,
         binding_positions: &[i32],
         bindings_buffer: &[Option<TableauObject>],
         view: View,
-    ) -> Option<Vec<usize>> {
+        out: &mut Vec<usize>,
+    ) -> bool {
         let mut selected: Option<&TupleIndex<TableauObject>> = None;
         let mut best_prefix = 0usize;
         for tuple_index in self.tuple_indexes.iter().rev() {
@@ -279,33 +285,39 @@ impl ExtensionTable {
                 selected = Some(tuple_index);
             }
         }
-        let tuple_index = selected?;
+        let tuple_index = match selected {
+            Some(tuple_index) => tuple_index,
+            None => return false,
+        };
         let sequence = tuple_index.get_indexing_sequence();
         // The selection array holds the *buffer* indices for the bound prefix
         // (Java `createSelectionArray`: `bindingPositions[indexingSequence[i]]`).
-        let selection_indices: Vec<usize> = sequence[..best_prefix]
-            .iter()
-            .map(|&column| binding_positions[column] as usize)
-            .collect();
+        // The prefix is at most the table arity (<= 3 for the binary/ternary tuple
+        // tables that use a `TupleIndex`), so keep it on the stack instead of
+        // allocating a `Vec` per retrieval.
+        let mut selection = [0usize; 4];
+        debug_assert!(best_prefix <= selection.len());
+        for (slot, &column) in selection.iter_mut().zip(&sequence[..best_prefix]) {
+            *slot = binding_positions[column] as usize;
+        }
         // The trie walk only reads the bound-prefix buffer slots, all of which
         // are `Some`, so the retrieval borrows `bindings_buffer` directly rather
         // than cloning it into an owned per-call buffer.
         let (first, after_last) = self.view_range(view);
         let mut retrieval =
-            TupleIndexRetrieval::new(tuple_index, bindings_buffer, selection_indices);
+            TupleIndexRetrieval::new(tuple_index, bindings_buffer, &selection[..best_prefix]);
         retrieval.open();
-        let mut result = Vec::new();
         while !retrieval.after_last() {
             let tuple = retrieval.get_current_tuple_index();
             if tuple >= 0 {
                 let tuple = tuple as usize;
                 if first <= tuple && tuple < after_last {
-                    result.push(tuple);
+                    out.push(tuple);
                 }
             }
             retrieval.next();
         }
-        Some(result)
+        true
     }
 }
 

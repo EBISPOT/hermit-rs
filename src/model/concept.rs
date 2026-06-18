@@ -281,7 +281,7 @@ impl ExistentialConcept {
 // Concept (abstract supertype)
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Concept {
     AtomicConcept(AtomicConcept),
     AtomicNegationConcept(AtomicNegationConcept),

@@ -12,7 +12,7 @@
 #![allow(dead_code)]
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::rc::Rc;
 
 use crate::model::{Concept, DLClause, DLPredicate, Term};
@@ -57,23 +57,23 @@ pub struct ValuesBufferManager {
 }
 
 impl ValuesBufferManager {
-    pub fn new(
+    pub fn new<S: std::hash::BuildHasher>(
         dl_clauses: &[DLClause],
-        terms_to_nodes: &HashMap<Term, NodeId>,
+        terms_to_nodes: &std::collections::HashMap<Term, NodeId, S>,
     ) -> Result<ValuesBufferManager, String> {
         // First pass: collect the distinct body predicates, the maximum number
         // of distinct variables in any one clause body, and the non-variable
         // body terms.
         let mut body_dl_predicates: Vec<DLPredicate> = Vec::new();
         let mut body_dl_predicate_set: std::collections::HashSet<DLPredicate> =
-            std::collections::HashSet::new();
+            std::collections::HashSet::default();
         let mut nonvariable_terms: Vec<Term> = Vec::new();
         let mut nonvariable_term_set: std::collections::HashSet<Term> =
-            std::collections::HashSet::new();
+            std::collections::HashSet::default();
         let mut max_number_of_variables = 0usize;
 
         for dl_clause in dl_clauses {
-            let mut variables: std::collections::HashSet<Term> = std::collections::HashSet::new();
+            let mut variables: std::collections::HashSet<Term> = std::collections::HashSet::default();
             for body_index in 0..dl_clause.get_body_length() {
                 let atom = dl_clause.get_body_atom(body_index);
                 let predicate = atom.get_dl_predicate().clone();
@@ -96,7 +96,7 @@ impl ValuesBufferManager {
             max_number_of_variables + body_dl_predicates.len() + nonvariable_terms.len();
         let mut values_buffer: Vec<Option<TableauObject>> = vec![None; buffer_len];
 
-        let mut body_dl_predicates_to_indexes: HashMap<DLPredicate, usize> = HashMap::new();
+        let mut body_dl_predicates_to_indexes: HashMap<DLPredicate, usize> = HashMap::default();
         let mut binding_index = max_number_of_variables;
         for predicate in body_dl_predicates {
             let label = predicate_to_stored_label(&predicate);
@@ -105,7 +105,7 @@ impl ValuesBufferManager {
             binding_index += 1;
         }
 
-        let mut body_nonvariable_terms_to_indexes: HashMap<Term, usize> = HashMap::new();
+        let mut body_nonvariable_terms_to_indexes: HashMap<Term, usize> = HashMap::default();
         for term in nonvariable_terms {
             match terms_to_nodes.get(&term) {
                 None => {

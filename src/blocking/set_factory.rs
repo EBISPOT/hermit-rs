@@ -12,7 +12,7 @@
 // canonical sets handed out as `Rc`-backed handles.
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
@@ -86,8 +86,8 @@ fn set_hash<E: Hash>(elements: &[E]) -> u64 {
 impl<E: Hash + Eq + Clone> SetFactory<E> {
     pub fn new() -> SetFactory<E> {
         SetFactory {
-            buckets: HashMap::new(),
-            meta: HashMap::new(),
+            buckets: HashMap::default(),
+            meta: HashMap::default(),
         }
     }
 

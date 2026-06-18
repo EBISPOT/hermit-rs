@@ -4622,7 +4622,7 @@ fn super_classes_of_description(
     // returned.
     let (hierarchy, position) = position_query_concept(ontology, &description)?;
     let mut result: HashSet<Class<crate::structural::A>> = HashSet::new();
-    let mut push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
+    let push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
         for class in hierarchy.node(node).equivalent_elements() {
             result.insert(class.clone());
         }
@@ -4735,7 +4735,7 @@ pub fn super_classes_of_expression(
     use crate::hierarchy::Position;
     let (hierarchy, position) = position_query_concept(ontology, ce)?;
     let mut result: HashSet<Class<crate::structural::A>> = HashSet::new();
-    let mut push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
+    let push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
         for class in hierarchy.node(node).equivalent_elements() {
             result.insert(class.clone());
         }
@@ -4794,7 +4794,7 @@ pub fn sub_classes_of_expression(
     use crate::hierarchy::Position;
     let (hierarchy, position) = position_query_concept(ontology, ce)?;
     let mut result: HashSet<Class<crate::structural::A>> = HashSet::new();
-    let mut push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
+    let push = |result: &mut HashSet<Class<crate::structural::A>>, node| {
         for class in hierarchy.node(node).equivalent_elements() {
             result.insert(class.clone());
         }

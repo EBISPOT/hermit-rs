@@ -7,7 +7,7 @@
 // as `impl Tableau` queries over the binary/ternary extension tables.
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::blocking::dl_clause_info::{ArgumentType, ConsequenceAtom, DLClauseInfo, YConstraint};
 use crate::model::{AtomicConcept, AtLeastConcept, Concept, DLClause, DLPredicate, Role};
@@ -281,7 +281,7 @@ impl BlockingValidator {
                 }
             }
         }
-        let mut by_x_concept: HashMap<AtomicConcept, Vec<usize>> = HashMap::new();
+        let mut by_x_concept: HashMap<AtomicConcept, Vec<usize>> = HashMap::default();
         let mut without_x_concept: Vec<usize> = Vec::new();
         for (index, info) in dl_clause_infos.iter().enumerate() {
             if info.x_concepts.is_empty() {

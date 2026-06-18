@@ -17,7 +17,7 @@
 #![allow(dead_code)]
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::rc::Rc;
 
 use crate::model::term::Variable;
@@ -162,7 +162,7 @@ fn swap_body_to_front(dl_clause: &DLClause, index: usize) -> DLClause {
 
     let mut used_atoms = vec![false; length];
     let mut reordered_atoms: Vec<Atom> = Vec::with_capacity(length);
-    let mut bound_variables: HashSet<Variable> = HashSet::new();
+    let mut bound_variables: HashSet<Variable> = HashSet::default();
 
     // The chosen delta atom goes first, binding its variables.
     let delta = &body[index];
@@ -289,7 +289,7 @@ impl HyperresolutionManager {
     ) -> HyperresolutionManager {
         let clause_vec: Vec<DLClause> = dl_clauses.iter().cloned().collect();
         let values_buffer_manager =
-            ValuesBufferManager::new(&clause_vec, &HashMap::new()).expect("buffer layout");
+            ValuesBufferManager::new(&clause_vec, &HashMap::default()).expect("buffer layout");
 
         // Index DL clauses by body (HyperresolutionManager.DLClauseBodyKey): every
         // clause with an identical body-atom sequence is compiled into a single
@@ -297,7 +297,7 @@ impl HyperresolutionManager {
         // representative body that drives body compilation and the core-variable
         // policy; the heads of all group members are derived together.
         let mut groups: Vec<(DLClause, Vec<DLClause>)> = Vec::new();
-        let mut group_of_body: HashMap<Vec<Atom>, usize> = HashMap::new();
+        let mut group_of_body: HashMap<Vec<Atom>, usize> = HashMap::default();
         for dl_clause in &clause_vec {
             let body = dl_clause.get_body_atoms();
             match group_of_body.get(&body) {
@@ -310,16 +310,16 @@ impl HyperresolutionManager {
         }
 
         let mut evaluators_by_predicate: HashMap<DLPredicate, Vec<SharedEvaluator>> =
-            HashMap::new();
-        let mut unguarded_by_role: HashMap<AtomicRole, Vec<SharedEvaluator>> = HashMap::new();
+            HashMap::default();
+        let mut unguarded_by_role: HashMap<AtomicRole, Vec<SharedEvaluator>> = HashMap::default();
         let mut guarded_by_role_concept1: HashMap<
             AtomicRole,
             HashMap<AtomicConcept, Vec<SharedEvaluator>>,
-        > = HashMap::new();
+        > = HashMap::default();
         let mut guarded_by_role_concept2: HashMap<
             AtomicRole,
             HashMap<AtomicConcept, Vec<SharedEvaluator>>,
-        > = HashMap::new();
+        > = HashMap::default();
         for (representative, members) in &groups {
             for body_atom_index in 0..representative.get_body_length() {
                 let predicate = representative.get_body_atom(body_atom_index).get_dl_predicate();
@@ -406,28 +406,36 @@ impl HyperresolutionManager {
 
     /// Applies the DL clauses to the current delta-old tuples.
     pub fn apply_dl_clauses(&mut self, tableau: &mut Tableau) {
+        // The DELTA_OLD ranges are fixed and append-only for the duration of this
+        // pass (rule firing only adds DELTA_NEW tuples; a clash returns early), so
+        // we snapshot just the eligible tuple *indices* up front -- preserving the
+        // exact selection/activity semantics -- and read each tuple into one reused
+        // buffer when we process it, instead of materialising a `Vec` per tuple
+        // (Java HermiT reads the delta through a reused `Object[]`).
+        let mut buf: Vec<TableauObject> = Vec::with_capacity(3);
         let binary_delta = snapshot_delta_old(tableau, 2);
-        for (objects, dependency_set, is_core) in binary_delta {
+        for (tuple_index, dependency_set) in binary_delta {
             if tableau.contains_clash() {
                 return;
             }
-            self.apply_to_tuple(tableau, objects, dependency_set, is_core);
+            read_tuple_into(&tableau.binary_extension_table, tuple_index, 2, &mut buf);
+            self.apply_to_tuple(tableau, &buf, dependency_set);
         }
         let ternary_delta = snapshot_delta_old(tableau, 3);
-        for (objects, dependency_set, is_core) in ternary_delta {
+        for (tuple_index, dependency_set) in ternary_delta {
             if tableau.contains_clash() {
                 return;
             }
-            self.apply_to_tuple(tableau, objects, dependency_set, is_core);
+            read_tuple_into(&tableau.ternary_extension_table, tuple_index, 3, &mut buf);
+            self.apply_to_tuple(tableau, &buf, dependency_set);
         }
     }
 
     fn apply_to_tuple(
         &mut self,
         tableau: &mut Tableau,
-        objects: Vec<TableauObject>,
+        objects: &[TableauObject],
         dependency_set: PermanentDependencySet,
-        is_core: bool,
     ) {
         let Some(predicate) = label_to_predicate(&objects[0]) else {
             return;
@@ -450,21 +458,15 @@ impl HyperresolutionManager {
                 let positive2 = tableau.nodes[node2].get_number_of_positive_atomic_concepts();
                 if (unoptimized.len() as i32) > positive1 + positive2 + unguarded_count as i32 {
                     apply_unoptimized = false;
-                    // Unguarded clauses always fire.
-                    let unguarded: Vec<SharedEvaluator> = self
-                        .unguarded_by_role
-                        .get(role)
-                        .map(|list| list.iter().map(Rc::clone).collect())
-                        .unwrap_or_default();
-                    for evaluator in &unguarded {
-                        evaluator.borrow_mut().set_delta_row(
-                            objects.clone(),
-                            dependency_set.clone(),
-                            is_core,
-                        );
-                        evaluator.borrow_mut().evaluate(tableau);
-                        if tableau.contains_clash() {
-                            return;
+                    // Unguarded clauses always fire. Iterate in place (see the
+                    // unoptimized branch below): `evaluate` never borrows `self`,
+                    // so no `Vec`/`Rc::clone` snapshot of the list is needed.
+                    if let Some(list) = self.unguarded_by_role.get(role) {
+                        for evaluator in list {
+                            evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
+                            if tableau.contains_clash() {
+                                return;
+                            }
                         }
                     }
                     // Clauses guarded by a concept on the delta's first argument.
@@ -476,12 +478,7 @@ impl HyperresolutionManager {
                             node1,
                         );
                         for evaluator in &to_run {
-                            evaluator.borrow_mut().set_delta_row(
-                                objects.clone(),
-                                dependency_set.clone(),
-                                is_core,
-                            );
-                            evaluator.borrow_mut().evaluate(tableau);
+                            evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
                             if tableau.contains_clash() {
                                 return;
                             }
@@ -496,12 +493,7 @@ impl HyperresolutionManager {
                             node2,
                         );
                         for evaluator in &to_run {
-                            evaluator.borrow_mut().set_delta_row(
-                                objects.clone(),
-                                dependency_set.clone(),
-                                is_core,
-                            );
-                            evaluator.borrow_mut().evaluate(tableau);
+                            evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
                             if tableau.contains_clash() {
                                 return;
                             }
@@ -512,15 +504,14 @@ impl HyperresolutionManager {
         }
 
         if apply_unoptimized {
-            let evaluators: Vec<SharedEvaluator> =
-                unoptimized.iter().map(Rc::clone).collect();
-            for evaluator in &evaluators {
-                evaluator.borrow_mut().set_delta_row(
-                    objects.clone(),
-                    dependency_set.clone(),
-                    is_core,
-                );
-                evaluator.borrow_mut().evaluate(tableau);
+            // Iterate the clause list in place (Java runs
+            // `m_compiledDLClauseInfos[i].evaluate(...)` directly). `evaluate`
+            // borrows only `tableau` (a separate `&mut`) and the evaluator's own
+            // `RefCell`; it never touches `self`, so holding the immutable borrow
+            // of `unoptimized` across the loop is sound and avoids a per-delta
+            // `Vec` alloc + an `Rc::clone` per clause.
+            for evaluator in unoptimized {
+                evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
                 if tableau.contains_clash() {
                     return;
                 }
@@ -565,10 +556,32 @@ impl HyperresolutionManager {
     }
 }
 
+/// Reads `arity` objects of `tuple_index` from `table` into the reused `buf`
+/// (cleared first). `TableauObject` is `Copy`, so this is a `memcpy`-style fill
+/// with no allocation once `buf` has been sized -- mirroring Java's reused
+/// `Object[]` tuple buffer.
+fn read_tuple_into(
+    table: &crate::tableau::extension_table::ExtensionTable,
+    tuple_index: usize,
+    arity: usize,
+    buf: &mut Vec<TableauObject>,
+) {
+    buf.clear();
+    for c in 0..arity {
+        buf.push(*table.get_tuple_object(tuple_index, c));
+    }
+}
+
+/// Snapshots the eligible DELTA_OLD tuple *indices* (with their dependency set
+/// and core flag), captured up front with the same per-tuple node-activity check
+/// as before. Storing indices rather than materialised object `Vec`s avoids a
+/// per-tuple allocation; the caller reads each tuple into one reused buffer when
+/// it processes it. The DELTA_OLD range is append-only for the pass, so the
+/// indices stay valid (rule firing only appends DELTA_NEW tuples).
 fn snapshot_delta_old(
     tableau: &Tableau,
     arity: usize,
-) -> Vec<(Vec<TableauObject>, PermanentDependencySet, bool)> {
+) -> Vec<(usize, PermanentDependencySet)> {
     let table = if arity == 2 {
         &tableau.binary_extension_table
     } else {
@@ -584,14 +597,7 @@ fn snapshot_delta_old(
                 continue 'outer;
             }
         }
-        let objects = (0..arity)
-            .map(|c| table.get_tuple_object(tuple_index, c).clone())
-            .collect();
-        result.push((
-            objects,
-            table.get_dependency_set(tuple_index, &empty),
-            table.is_core(tuple_index),
-        ));
+        result.push((tuple_index, table.get_dependency_set(tuple_index, &empty)));
     }
     result
 }

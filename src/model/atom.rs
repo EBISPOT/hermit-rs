@@ -38,7 +38,10 @@ impl Atom {
     pub fn get_argument_variable(&self, argument_index: usize) -> Option<&Variable> {
         self.0.arguments[argument_index].as_variable()
     }
-    pub fn get_variables(&self, variables: &mut HashSet<Variable>) {
+    pub fn get_variables<S: std::hash::BuildHasher>(
+        &self,
+        variables: &mut HashSet<Variable, S>,
+    ) {
         for argument in self.0.arguments.iter().rev() {
             if let Term::Variable(v) = argument {
                 variables.insert(v.clone());

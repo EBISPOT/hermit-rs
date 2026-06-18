@@ -12,7 +12,7 @@
 // and free-list are memory optimizations that do not affect results, so the
 // usage counting here simply prunes unreferenced canonical sets.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::sync::Arc;
 
 /// The `DependencySet` interface.
@@ -178,7 +178,7 @@ pub struct DependencySetFactory {
 impl DependencySetFactory {
     pub fn new() -> DependencySetFactory {
         let empty_set = PermanentDependencySet(Arc::new(Vec::new()));
-        let mut canonical = HashMap::new();
+        let mut canonical = HashMap::default();
         canonical.insert(
             Vec::new(),
             CanonicalEntry { set: empty_set.clone(), usage: 1 },
@@ -239,6 +239,24 @@ impl DependencySetFactory {
     }
 
     /// Flattens any union into a canonical permanent dependency set.
+    /// The interned permanent union of the (present) `constituents` -- the
+    /// branching points of every `Some` constituent, canonicalised. This is what
+    /// the clause evaluator needs for a derived fact's dependency set; computing
+    /// it directly avoids building a throwaway `UnionDependencySet` (a `Vec` plus
+    /// an `Arc` clone per constituent) and then re-walking it in `get_permanent`.
+    pub fn permanent_union_of(
+        &mut self,
+        constituents: &[Option<PermanentDependencySet>],
+    ) -> PermanentDependencySet {
+        let mut branching_points: Vec<i32> = Vec::new();
+        for constituent in constituents {
+            if let Some(dependency_set) = constituent {
+                branching_points.extend(dependency_set.0.iter().copied());
+            }
+        }
+        self.intern(branching_points)
+    }
+
     pub fn get_permanent(&mut self, dependency_set: &DependencySet) -> PermanentDependencySet {
         match dependency_set {
             DependencySet::Permanent(s) => s.clone(),

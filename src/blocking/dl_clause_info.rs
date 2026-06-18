@@ -13,7 +13,7 @@
 // This is a pure function of a `model::DLClause` and changes no reasoning
 // behaviour; it is the foundation the `BlockingValidator` is built on.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use crate::model::{AtomicConcept, AtomicRole, DLClause, DLPredicate, Variable};
 
@@ -252,11 +252,11 @@ impl DLClauseInfo {
         // deterministic (HermiT uses HashSets, but the validation is order
         // independent).
         let mut y_variables: Vec<Variable> = Vec::new();
-        let mut y2concepts: HashMap<Variable, Vec<AtomicConcept>> = HashMap::new();
-        let mut x2y_roles: HashMap<Variable, Vec<AtomicRole>> = HashMap::new();
-        let mut y2x_roles: HashMap<Variable, Vec<AtomicRole>> = HashMap::new();
+        let mut y2concepts: HashMap<Variable, Vec<AtomicConcept>> = HashMap::default();
+        let mut x2y_roles: HashMap<Variable, Vec<AtomicRole>> = HashMap::default();
+        let mut y2x_roles: HashMap<Variable, Vec<AtomicRole>> = HashMap::default();
         let mut z_variables: Vec<Variable> = Vec::new();
-        let mut z2concepts: HashMap<Variable, Vec<AtomicConcept>> = HashMap::new();
+        let mut z2concepts: HashMap<Variable, Vec<AtomicConcept>> = HashMap::default();
 
         let ensure_y = |y_variables: &mut Vec<Variable>, var: &Variable| {
             if !y_variables.contains(var) {

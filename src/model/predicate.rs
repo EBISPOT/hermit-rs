@@ -82,7 +82,7 @@ impl_display_prefixes!(AnnotatedEquality, NodeIDsAscendingOrEqual);
 // The unit variants Equality / Inequality / NodeIDLessEqualThan correspond to
 // the Java singleton predicates (their `INSTANCE` constants).
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum DLPredicate {
     AtomicConcept(AtomicConcept),
     AtomicRole(AtomicRole),

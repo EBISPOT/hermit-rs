@@ -507,6 +507,12 @@ fn create_automata(
             }
         }
     }
+    // Merge the equivalent-role clones into the automata map (Java
+    // `automataByProperty.putAll(individualAutomataForEquivRoles)`, line ~228).
+    // Without this the clones built above are discarded, so a property equivalent
+    // to a complex one (e.g. `s` with `r ≡ s`, `r` transitive) gets no automaton
+    // and `∀s.C` fails to propagate along its (shared) chains.
+    automata_by_property.extend(equivalent_automata);
     Ok(())
 }
 
@@ -891,11 +897,14 @@ fn connect_all_automata(
     // transitive super-role with a chain-carrying sub-role) unbuilt when an
     // inverse-property inclusion gives it an outgoing edge: it is then derived by
     // the mirror-fill pass from its inverse, whose automaton lacks the
-    // (un-mirrored) sub-chains, silently dropping them. Building every property
-    // directly — combined with the guard that forbids the "mirror of complete
-    // inverse" shortcut for a property that has its own sub-properties — keeps both
-    // directions complete regardless of which representation is reached first.
-    // Builds are memoised, so the extra seeds are no-ops once a property is done.
+    // (un-mirrored) sub-chains, silently dropping them (verified against Java:
+    // `M ⊑ ∃u.Z` is entailed / `M ⊓ ∀u.¬Z` is unsatisfiable for the
+    // `forward_sub_chain_*` pattern, so the chain MUST be kept). Building every
+    // property directly — combined with the guard that forbids the "mirror of
+    // complete inverse" shortcut for a property that has its own sub-properties —
+    // keeps both directions complete regardless of which representation is reached
+    // first. Builds are memoised, so the extra seeds are no-ops once a property is
+    // done.
     for prop in trans_closed.get_elements() {
         if !properties_to_start.contains(prop) {
             properties_to_start.push(prop.clone());
@@ -916,6 +925,11 @@ fn connect_all_automata(
     // successors in this graph = sub-properties.
     let inverse_dependency_graph = property_dependency_graph.get_inverse();
 
+    // Tracks the properties currently on the recursion stack, so a cyclic
+    // complex-property dependency is broken instead of recursing forever (see the
+    // guard in `build_complete_automaton`). Balanced insert/remove keeps it empty
+    // between top-level seeds.
+    let mut building: HashSet<ObjectPropExpr> = HashSet::new();
     for superproperty in properties_to_start {
         build_complete_automaton(
             &superproperty,
@@ -925,6 +939,7 @@ fn connect_all_automata(
             inverse_map,
             symmetric_properties,
             transitive_properties,
+            &mut building,
         );
     }
 
@@ -1004,7 +1019,17 @@ fn finalize_construction(
 }
 
 /// Port of `buildCompleteAutomataForProperties` (forward fragment), finalizing
-/// each completed automaton via `finalize_construction`.
+/// each completed automaton via `finalize_construction`. Wrapper: the memo check
+/// plus a cycle guard on `building` (the set of properties currently on the build
+/// stack). Because the seeding above starts the recursion from EVERY property (not
+/// just Java's sinks, for forward-chain completeness), a cyclic complex-property
+/// dependency — e.g. equivalent properties with cross-chains (`a≡b`, `a∘x⊑b`,
+/// `b∘y⊑a`) give `a→b→a` — would otherwise recurse forever. Java never enters such
+/// a cycle. On re-entry of a property still being built, return its own
+/// (individual, else single-transition) language to break the loop; the outer
+/// build still completes and stores the full automaton. Acyclic hierarchies
+/// (including EFO) never re-enter, so this is behaviour-preserving for them.
+#[allow(clippy::too_many_arguments)]
 fn build_complete_automaton(
     property: &ObjectPropExpr,
     individual_automata: &HashMap<ObjectPropExpr, Automaton>,
@@ -1013,11 +1038,46 @@ fn build_complete_automaton(
     inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
     symmetric_properties: &HashSet<ObjectPropExpr>,
     transitive_properties: &HashSet<ObjectPropExpr>,
+    building: &mut HashSet<ObjectPropExpr>,
 ) -> Automaton {
     if let Some(automaton) = complete_automata.get(property) {
         return automaton.clone();
     }
+    if building.contains(property) {
+        return individual_automata.get(property).cloned().unwrap_or_else(|| {
+            let mut automaton = Automaton::new();
+            let initial = automaton.add_state(true, false);
+            let finalst = automaton.add_state(false, true);
+            automaton.add_transition(initial, Some(property.clone()), finalst);
+            automaton
+        });
+    }
+    building.insert(property.clone());
+    let result = build_complete_automaton_inner(
+        property,
+        individual_automata,
+        complete_automata,
+        inverse_dependency_graph,
+        inverse_map,
+        symmetric_properties,
+        transitive_properties,
+        building,
+    );
+    building.remove(property);
+    result
+}
 
+#[allow(clippy::too_many_arguments)]
+fn build_complete_automaton_inner(
+    property: &ObjectPropExpr,
+    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
+    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
+    inverse_dependency_graph: &Graph<ObjectPropExpr>,
+    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
+    symmetric_properties: &HashSet<ObjectPropExpr>,
+    transitive_properties: &HashSet<ObjectPropExpr>,
+    building: &mut HashSet<ObjectPropExpr>,
+) -> Automaton {
     // Java 384-388: for ANY property (named or anonymous) whose inverse already
     // has a COMPLETE automaton and which has no individual automaton, the complete
     // automaton is the mirror of the inverse's complete automaton. Gated only by
@@ -1058,6 +1118,7 @@ fn build_complete_automaton(
                 symmetric_properties,
                 transitive_properties,
                 true,
+                building,
             );
         }
         // Java 393-417: no own automaton. If a declared inverse has its own
@@ -1074,6 +1135,7 @@ fn build_complete_automaton(
                         inverse_map,
                         symmetric_properties,
                         transitive_properties,
+                        building,
                     );
                     let mirrored = mirrored_copy(&inv_complete);
                     complete_automata.insert(property.clone(), mirrored.clone());
@@ -1091,6 +1153,7 @@ fn build_complete_automaton(
                 inverse_map,
                 symmetric_properties,
                 transitive_properties,
+                building,
             );
             if complete_automata.contains_key(property) {
                 return complete_automata[property].clone();
@@ -1133,6 +1196,7 @@ fn build_complete_automaton(
                         inverse_map,
                         symmetric_properties,
                         transitive_properties,
+                        building,
                     );
                     if smaller.delta().len() != 1 {
                         automata_connector(
@@ -1154,6 +1218,7 @@ fn build_complete_automaton(
                     inverse_map,
                     symmetric_properties,
                     transitive_properties,
+                    building,
                 );
                 let initial = bigger.initial_state();
                 let finalst = bigger.final_state();
@@ -1177,6 +1242,7 @@ fn build_complete_automaton(
                 inverse_map,
                 symmetric_properties,
                 transitive_properties,
+                building,
             );
             automata_connector(&mut bigger, &smaller, initial, finalst);
             bigger.add_transition(initial, Some(smaller_property.clone()), finalst);
@@ -1200,6 +1266,7 @@ fn build_complete_automaton(
         symmetric_properties,
         transitive_properties,
         false,
+        building,
     );
     if has_own_automaton {
         first
@@ -1214,6 +1281,7 @@ fn build_complete_automaton(
             symmetric_properties,
             transitive_properties,
             false,
+            building,
         )
     }
 }
@@ -1237,6 +1305,7 @@ fn apply_inverse_and_finalize(
     symmetric_properties: &HashSet<ObjectPropExpr>,
     transitive_properties: &HashSet<ObjectPropExpr>,
     unconditional_finalize: bool,
+    building: &mut HashSet<ObjectPropExpr>,
 ) -> Automaton {
     let inv_prop = inverse_property(property);
     // `Inv(R)` is anonymous exactly when `R` is a named property.
@@ -1250,6 +1319,7 @@ fn apply_inverse_and_finalize(
             inverse_map,
             symmetric_properties,
             transitive_properties,
+            building,
         );
         increase_automaton_with_inverse(&mut automaton, &mirrored_copy(&inv_complete));
         if !complete_automata.contains_key(property) {

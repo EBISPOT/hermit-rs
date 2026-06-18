@@ -23,8 +23,6 @@
 // `AnywhereBlocking` path, matching HermiT's `OPTIMAL` default for SHIQ/SHOIQ.
 #![allow(dead_code)]
 
-use std::collections::BTreeSet;
-
 use crate::blocking::CachedSignature;
 use crate::model::{AtomicConcept, AtomicRole, DLPredicate};
 use crate::tableau::node::NodeId;
@@ -34,17 +32,18 @@ use crate::tableau::tableau::Tableau;
 use crate::tableau::View;
 
 /// The validated-blocking core signature: the node's core atomic-concept label,
-/// plus (under pairwise blocking) the parent's core label.
+/// plus (under pairwise blocking) the parent's core label. Label sets are sorted,
+/// de-duplicated `Vec`s (see `CachedSignature`): used only for equality/hashing.
 pub(crate) type ValidatedSignature =
-    (BTreeSet<AtomicConcept>, Option<BTreeSet<AtomicConcept>>);
+    (Vec<AtomicConcept>, Option<Vec<AtomicConcept>>);
 
 /// The pairwise blocking signature: (node label, parent label, parent→node edge
-/// roles, node→parent edge roles).
+/// roles, node→parent edge roles). Each is a sorted, de-duplicated `Vec`.
 type PairwiseSignature = (
-    BTreeSet<AtomicConcept>,
-    BTreeSet<AtomicConcept>,
-    BTreeSet<AtomicRole>,
-    BTreeSet<AtomicRole>,
+    Vec<AtomicConcept>,
+    Vec<AtomicConcept>,
+    Vec<AtomicRole>,
+    Vec<AtomicRole>,
 );
 
 /// The direct-blocking signature in use (port of HermiT's
@@ -722,7 +721,7 @@ impl Tableau {
 
     /// The parent->node edge role label, cached on the node
     /// (`PairWiseBlockingObject.getFromParentLabel`).
-    fn from_parent_label(&mut self, node: NodeId, parent: NodeId) -> BTreeSet<AtomicRole> {
+    fn from_parent_label(&mut self, node: NodeId, parent: NodeId) -> Vec<AtomicRole> {
         if self.nodes[node].blocking_from_parent_cache.is_none() {
             let label = self.scan_edge_label(parent, node);
             self.nodes[node].blocking_from_parent_cache = Some(label);
@@ -732,7 +731,7 @@ impl Tableau {
 
     /// The node->parent edge role label, cached on the node
     /// (`PairWiseBlockingObject.getToParentLabel`).
-    fn to_parent_label(&mut self, node: NodeId, parent: NodeId) -> BTreeSet<AtomicRole> {
+    fn to_parent_label(&mut self, node: NodeId, parent: NodeId) -> Vec<AtomicRole> {
         if self.nodes[node].blocking_to_parent_cache.is_none() {
             let label = self.scan_edge_label(node, parent);
             self.nodes[node].blocking_to_parent_cache = Some(label);
@@ -743,7 +742,7 @@ impl Tableau {
     /// The set of *core* atomic concepts on `node`: those asserted with the core
     /// flag (the concepts the node deterministically must have, including the
     /// ∃-rule filler that created it), used as the validated-blocking signature.
-    fn node_core_concept_label(&mut self, node: NodeId) -> BTreeSet<AtomicConcept> {
+    fn node_core_concept_label(&mut self, node: NodeId) -> Vec<AtomicConcept> {
         if self.nodes[node].blocking_core_label_cache.is_none() {
             let label = self.scan_node_core_concept_label(node);
             self.nodes[node].blocking_core_label_cache = Some(label);
@@ -753,22 +752,24 @@ impl Tableau {
 
     /// Reads the *core* atomic-concept label of `node` directly from the binary
     /// extension table.
-    fn scan_node_core_concept_label(&self, node: NodeId) -> BTreeSet<AtomicConcept> {
+    fn scan_node_core_concept_label(&self, node: NodeId) -> Vec<AtomicConcept> {
         let retrieval = self.create_binary_retrieval(
             [-1, 1],
             [None, Some(TableauObject::Node(node))],
             View::Total,
         );
-        let mut label = BTreeSet::new();
+        let mut label = Vec::new();
         for &tuple_index in &retrieval.tuple_indices {
             if self.binary_extension_table.is_core(tuple_index) {
                 if let TableauObject::Concept(crate::model::Concept::AtomicConcept(c)) =
                     self.binary_extension_table.get_tuple_object(tuple_index, 0)
                 {
-                    label.insert(c.clone());
+                    label.push(c.clone());
                 }
             }
         }
+        label.sort_unstable_by_key(|c| c.intern_ptr());
+        label.dedup();
         label
     }
 
@@ -779,7 +780,7 @@ impl Tableau {
     fn validated_block_signature(
         &mut self,
         node: NodeId,
-    ) -> (BTreeSet<AtomicConcept>, Option<BTreeSet<AtomicConcept>>) {
+    ) -> (Vec<AtomicConcept>, Option<Vec<AtomicConcept>>) {
         let own = self.node_core_concept_label(node);
         match self.direct_blocking_kind {
             DirectBlockingKind::Single => (own, None),
@@ -797,7 +798,7 @@ impl Tableau {
     /// The set of atomic concepts asserted on `node` (its blocking label),
     /// returned from the per-node cache and lazily refetched only when the cache
     /// was invalidated by a label change (`PairWiseBlockingObject.getAtomicConceptsLabel`).
-    fn node_concept_label(&mut self, node: NodeId) -> BTreeSet<AtomicConcept> {
+    fn node_concept_label(&mut self, node: NodeId) -> Vec<AtomicConcept> {
         if self.nodes[node].blocking_label_cache.is_none() {
             let label = self.scan_node_concept_label(node);
             self.nodes[node].blocking_label_cache = Some(label);
@@ -807,23 +808,25 @@ impl Tableau {
 
     /// Reads the atomic-concept label of `node` directly from the binary extension
     /// table (`fetchAtomicConceptsLabel`).
-    fn scan_node_concept_label(&self, node: NodeId) -> BTreeSet<AtomicConcept> {
+    fn scan_node_concept_label(&self, node: NodeId) -> Vec<AtomicConcept> {
         let retrieval =
             self.create_binary_retrieval([-1, 1], [None, Some(TableauObject::Node(node))], View::Total);
-        let mut label = BTreeSet::new();
+        let mut label = Vec::new();
         for &tuple_index in &retrieval.tuple_indices {
             if let TableauObject::Concept(crate::model::Concept::AtomicConcept(c)) =
                 self.binary_extension_table.get_tuple_object(tuple_index, 0)
             {
-                label.insert(c.clone());
+                label.push(c.clone());
             }
         }
+        label.sort_unstable_by_key(|c| c.intern_ptr());
+        label.dedup();
         label
     }
 
     /// The set of atomic roles `r` with `r(node_from, node_to)` asserted -- the
     /// directed edge label used in the pairwise signature.
-    fn scan_edge_label(&self, node_from: NodeId, node_to: NodeId) -> BTreeSet<AtomicRole> {
+    fn scan_edge_label(&self, node_from: NodeId, node_to: NodeId) -> Vec<AtomicRole> {
         let retrieval = self.create_ternary_retrieval(
             [-1, 1, 2],
             [
@@ -833,14 +836,16 @@ impl Tableau {
             ],
             View::Total,
         );
-        let mut label = BTreeSet::new();
+        let mut label = Vec::new();
         for &tuple_index in &retrieval.tuple_indices {
             if let TableauObject::DLPredicate(DLPredicate::AtomicRole(r)) =
                 self.ternary_extension_table.get_tuple_object(tuple_index, 0)
             {
-                label.insert(r.clone());
+                label.push(r.clone());
             }
         }
+        label.sort_unstable_by_key(|c| c.intern_ptr());
+        label.dedup();
         label
     }
 }

@@ -8,7 +8,6 @@
 // accessors live here.
 #![allow(dead_code)]
 
-use std::collections::BTreeSet;
 
 use crate::model::{AtomicConcept, AtomicRole, ExistentialConcept};
 use crate::tableau::dependency_set::PermanentDependencySet;
@@ -65,10 +64,10 @@ pub struct Node {
     /// label is lazily refetched from the extension tables and reused until the
     /// node's blocking info changes (`fetchAtomicConceptsLabel` etc.), so a
     /// blocking pass no longer rescans the tables for unchanged nodes.
-    pub(crate) blocking_label_cache: Option<BTreeSet<AtomicConcept>>,
-    pub(crate) blocking_core_label_cache: Option<BTreeSet<AtomicConcept>>,
-    pub(crate) blocking_from_parent_cache: Option<BTreeSet<AtomicRole>>,
-    pub(crate) blocking_to_parent_cache: Option<BTreeSet<AtomicRole>>,
+    pub(crate) blocking_label_cache: Option<Vec<AtomicConcept>>,
+    pub(crate) blocking_core_label_cache: Option<Vec<AtomicConcept>>,
+    pub(crate) blocking_from_parent_cache: Option<Vec<AtomicRole>>,
+    pub(crate) blocking_to_parent_cache: Option<Vec<AtomicRole>>,
     /// `BlockingObject.m_hasChanged` (`hasBlockingInfoChanged`): set when this
     /// node's blocking-relevant label changes, cleared once it is reprocessed in a
     /// blocking pass. Lets the incremental pass skip a directly blocked node whose

@@ -24,8 +24,7 @@
 // core-validated block can be invalidated by later merges, so caching its
 // signature would be unsound).
 
-use std::collections::BTreeSet;
-use std::collections::HashSet;
+use rustc_hash::FxHashSet as HashSet;
 
 use crate::model::{AtomicConcept, AtomicRole};
 
@@ -33,17 +32,28 @@ use crate::model::{AtomicConcept, AtomicRole};
 /// configured `DirectBlockingChecker`: `Single` is the node's own
 /// atomic-concept label only (`SingleBlockingSignature`); `Pairwise` is the
 /// four-component double-blocking signature (`PairWiseBlockingSignature`).
+///
+/// Each component is a label *set*, represented as a **sorted, de-duplicated
+/// `Vec`** rather than a `BTreeSet`: signatures are only ever compared for
+/// equality and hashed (set membership in the cache and the blockers maps),
+/// never queried for subset/range, and they are cloned, hashed and dropped once
+/// per eligible node on every `computeBlocking`. A sorted `Vec` hashes/clones/
+/// compares as a flat contiguous buffer (no per-element B-tree nodes), which is
+/// markedly cheaper on all four operations and uses less memory. The sorted +
+/// de-duplicated invariant (established by the construction sites in
+/// `blocking_strategy`) makes `Vec` equality/hashing coincide exactly with set
+/// equality, as `BTreeSet` did.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CachedSignature {
     /// `SingleBlockingSignature`: the node's atomic-concept label.
-    Single(BTreeSet<AtomicConcept>),
+    Single(Vec<AtomicConcept>),
     /// `PairWiseBlockingSignature`: (node label, parent label, parent->node edge
     /// roles, node->parent edge roles).
     Pairwise(
-        BTreeSet<AtomicConcept>,
-        BTreeSet<AtomicConcept>,
-        BTreeSet<AtomicRole>,
-        BTreeSet<AtomicRole>,
+        Vec<AtomicConcept>,
+        Vec<AtomicConcept>,
+        Vec<AtomicRole>,
+        Vec<AtomicRole>,
     ),
 }
 
@@ -59,7 +69,7 @@ pub struct BlockingSignatureCache {
 
 impl BlockingSignatureCache {
     pub fn new() -> BlockingSignatureCache {
-        BlockingSignatureCache { signatures: HashSet::new() }
+        BlockingSignatureCache { signatures: HashSet::default() }
     }
 
     /// `isEmpty`.
@@ -98,8 +108,7 @@ mod tests {
     fn add_and_contains_single_signature() {
         let mut cache = BlockingSignatureCache::new();
         assert!(cache.is_empty());
-        let mut label = BTreeSet::new();
-        label.insert(concept("http://example.org/A"));
+        let label = vec![concept("http://example.org/A")];
         let sig = CachedSignature::Single(label.clone());
         // First add succeeds; a duplicate add returns false but membership holds.
         assert!(cache.add_signature(sig.clone()));
@@ -108,18 +117,15 @@ mod tests {
         assert_eq!(cache.len(), 1);
 
         // A different label is not a member.
-        let mut other = BTreeSet::new();
-        other.insert(concept("http://example.org/B"));
+        let other = vec![concept("http://example.org/B")];
         assert!(!cache.contains_signature(&CachedSignature::Single(other)));
     }
 
     #[test]
     fn single_and_pairwise_signatures_are_distinct() {
-        let mut a = BTreeSet::new();
-        a.insert(concept("http://example.org/A"));
+        let a = vec![concept("http://example.org/A")];
         let single = CachedSignature::Single(a.clone());
-        let pairwise =
-            CachedSignature::Pairwise(a, BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
+        let pairwise = CachedSignature::Pairwise(a, Vec::new(), Vec::new(), Vec::new());
         assert_ne!(single, pairwise);
     }
 }

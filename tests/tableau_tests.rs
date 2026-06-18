@@ -174,7 +174,7 @@ fn tuple_index_add_get_remove_and_retrieval() {
 
     // Retrieve all tuples whose column 0 == 1 (selection on the first column).
     // bindings buffer holds the value to match at position 0.
-    let mut retrieval = TupleIndexRetrieval::new(&index, &[Some(1), None, None], vec![0]);
+    let mut retrieval = TupleIndexRetrieval::new(&index, &[Some(1), None, None], &[0]);
     retrieval.open();
     let mut found = Vec::new();
     while !retrieval.after_last() {
@@ -468,15 +468,11 @@ fn dl_clause_evaluator_derives_fact() {
 
     // The delta tuple is A(node).
     let empty_perm = tableau.dependency_set_factory().empty_set();
-    evaluator.set_delta_row(
-        vec![
-            TableauObject::Concept(Concept::AtomicConcept(a)),
-            TableauObject::Node(node),
-        ],
-        empty_perm,
-        true,
-    );
-    evaluator.evaluate(&mut tableau);
+    let delta = [
+        TableauObject::Concept(Concept::AtomicConcept(a)),
+        TableauObject::Node(node),
+    ];
+    evaluator.evaluate(&mut tableau, &delta, &empty_perm);
 
     // B(node) is now derived.
     assert!(tableau.contains_concept_assertion(&Concept::AtomicConcept(b), node));

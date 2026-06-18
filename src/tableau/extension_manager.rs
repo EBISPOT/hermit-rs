@@ -564,14 +564,13 @@ impl Tableau {
         // Java `createRetrieval` uses an IndexedRetrieval (trie walk, reverse-
         // insertion order) when some leading column is bound, otherwise an
         // ascending UnindexedRetrieval scan over the view window.
-        let tuple_indices = match table.indexed_tuple_indices(&binding_positions, &bindings_buffer, view)
-        {
-            Some(indexed) => indexed.into_iter().filter(|&t| keep(t)).collect(),
-            None => {
-                let (start, after_last) = table.view_range(view);
-                (start..after_last).filter(|&t| keep(t)).collect()
-            }
-        };
+        let mut tuple_indices = Vec::new();
+        if table.indexed_tuple_indices_into(&binding_positions, &bindings_buffer, view, &mut tuple_indices) {
+            tuple_indices.retain(|&t| keep(t));
+        } else {
+            let (start, after_last) = table.view_range(view);
+            tuple_indices.extend((start..after_last).filter(|&t| keep(t)));
+        }
         Retrieval { tuple_indices, position: 0, view }
     }
 
@@ -612,14 +611,13 @@ impl Tableau {
         };
         // As for the binary table: indexed trie walk when a leading column is
         // bound (reverse-insertion order), else an ascending unindexed scan.
-        let tuple_indices = match table.indexed_tuple_indices(&binding_positions, &bindings_buffer, view)
-        {
-            Some(indexed) => indexed.into_iter().filter(|&t| keep(t)).collect(),
-            None => {
-                let (start, after_last) = table.view_range(view);
-                (start..after_last).filter(|&t| keep(t)).collect()
-            }
-        };
+        let mut tuple_indices = Vec::new();
+        if table.indexed_tuple_indices_into(&binding_positions, &bindings_buffer, view, &mut tuple_indices) {
+            tuple_indices.retain(|&t| keep(t));
+        } else {
+            let (start, after_last) = table.view_range(view);
+            tuple_indices.extend((start..after_last).filter(|&t| keep(t)));
+        }
         Retrieval { tuple_indices, position: 0, view }
     }
 

@@ -3,7 +3,6 @@
 
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 
 use crate::model::atom::Atom;
 use crate::model::clause::DLClause;
@@ -31,18 +30,23 @@ pub struct DescriptionGraphData {
     start_concepts: HashSet<AtomicConcept>,
 }
 
-#[derive(Clone)]
-pub struct DescriptionGraph(Arc<DescriptionGraphData>);
+// A `Copy` handle that is a plain pointer to a leaked, identity-distinct
+// allocation -- mirroring Java's object identity (each `new` is a distinct
+// instance) without `Arc`'s atomic reference counting. There are very few
+// description graphs, so leaking them (they live for the whole run, as the Java
+// instances effectively do) costs nothing.
+#[derive(Clone, Copy)]
+pub struct DescriptionGraph(&'static DescriptionGraphData);
 
 impl PartialEq for DescriptionGraph {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        std::ptr::eq(self.0, other.0)
     }
 }
 impl Eq for DescriptionGraph {}
 impl Hash for DescriptionGraph {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        (Arc::as_ptr(&self.0) as usize).hash(state);
+        (self.0 as *const DescriptionGraphData as usize).hash(state);
     }
 }
 impl std::fmt::Debug for DescriptionGraph {
@@ -58,12 +62,12 @@ impl DescriptionGraph {
         edges: Vec<Edge>,
         start_concepts: HashSet<AtomicConcept>,
     ) -> DescriptionGraph {
-        DescriptionGraph(Arc::new(DescriptionGraphData {
+        DescriptionGraph(Box::leak(Box::new(DescriptionGraphData {
             name: name.into(),
             atomic_concepts_by_vertices,
             edges,
             start_concepts,
-        }))
+        })))
     }
     pub fn name(&self) -> &str {
         &self.0.name

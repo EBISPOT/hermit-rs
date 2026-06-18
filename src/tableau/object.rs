@@ -10,7 +10,7 @@
 use crate::model::{Concept, DLPredicate, DescriptionGraph, NegatedAtomicRole};
 use crate::tableau::node::NodeId;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TableauObject {
     Concept(Concept),
     DLPredicate(DLPredicate),

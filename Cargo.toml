@@ -27,6 +27,14 @@ num-traits = "0.2"
 # insertion-ordered set semantics (deduplicating like a HashSet, iterating in
 # insertion order) for the DL-clause container.
 indexmap = "2"
+# Saturation hot path: the tableau's internal maps/sets (trie children, tuple
+# indices, evaluator guards, dependency-set interning, blocking signatures) are
+# keyed on small interned ids. The default SipHash dominated the profile (~21%
+# of EFO classification); rustc-hash's FxHash is a much cheaper, *deterministic*
+# (fixed-seed) hash with identical memory layout. Only saturation-internal maps
+# (whose iteration order does not affect the confluent fixpoint) use it; the
+# order-sensitive role-automaton construction keeps its explicit sort.
+rustc-hash = "2"
 
 [dev-dependencies]
 # OWL 2 WG conformance harness (tests/owl_wg_conformance.rs): a small streaming
