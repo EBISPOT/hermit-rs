@@ -234,7 +234,8 @@ fn inverse_role_ontology() -> SetOntology<hermit_rs::structural::A> {
         },
     }));
     ontology.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        OPE::ObjectProperty(r), OPE::ObjectProperty(ri),
+        OPE::ObjectProperty(r),
+        OPE::ObjectProperty(ri),
     )));
     ontology.insert(Component::ClassAssertion(ClassAssertion {
         ce: CE::Class(a),

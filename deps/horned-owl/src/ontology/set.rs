@@ -1,5 +1,13 @@
 //! Rapid, simple, in-memory `Ontology` and `OntologyIndex`
-use std::{collections::HashSet, hash::Hash, iter::FusedIterator, rc::Rc};
+use std::{hash::Hash, iter::FusedIterator, rc::Rc};
+
+// The component set is hashed on the deep, structural hash of every
+// `AnnotatedComponent` -- the dominant cost of loading/round-tripping large
+// ontologies. The default `RandomState` (SipHash) is a cryptographic hash and far
+// too slow for this; `FxHashSet` (the rustc hasher) is ~3-5x faster per byte and
+// the set is sorted before any serialization, so iteration order (and thus output)
+// is unaffected.
+use rustc_hash::FxHashSet as HashSet;
 
 use super::indexed::ForIndex;
 use super::indexed::{OneIndexedOntology, OntologyIndex};
@@ -80,7 +88,7 @@ impl SetIndex<RcStr, crate::model::RcAnnotatedComponent> {
             .map(|rc| Rc::try_unwrap(rc).unwrap_or_else(|rc| (*rc).clone()))
             .collect();
         let t1 = std::time::Instant::now();
-        let mut hs: HashSet<AnnotatedComponent<RcStr>> = HashSet::with_capacity(n);
+        let mut hs: HashSet<AnnotatedComponent<RcStr>> = HashSet::with_capacity_and_hasher(n, Default::default());
         hs.extend(moved);
         if dbg {
             eprintln!(
@@ -101,7 +109,7 @@ impl<A: ForIRI, AA: ForIndex<A>> From<SetIndex<A, AA>> for SetOntology<A> {
         // recomputes every element's (deep, structural) hash on each resize —
         // roughly doubling the hashing of a multi-million-component ontology
         // (the dominant cost of loading large RDF/XML, e.g. ~160s on phenio).
-        let mut hs: HashSet<AnnotatedComponent<A>> = HashSet::with_capacity(index.0.len());
+        let mut hs: HashSet<AnnotatedComponent<A>> = HashSet::with_capacity_and_hasher(index.0.len(), Default::default());
         for c in index.0.into_iter() {
             hs.insert(c.unwrap());
         }

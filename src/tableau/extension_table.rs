@@ -69,6 +69,16 @@ impl ExtensionTable {
         }
     }
 
+    /// Total retained backing-store capacity (tuple slots + trie nodes/buckets +
+    /// per-tuple side tables), in elements — for oversize detection after a hard
+    /// satisfiability test has grown the tables.
+    pub(crate) fn retained_capacity(&self) -> usize {
+        self.tuple_table.objects_capacity()
+            + self.tuple_indexes.iter().map(|ti| ti.retained_capacity()).sum::<usize>()
+            + self.dependency_sets.capacity()
+            + self.core_flags.capacity()
+    }
+
     pub fn arity(&self) -> usize {
         self.arity
     }
@@ -318,6 +328,66 @@ impl ExtensionTable {
             retrieval.next();
         }
         true
+    }
+
+    /// Short-circuiting indexed retrieval: like `indexed_tuple_indices_into`, but
+    /// instead of collecting every matching tuple index into a `Vec`, it drives the
+    /// trie cursor directly and invokes `visit(tuple_index)` per in-view tuple,
+    /// stopping (returning `Some(true)`) as soon as `visit` returns `true`. Returns
+    /// `Some(false)` if an index was used but no tuple satisfied `visit`, and `None`
+    /// (cursor untouched) when no index has a bound leading prefix -- signalling the
+    /// caller to fall back to an ascending scan.
+    ///
+    /// This is the allocation-free / early-exit twin of `indexed_tuple_indices_into`
+    /// for the cardinality-1 "is this ∃ already satisfied?" probe, which only needs
+    /// the first matching successor: no `Vec` per call, and the trie walk stops at
+    /// the first witness instead of materializing the whole subtree.
+    pub fn indexed_visit<F: FnMut(usize) -> bool>(
+        &self,
+        binding_positions: &[i32],
+        bindings_buffer: &[Option<TableauObject>],
+        view: View,
+        mut visit: F,
+    ) -> Option<bool> {
+        let mut selected: Option<&TupleIndex<TableauObject>> = None;
+        let mut best_prefix = 0usize;
+        for tuple_index in self.tuple_indexes.iter().rev() {
+            let sequence = tuple_index.get_indexing_sequence();
+            let mut prefix = 0usize;
+            for &column in sequence {
+                if binding_positions[column] != -1 {
+                    prefix += 1;
+                } else {
+                    break;
+                }
+            }
+            if prefix > best_prefix {
+                best_prefix = prefix;
+                selected = Some(tuple_index);
+            }
+        }
+        let tuple_index = selected?;
+        let sequence = tuple_index.get_indexing_sequence();
+        let mut selection = [0usize; 4];
+        debug_assert!(best_prefix <= selection.len());
+        for (slot, &column) in selection.iter_mut().zip(&sequence[..best_prefix]) {
+            *slot = binding_positions[column] as usize;
+        }
+        let (first, after_last) = self.view_range(view);
+        let mut retrieval =
+            TupleIndexRetrieval::new(tuple_index, bindings_buffer, &selection[..best_prefix]);
+        retrieval.open();
+        while !retrieval.after_last() {
+            let tuple = retrieval.get_current_tuple_index();
+            if tuple >= 0 {
+                let tuple = tuple as usize;
+                if first <= tuple && tuple < after_last && visit(tuple) {
+                    return Some(true);
+                }
+            }
+            retrieval.next();
+        }
+        Some(false)
     }
 }
 

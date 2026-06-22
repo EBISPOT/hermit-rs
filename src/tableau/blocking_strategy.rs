@@ -171,6 +171,12 @@ impl Tableau {
                         None => -1 >= start_id,
                     };
                 if recompute {
+                    // The unblocked `else`-branch below computes the node's
+                    // direct-blocking signature for the cache lookup; stash it so the
+                    // post-decision re-add does not recompute (and re-scan/re-clone)
+                    // the very same signature. The parent-none branch leaves this
+                    // `None` and computes the signature once at re-add time.
+                    let mut computed_signature: Option<CachedSignature> = None;
                     let parent = self.nodes[current].get_parent();
                     if parent.is_none() {
                         self.nodes[current].set_blocked(None, false);
@@ -190,14 +196,25 @@ impl Tableau {
                             self.nodes[current].set_blocked(Some(blocker), true);
                         } else {
                             self.nodes[current].set_blocked(None, false);
+                            computed_signature = Some(signature);
                         }
                     }
                     // A node left unblocked re-enters the blockers cache as a
                     // candidate blocker (Java's post-decision `if (!node.isBlocked()
                     // && canBeBlocker(node)) addNode(node)`).
                     if !self.nodes[current].is_blocked() {
-                        let signature = self.direct_signature(current);
+                        let signature = match computed_signature {
+                            Some(sig) => sig,
+                            None => self.direct_signature(current),
+                        };
                         self.blockers_cache_add(current, signature);
+                        // A node that just became unblocked and still carries
+                        // unprocessed existentials must be reconsidered by the
+                        // expansion walk, so pull the cursor back to it (it may have
+                        // been a blocked "wall" the cursor previously sat behind).
+                        if self.nodes[current].has_unprocessed_existentials() {
+                            self.note_unprocessed_existential(current);
+                        }
                     }
                 }
                 self.nodes[current].has_blocking_info_changed = false;
@@ -367,6 +384,14 @@ impl Tableau {
                             None => self.nodes[current].set_blocked(None, false),
                         }
                     }
+                }
+                // As in the anywhere pass: a node left unblocked that still carries
+                // unprocessed existentials must be reconsidered by the expansion
+                // walk, so pull the expansion cursor back to it.
+                if !self.nodes[current].is_blocked()
+                    && self.nodes[current].has_unprocessed_existentials()
+                {
+                    self.note_unprocessed_existential(current);
                 }
             }
             node = self.nodes[current].next_tableau_node;

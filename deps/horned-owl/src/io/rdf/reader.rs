@@ -23,7 +23,7 @@ use crate::{
 };
 
 use std::collections::BTreeSet;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::{io::BufRead, marker::PhantomData};
@@ -686,12 +686,12 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
     /// `bnode_seq[head]` is the list's values in order, and incomplete (non
     /// nil-terminated) or non-list bnodes are left untouched in `self.bnode`.
     fn stitch_seqs(&mut self) {
-        use std::collections::{HashMap, HashSet};
+        use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
         // Pull out the list cells, keeping non-list bnodes in place. For each
         // cell record (first value, rest target) and remember which bnodes are
         // pointed at by some `rest` (so the remainder are list heads).
-        let mut cells: HashMap<BNode<A>, (Term<A>, Option<BNode<A>>, VPosTriple<A>)> = HashMap::new();
-        let mut pointed: HashSet<BNode<A>> = HashSet::new();
+        let mut cells: HashMap<BNode<A>, (Term<A>, Option<BNode<A>>, VPosTriple<A>)> = HashMap::default();
+        let mut pointed: HashSet<BNode<A>> = HashSet::default();
         for (k, v) in std::mem::take(&mut self.bnode) {
             let parsed: Option<(Term<A>, Option<BNode<A>>)> = match v.as_slice() {
                 [
@@ -722,7 +722,7 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
         // Walk each head (a cell not pointed at by any `rest`) to its tail,
         // collecting values in order. Only nil-terminated chains become seqs.
         let heads: Vec<BNode<A>> = cells.keys().filter(|k| !pointed.contains(*k)).cloned().collect();
-        let mut consumed: HashSet<BNode<A>> = HashSet::new();
+        let mut consumed: HashSet<BNode<A>> = HashSet::default();
         for head in heads {
             let mut chain: Vec<BNode<A>> = Vec::new();
             let mut vals: Vec<Term<A>> = Vec::new();
@@ -979,7 +979,7 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
     /// Process data ranges
     fn data_ranges(&mut self) -> Result<(), HornedError> {
         let data_range_len = self.data_range.len();
-        let mut facet_map: HashMap<Term<A>, PosTriple<A>> = HashMap::new();
+        let mut facet_map: HashMap<Term<A>, PosTriple<A>> = HashMap::default();
 
         for (k, v) in std::mem::take(&mut self.bnode) {
             match v.as_slice() {
@@ -2157,14 +2157,32 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                             .map(|ann| Some(AnnotationAssertion { subject: sub.into(), ann }.into()))
                     }
                 }
-                [Term::Iri(sub), Term::Iri(pred), Term::Iri(obj)] => Ok(Some(
-                    ObjectPropertyAssertion {
-                        ope: ObjectProperty(pred.clone()).into(),
-                        from: sub.into(),
-                        to: obj.into(),
+                [Term::Iri(sub), Term::Iri(pred), Term::Iri(obj)] => {
+                    // A `subject predicate object` triple (all IRIs) is an
+                    // ObjectPropertyAssertion, EXCEPT when `predicate` is a *declared*
+                    // annotation property, in which case it is an IRI-valued
+                    // AnnotationAssertion — matching OWLAPI/ROBOT (a declared annotation
+                    // property is never an object property, so the triple annotates
+                    // `subject` rather than asserting an object-property edge). Without
+                    // this guard every annotation like `obo:IAO_0000231 rdf:resource=…`
+                    // (term-replaced-by, has-curation-status, …) is mis-read as a logical
+                    // object-property assertion, polluting the ABox handed to the reasoner.
+                    if <O as AsRef<DeclarationMappedIndex<A, AA>>>::as_ref(&self.o)
+                        .is_declaration_kind(pred, NamedOWLEntityKind::AnnotationProperty)
+                    {
+                        self.annotation(t.triple())
+                            .map(|ann| Some(AnnotationAssertion { subject: sub.into(), ann }.into()))
+                    } else {
+                        Ok(Some(
+                            ObjectPropertyAssertion {
+                                ope: ObjectProperty(pred.clone()).into(),
+                                from: sub.into(),
+                                to: obj.into(),
+                            }
+                            .into(),
+                        ))
                     }
-                    .into(),
-                )),
+                }
                 _ => Ok(None),
             };
 

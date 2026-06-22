@@ -72,6 +72,13 @@ impl DescriptionGraph {
     pub fn name(&self) -> &str {
         &self.0.name
     }
+    /// The canonical leaked-allocation address, a stable per-value word id (one
+    /// allocation per distinct graph), consistent with this type's identity
+    /// `Eq`/`Hash`. Used as a cheap hash key on the hot tuple-index path.
+    #[inline]
+    pub fn intern_ptr(&self) -> usize {
+        self.0 as *const DescriptionGraphData as usize
+    }
     pub fn arity(&self) -> usize {
         self.0.atomic_concepts_by_vertices.len()
     }

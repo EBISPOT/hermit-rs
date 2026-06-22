@@ -59,6 +59,24 @@ fn literal_data_range_to_predicate(range: &LiteralDataRange) -> DLPredicate {
 }
 
 impl Tableau {
+    /// Record that `node` just gained an unprocessed existential, so the
+    /// expansion cursor (a lower bound on the first node that may still need
+    /// expanding) is pulled back to `node` if `node` precedes the current cursor
+    /// in tableau order. Called from every site that pushes onto a node's
+    /// `unprocessed_existentials`. Keeps the cursor a correct lower bound: the
+    /// node-walk can then resume from the cursor without missing earlier work.
+    #[inline]
+    pub(crate) fn note_unprocessed_existential(&mut self, node: NodeId) {
+        let seq = self.nodes[node].tableau_seq;
+        match self.existential_cursor {
+            Some(_) if seq >= self.existential_cursor_seq => {}
+            _ => {
+                self.existential_cursor = Some(node);
+                self.existential_cursor_seq = seq;
+            }
+        }
+    }
+
     /// One step of existential expansion. HermiT's `CreationOrderStrategy` sets
     /// `m_expandNodeAtATime=true`, so `expandExistentials` recomputes blocking, then
     /// walks the tableau nodes only until the *first* node that produces an
@@ -90,20 +108,62 @@ impl Tableau {
         // unchanged. See the module-level note in `src/existentials.rs`.
         self.compute_blocking_with(final_chance);
         let mut extensions_changed = false;
-        let mut node = self.first_tableau_node;
+        // Resume the node-walk from the cursor: a verified lower bound on the first
+        // node that may still carry an unprocessed existential. Every site that
+        // pushes onto a node's `unprocessed_existentials` (concept-assertion add,
+        // backtrack restore) and every blocking-pass unblock pulls the cursor back
+        // to that node via `note_unprocessed_existential`, so `existential_cursor
+        // == None` means "no unprocessed existentials anywhere" and the walk does
+        // nothing -- no re-scan of a fully-settled tableau (the O(n^2) sweep this
+        // replaces). `advancing_cursor` stays true while every node seen so far has
+        // none left: those are settled until a push pulls the cursor back, so the
+        // cursor may advance over them. It stops at the first node that still has
+        // one (blocked or not -- a blocked node may unblock later, so it stays the
+        // wall until the blocking pass pulls the cursor onto it).
+        let mut node = self.existential_cursor;
+        let mut advancing_cursor = true;
         while let Some(current) = node {
-            if self.nodes[current].is_active()
-                && !self.nodes[current].is_blocked()
-                && self.nodes[current].has_unprocessed_existentials()
-            {
-                let existentials: Vec<ExistentialConcept> =
-                    self.nodes[current].unprocessed_existentials.clone();
+            let has_unprocessed = self.nodes[current].has_unprocessed_existentials();
+            // A node is "expandable" only if it actually has work the walk would do
+            // here: unprocessed existentials AND active AND unblocked. The cursor
+            // may safely advance over every node that is NOT expandable -- settled
+            // nodes (no work) and *blocked* nodes (whose existentials are not
+            // expanded while blocked). A blocked node that later unblocks is caught
+            // by the blocking pass's `note_unprocessed_existential` pull-back, so
+            // advancing past it cannot lose work. This is what stops a long run of
+            // blocked-with-unprocessed nodes from being re-walked every call.
+            let expandable = has_unprocessed
+                && self.nodes[current].is_active()
+                && !self.nodes[current].is_blocked();
+            if advancing_cursor {
+                if expandable {
+                    advancing_cursor = false;
+                    self.existential_cursor = Some(current);
+                    self.existential_cursor_seq = self.nodes[current].tableau_seq;
+                } else {
+                    // Not expandable here: advance the cursor past it.
+                    let next = self.nodes[current].next_tableau_node;
+                    self.existential_cursor = next;
+                    self.existential_cursor_seq =
+                        next.map(|n| self.nodes[n].tableau_seq).unwrap_or(u64::MAX);
+                }
+            }
+            if expandable {
+                // Snapshot the node's unprocessed existentials into the reusable
+                // `m_processedExistentials` buffer (taken out of `self` so the loop
+                // body can mutate the rest of `self`, including the node's own list,
+                // without aliasing). Refilling a kept-capacity buffer avoids a fresh
+                // allocation per processed node.
+                let mut existentials =
+                    std::mem::take(&mut self.processed_existentials_buffer);
+                existentials.clear();
+                existentials.extend_from_slice(&self.nodes[current].unprocessed_existentials);
                 // HermiT iterates the node's unprocessed existentials in reverse
                 // (`AbstractExpansionStrategy.expandExistentials`: `for index =
                 // size-1 .. 0`); match that order so the model/witness creation
                 // sequence is identical.
-                for existential in existentials.into_iter().rev() {
-                    match &existential {
+                for existential in existentials.iter().rev() {
+                    match existential {
                         ExistentialConcept::AtLeastConcept(at_least) => {
                             match self.at_least_concept_sat_type(at_least, current) {
                                 SatType::NotSatisfied => {
@@ -115,12 +175,12 @@ impl Tableau {
                                     // otherwise an `IndividualReuseBranchingPoint` retry
                                     // would re-expand it. Answer-neutral for the default
                                     // creation-order path, which pushes no branching point.
-                                    self.record_existential_processed(current, &existential);
+                                    self.record_existential_processed(current, existential);
                                     self.expand_at_least_concept(at_least.clone(), current);
                                     extensions_changed = true;
                                 }
                                 SatType::PermanentlySatisfied => {
-                                    self.record_existential_processed(current, &existential);
+                                    self.record_existential_processed(current, existential);
                                     // AbstractExpansionStrategy.java:121-122: fire when
                                     // permanently satisfied and expansion is skipped.
                                     self.monitor_event(|m| m.existential_satisfied());
@@ -140,12 +200,12 @@ impl Tableau {
                                     // Mark processed before expanding, as Java's
                                     // `expandExistential` does for every `AtLeast`
                                     // (matching the AtLeastConcept arm above).
-                                    self.record_existential_processed(current, &existential);
+                                    self.record_existential_processed(current, existential);
                                     self.expand_at_least_data_range(at_least.clone(), current);
                                     extensions_changed = true;
                                 }
                                 SatType::PermanentlySatisfied => {
-                                    self.record_existential_processed(current, &existential);
+                                    self.record_existential_processed(current, existential);
                                     // AbstractExpansionStrategy.java:121-122 (AtLeast supertype).
                                     self.monitor_event(|m| m.existential_satisfied());
                                 }
@@ -170,12 +230,15 @@ impl Tableau {
                                 // and expansion is skipped.
                                 self.monitor_event(|m| m.existential_satisfied());
                             }
-                            self.record_existential_processed(current, &existential);
+                            self.record_existential_processed(current, existential);
                         }
                     }
                     // AbstractExpansionStrategy.java:145 -- after each existential.
                     self.note_interrupt(); // no-op with the default -1 timeout
                 }
+                // Return the buffer (keeping its capacity) for the next node.
+                existentials.clear();
+                self.processed_existentials_buffer = existentials;
             }
             node = self.nodes[current].next_tableau_node;
             // AbstractExpansionStrategy.java:149 -- after each tableau node.
@@ -189,11 +252,23 @@ impl Tableau {
         extensions_changed
     }
 
-    /// The successor nodes of `node` along `on_role`.
-    fn role_successors(&self, on_role: &Role, node: NodeId) -> Vec<NodeId> {
-        let (predicate, bindings, positions, successor_column) = match on_role {
+    /// Iterate the `on_role`-successors of `node`, invoking `f(successor)` for each
+    /// until `f` returns `Some` (early-exit, returning that value) or the
+    /// successors are exhausted (returning `None`). Mirrors HermiT's `isSatisfied`,
+    /// which drives the persistent `Retrieval` cursor directly and `return`s on the
+    /// first witness instead of first materializing every successor into a list.
+    ///
+    /// Only ONE `Vec` (the retrieval's tuple-index buffer) is allocated per call;
+    /// the successor `NodeId`s are produced lazily, so the cardinality-1 satisfied
+    /// case touches just the first matching tuple.
+    fn find_role_successor<T>(
+        &self,
+        on_role: &Role,
+        node: NodeId,
+        mut f: impl FnMut(NodeId) -> Option<T>,
+    ) -> Option<T> {
+        let (bindings, positions, successor_column) = match on_role {
             Role::AtomicRole(r) => (
-                DLPredicate::AtomicRole(r.clone()),
                 [
                     Some(TableauObject::DLPredicate(DLPredicate::AtomicRole(r.clone()))),
                     Some(TableauObject::Node(node)),
@@ -203,7 +278,6 @@ impl Tableau {
                 2usize,
             ),
             Role::InverseRole(r) => (
-                DLPredicate::AtomicRole(r.get_inverse_of().clone()),
                 [
                     Some(TableauObject::DLPredicate(DLPredicate::AtomicRole(
                         r.get_inverse_of().clone(),
@@ -215,18 +289,27 @@ impl Tableau {
                 1usize,
             ),
         };
-        let _ = predicate;
-        let retrieval = self.create_ternary_retrieval(positions, bindings, View::Total);
-        retrieval
-            .tuple_indices
-            .iter()
-            .map(|&ti| {
-                self.ternary_extension_table
-                    .get_tuple_object(ti, successor_column)
-                    .as_node()
-                    .unwrap()
-            })
-            .collect()
+        // Drive the trie cursor directly (no `Vec<usize>` per probe), stopping at
+        // the first successor for which `f` yields a value. This is the dominant
+        // path for the cardinality-1 satisfaction check on dense inverse-role
+        // workloads, where the existential is usually already satisfied and only
+        // the first matching successor is touched.
+        let mut result: Option<T> = None;
+        self.visit_ternary_retrieval(positions, bindings, View::Total, |ti| {
+            let s = self
+                .ternary_extension_table
+                .get_tuple_object(ti, successor_column)
+                .as_node()
+                .unwrap();
+            match f(s) {
+                Some(v) => {
+                    result = Some(v);
+                    true
+                }
+                None => false,
+            }
+        });
+        result
     }
 
     /// Port of `ExistentialExpansionManager.getFunctionalExpansionNode`. For a
@@ -308,29 +391,34 @@ impl Tableau {
             (!this.nodes[s].is_blocked() || this.nodes[s].get_parent() == Some(node))
                 && this.contains_concept_assertion(&to_concept, s)
         };
-        let successors = self.role_successors(at_least.on_role(), node);
         if cardinality == 1 {
-            for s in successors {
+            // Drive the retrieval directly and stop at the first witness
+            // (`isSatisfied`'s `return` inside the cardinality==1 loop), so a
+            // satisfied existential touches only the first matching successor.
+            self.find_role_successor(at_least.on_role(), node, |s| {
                 if candidate(self, s) {
-                    return if self.is_permanent_satisfier(node, s) {
+                    Some(if self.is_permanent_satisfier(node, s) {
                         SatType::PermanentlySatisfied
                     } else {
                         SatType::CurrentlySatisfied
-                    };
+                    })
+                } else {
+                    None
                 }
-            }
-            SatType::NotSatisfied
+            })
+            .unwrap_or(SatType::NotSatisfied)
         } else {
             let mut satisfiers: Vec<NodeId> = Vec::new();
             let mut all_permanent = true;
-            for s in successors {
+            self.find_role_successor::<()>(at_least.on_role(), node, |s| {
                 if candidate(self, s) {
                     if !self.is_permanent_satisfier(node, s) {
                         all_permanent = false;
                     }
                     satisfiers.push(s);
                 }
-            }
+                None
+            });
             if satisfiers.len() >= cardinality as usize
                 && self.contains_subset_of_n_unequal_nodes(
                     &satisfiers,
@@ -375,29 +463,31 @@ impl Tableau {
             ];
             this.binary_extension_table.get_tuple_index(&tuple) != -1 && this.nodes[s].is_active()
         };
-        let successors = self.role_successors(at_least.on_role(), node);
         if cardinality == 1 {
-            for s in successors {
+            self.find_role_successor(at_least.on_role(), node, |s| {
                 if candidate(self, s) {
-                    return if self.is_permanent_satisfier(node, s) {
+                    Some(if self.is_permanent_satisfier(node, s) {
                         SatType::PermanentlySatisfied
                     } else {
                         SatType::CurrentlySatisfied
-                    };
+                    })
+                } else {
+                    None
                 }
-            }
-            SatType::NotSatisfied
+            })
+            .unwrap_or(SatType::NotSatisfied)
         } else {
             let mut satisfiers: Vec<NodeId> = Vec::new();
             let mut all_permanent = true;
-            for s in successors {
+            self.find_role_successor::<()>(at_least.on_role(), node, |s| {
                 if candidate(self, s) {
                     if !self.is_permanent_satisfier(node, s) {
                         all_permanent = false;
                     }
                     satisfiers.push(s);
                 }
-            }
+                None
+            });
             if satisfiers.len() >= cardinality as usize
                 && self.contains_subset_of_n_unequal_nodes(
                     &satisfiers,

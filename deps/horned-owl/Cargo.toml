@@ -97,6 +97,9 @@ version = "0.11.0"
 [dependencies.quick-xml]
 version = "0.37.5"
 
+[dependencies.rustc-hash]
+version = "2"
+
 [dependencies.thiserror]
 version = "1.0"
 

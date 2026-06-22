@@ -23,6 +23,27 @@ use crate::tableau::node::NodeId;
 use crate::tableau::object::TableauObject;
 use crate::tableau::{HyperresolutionManager, Tableau};
 
+/// Hard ceiling on concurrent leaf-node model builds (see
+/// `ConceptSubsumptionOracle::build_models_batch`). A single dense model's tableau
+/// can be multiple GB, so concurrency is capped to bound peak RAM rather than to
+/// the full core count. Overridable (and still clamped) via `OWLMAKE_CLASSIFY_THREADS`.
+const LEAF_BUILD_MAX_WORKERS_CAP: usize = 8;
+
+/// The effective worker cap: `min(cap, available_parallelism)`, optionally
+/// overridden (and still clamped to the cap) by `OWLMAKE_CLASSIFY_THREADS`.
+fn leaf_build_max_workers() -> usize {
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let mut cap = std::cmp::min(LEAF_BUILD_MAX_WORKERS_CAP, cores);
+    if let Ok(v) = std::env::var("OWLMAKE_CLASSIFY_THREADS") {
+        if let Ok(n) = v.parse::<usize>() {
+            if n >= 1 {
+                cap = std::cmp::min(n, LEAF_BUILD_MAX_WORKERS_CAP);
+            }
+        }
+    }
+    cap.max(1)
+}
+
 /// One iteration of HermiT's `doIteration`: returns whether work was done.
 fn do_iteration(
     tableau: &mut Tableau,
@@ -2535,6 +2556,7 @@ where
     // The atomic concepts to classify are the named classes of the clausified
     // vocabulary (everything appearing in the axioms), minus owl:Thing/Nothing
     // and the auxiliary "internal:" concepts introduced during clausification.
+    monitor.classification_phase("clausify");
     let dl_ontology = clausify_for_query(ontology)?;
     let mut element_set: HashSet<Class<crate::structural::A>> = HashSet::new();
     for concept in dl_ontology.get_all_atomic_concepts() {
@@ -2555,9 +2577,11 @@ where
     // every subsumption test (HermiT's single `m_tableau`). This is what makes
     // classification of large ontologies feasible -- the per-test re-clausification
     // was the bottleneck.
+    monitor.classification_phase("compile");
     let reasoner = Reasoner::with_configuration(&dl_ontology, configuration.clone());
     let mut manager = reasoner.new_manager();
 
+    monitor.classification_phase("consistency");
     if !reasoner.is_consistent() {
         // Java's classifyClasses() runs
         // checkPreConditions() FIRST, throwing InconsistentOntologyException under the
@@ -2576,6 +2600,8 @@ where
     use crate::model::AtomicConcept;
     let atomic_of = |c: &Class<crate::structural::A>| AtomicConcept::create(c.0.to_string());
 
+    monitor.classification_phase("classify");
+
     // Deterministic (Horn) ontologies: one model build per concept, reading its
     // subsumers off the single saturated model -- `DeterministicClassification`.
     // O(N) satisfiability tests instead of O(N^2) pairwise subsumption tests.
@@ -2587,7 +2613,9 @@ where
             Class<crate::structural::A>,
             HashSet<Class<crate::structural::A>>,
         > = HashMap::new();
-        for element in &elements {
+        let total = elements.len();
+        for (idx, element) in elements.iter().enumerate() {
+            monitor.classification_progress(idx, total);
             let mut element_subsumers: HashSet<Class<crate::structural::A>> = HashSet::new();
             // Read every element's subsumers off its own single model -- including
             // owl:Thing, so a `⊤ ⊑ C` axiom (making C equivalent to Thing) is found.
@@ -2664,6 +2692,7 @@ where
         reasoner: &reasoner,
         manager,
         thing: thing.clone(),
+        class_cache: std::cell::RefCell::new(HashMap::new()),
     };
     let mut classifier =
         QuasiOrderClassification::new(oracle, thing.clone(), nothing.clone(), element_set);
@@ -2794,6 +2823,47 @@ struct ConceptSubsumptionOracle<'r, 'd> {
     reasoner: &'r Reasoner<'d>,
     manager: HyperresolutionManager,
     thing: horned_owl::model::Class<crate::structural::A>,
+    /// Interns the `Class<A>` for each distinct concept encountered while reading
+    /// labels off saturated models. On dense models the same atomic concepts recur
+    /// across tens of thousands of node labels per model and across every model
+    /// build; without this cache each occurrence re-ran `Build::class` -- a
+    /// `BTreeSet<IRI>` string-comparison lookup keyed by the concept's IRI, after a
+    /// fresh `AtomicConcept -> String` round-trip -- millions of times per
+    /// classification. `AtomicConcept` is a `Copy` interned handle with O(1)
+    /// pointer hashing, so this map turns each repeat occurrence into a single word
+    /// hash plus an `Arc` refcount bump on the already-built `Class`, and builds
+    /// each distinct `Class` exactly once for the whole classification. The cached
+    /// `Class` is value-identical to what `Build::class` produced, so the
+    /// classification result is byte-identical.
+    class_cache: std::cell::RefCell<
+        HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+    >,
+}
+
+impl<'r, 'd> ConceptSubsumptionOracle<'r, 'd> {
+    /// The cached `Class<A>` for `ac`, building (and interning) it on first sight.
+    fn class_of(
+        &self,
+        build: &Build<crate::structural::A>,
+        ac: crate::model::AtomicConcept,
+    ) -> horned_owl::model::Class<crate::structural::A> {
+        self.class_cache
+            .borrow_mut()
+            .entry(ac)
+            .or_insert_with(|| build.class(ac.iri()))
+            .clone()
+    }
+
+    /// Convert a read-off set of atomic concepts into the matching `Class` set,
+    /// reusing `class_of`'s per-concept cache (one `Class` build per distinct IRI
+    /// for the whole classification, not one per occurrence).
+    fn classes_of(
+        &self,
+        build: &Build<crate::structural::A>,
+        acs: std::collections::HashSet<crate::model::AtomicConcept>,
+    ) -> std::collections::HashSet<horned_owl::model::Class<crate::structural::A>> {
+        acs.into_iter().map(|c| self.class_of(build, c)).collect()
+    }
 }
 
 impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crate::structural::A>>
@@ -2808,17 +2878,15 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
             &mut self.manager,
             &crate::model::AtomicConcept::create(concept.0.to_string()),
         )?;
-        let to_classes = |acs: std::collections::HashSet<crate::model::AtomicConcept>| {
-            acs.into_iter()
-                .map(|c| build.class(c.iri()))
-                .collect::<std::collections::HashSet<_>>()
-        };
         // readKnownSubsumersFromRootNode: deterministic subsumers + owl:Thing.
-        let mut query_known = to_classes(known_concepts);
+        let mut query_known = self.classes_of(&build, known_concepts);
         query_known.insert(self.thing.clone());
         // updatePossibleSubsumers: every active, unblocked node's concept label.
         let node_labels: Vec<std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>> =
-            label_concepts.into_iter().map(to_classes).collect();
+            label_concepts
+                .into_iter()
+                .map(|acs| self.classes_of(&build, acs))
+                .collect();
         Some(crate::quasi_order::ModelReadOff {
             query_known,
             query_possible: std::collections::HashSet::new(),
@@ -2851,15 +2919,15 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
             &crate::model::AtomicConcept::create(parent.0.to_string()),
         );
         let read_off = read_off.map(|(known_concepts, label_concepts)| {
-            let to_classes = |acs: std::collections::HashSet<crate::model::AtomicConcept>| {
-                acs.into_iter()
-                    .map(|c| build.class(c.iri()))
-                    .collect::<std::collections::HashSet<_>>()
-            };
             crate::quasi_order::ModelReadOff {
-                query_known: to_classes(known_concepts),
+                query_known: self.classes_of(&build, known_concepts),
                 query_possible: std::collections::HashSet::new(),
-                node_labels: Some(label_concepts.into_iter().map(to_classes).collect()),
+                node_labels: Some(
+                    label_concepts
+                        .into_iter()
+                        .map(|acs| self.classes_of(&build, acs))
+                        .collect(),
+                ),
             }
         });
         (subsumed, read_off)
@@ -2882,9 +2950,596 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
         // readKnownSubsumersFromRootNode reads only the atomic concepts actually
         // on the witnessing root (it does not inject owl:Thing); the classifier
         // filters them against its element set.
-        let query_known: std::collections::HashSet<horned_owl::model::Class<crate::structural::A>> =
-            known_concepts.into_iter().map(|c| build.class(c.iri())).collect();
+        let query_known = self.classes_of(&build, known_concepts);
         Some(crate::quasi_order::UnionTestResult { subsumed, query_known })
+    }
+
+    /// Open the streaming worker pool that backs the leaf-node strategy's
+    /// continuous coordinator/worker pipeline (no per-round barrier). See
+    /// [`ConceptStreamingPool`] for the design; the pool borrows the oracle's
+    /// reasoner + class-cache for its lifetime and joins all workers on drop.
+    fn streaming_pool<'p>(
+        &'p mut self,
+    ) -> Option<
+        Box<
+            dyn crate::quasi_order::StreamingModelPool<
+                    horned_owl::model::Class<crate::structural::A>,
+                > + 'p,
+        >,
+    > {
+        let worker_count = leaf_build_max_workers();
+        if worker_count <= 1 {
+            return None;
+        }
+        Some(Box::new(ConceptStreamingPool::new(
+            self.reasoner,
+            self.thing.clone(),
+            &self.class_cache,
+            worker_count,
+        )))
+    }
+
+    /// Parallel leaf-node model builds. Each model
+    /// (`buildModelForConcept`/`concept_model_read_off`) is independent: it
+    /// saturates its OWN tableau over the read-only, shareable [`DLOntology`] (whose
+    /// clauses hold process-global interned `&'static` handles, valid and identical
+    /// across threads). A fixed pool of [`leaf_build_max_workers()`]-many worker
+    /// threads shares a single global work queue (an atomic claim index) over the
+    /// WHOLE batch -- so a worker that finishes a cheap model immediately claims the
+    /// next concept rather than idling behind a single pathologically dense one.
+    /// Each worker owns its own replica reasoner (own tableau + manager + reuse set,
+    /// so nothing `!Send` -- `Rc`/`RefCell` -- crosses a thread boundary), reused
+    /// across every concept it claims.
+    ///
+    /// Workers return raw `AtomicConcept` read-offs (interned handles are
+    /// `Send + Sync`); THIS thread reorders them into batch order and converts each
+    /// to the classifier's `Class<A>` sets via the (single-threaded) `class_cache`,
+    /// so the values handed to the serial, confluent harvest are byte-identical to
+    /// the one-at-a-time path. RAM-bounded: at most `worker_count` concurrent
+    /// multi-GB tableaux, and only one batch's read-offs held at a time.
+    fn build_models_batch(
+        &mut self,
+        concepts: &[horned_owl::model::Class<crate::structural::A>],
+    ) -> Vec<Option<crate::quasi_order::ModelReadOff<horned_owl::model::Class<crate::structural::A>>>>
+    {
+        type RawReadOff = (
+            std::collections::HashSet<crate::model::AtomicConcept>,
+            Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
+        );
+        // Pre-intern the query concepts as `AtomicConcept` (Send) for the workers.
+        let queries: Vec<crate::model::AtomicConcept> = concepts
+            .iter()
+            .map(|c| crate::model::AtomicConcept::create(c.0.to_string()))
+            .collect();
+        let n = queries.len();
+        let worker_count = std::cmp::min(leaf_build_max_workers(), n.max(1));
+        // Below the threshold the thread-pool overhead is not worth it; build
+        // serially on this thread reusing the oracle's own manager/tableau.
+        if worker_count <= 1 {
+            return concepts.iter().map(|c| self.build_model(c)).collect();
+        }
+
+        let dl_ontology = self.reasoner.dl_ontology();
+        let configuration = self.reasoner.configuration().clone();
+        // Global work queue: each worker repeatedly claims the next concept index.
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        // Each worker pushes its `(index, raw_result)` into the shared sink; we
+        // reorder afterwards. The lock is held only for the push -- negligible next
+        // to the multi-millisecond tableau saturation it guards.
+        let sink: std::sync::Mutex<Vec<(usize, Option<RawReadOff>)>> =
+            std::sync::Mutex::new(Vec::with_capacity(n));
+
+        std::thread::scope(|scope| {
+            for _ in 0..worker_count {
+                let next = &next;
+                let sink = &sink;
+                let queries = &queries;
+                let configuration = &configuration;
+                scope.spawn(move || {
+                    // One replica reasoner + manager per worker, reused across every
+                    // concept it claims (the replica caches a single per-test tableau
+                    // internally, exactly as the serial path does), so there is one
+                    // tableau allocation per worker, not per concept.
+                    let worker = Reasoner::with_configuration(dl_ontology, configuration.clone());
+                    let mut manager = worker.new_manager();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if i >= queries.len() {
+                            break;
+                        }
+                        let result = worker.concept_model_read_off(&mut manager, &queries[i]);
+                        sink.lock().unwrap().push((i, result));
+                    }
+                });
+            }
+        });
+
+        // Reorder the workers' results back into batch order.
+        let mut raw: Vec<Option<Option<RawReadOff>>> = (0..n).map(|_| None).collect();
+        for (i, result) in sink.into_inner().unwrap() {
+            raw[i] = Some(result);
+        }
+
+        // Serial, deterministic conversion of the raw interned read-offs into the
+        // classifier's `Class<A>` sets, reusing the per-classification cache so each
+        // distinct concept's `Class` is built exactly once (value-identical to the
+        // serial path).
+        let build = Build::new_arc();
+        raw.into_iter()
+            .map(|slot| {
+                let result = slot.expect("every query slot is filled by a worker");
+                result.map(|(known_concepts, label_concepts)| {
+                    let mut query_known = self.classes_of(&build, known_concepts);
+                    query_known.insert(self.thing.clone());
+                    let node_labels: Vec<std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>> =
+                        label_concepts
+                            .into_iter()
+                            .map(|acs| self.classes_of(&build, acs))
+                            .collect();
+                    crate::quasi_order::ModelReadOff {
+                        query_known,
+                        query_possible: std::collections::HashSet::new(),
+                        node_labels: Some(node_labels),
+                    }
+                })
+            })
+            .collect()
+    }
+
+    fn resolution_pool<'p>(
+        &'p mut self,
+        top: &horned_owl::model::Class<crate::structural::A>,
+        bottom: &horned_owl::model::Class<crate::structural::A>,
+        elements: &std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>,
+    ) -> Option<
+        Box<
+            dyn crate::quasi_order::ResolutionPool<
+                    horned_owl::model::Class<crate::structural::A>,
+                > + 'p,
+        >,
+    > {
+        let worker_count = leaf_build_max_workers();
+        if worker_count <= 1 {
+            return None;
+        }
+        Some(Box::new(ConceptResolutionPool::new(
+            self.reasoner,
+            &self.class_cache,
+            worker_count,
+            top,
+            bottom,
+            elements,
+        )))
+    }
+}
+
+/// A minimal [`SubsumptionOracle`] over a worker's replica reasoner, native to
+/// `AtomicConcept` (no `Class<A>` conversion / class cache), exposing just the two
+/// subsumption tests the isolated resolver uses. The model-build entry points are
+/// unreachable on this path.
+struct RawResolveOracle<'r, 'd> {
+    reasoner: &'r Reasoner<'d>,
+    manager: &'r mut HyperresolutionManager,
+}
+
+impl crate::quasi_order::SubsumptionOracle<crate::model::AtomicConcept>
+    for RawResolveOracle<'_, '_>
+{
+    fn build_model(
+        &mut self,
+        _concept: &crate::model::AtomicConcept,
+    ) -> Option<crate::quasi_order::ModelReadOff<crate::model::AtomicConcept>> {
+        unreachable!("RawResolveOracle only runs the resolution subsumption tests")
+    }
+    fn does_subsume(
+        &mut self,
+        parent: &crate::model::AtomicConcept,
+        child: &crate::model::AtomicConcept,
+    ) -> bool {
+        self.reasoner.atomic_subsumes(self.manager, child, parent)
+    }
+    fn does_subsume_with_read_off(
+        &mut self,
+        parent: &crate::model::AtomicConcept,
+        child: &crate::model::AtomicConcept,
+    ) -> (
+        bool,
+        Option<crate::quasi_order::ModelReadOff<crate::model::AtomicConcept>>,
+    ) {
+        let (subsumed, raw) =
+            self.reasoner.atomic_subsumes_with_read_off(self.manager, child, parent);
+        (
+            subsumed,
+            raw.map(|(known, labels)| crate::quasi_order::ModelReadOff {
+                query_known: known,
+                query_possible: std::collections::HashSet::new(),
+                node_labels: Some(labels),
+            }),
+        )
+    }
+    fn is_subsumed_by_union(
+        &mut self,
+        child: &crate::model::AtomicConcept,
+        candidates: &std::collections::HashSet<crate::model::AtomicConcept>,
+    ) -> Option<crate::quasi_order::UnionTestResult<crate::model::AtomicConcept>> {
+        let (subsumed, known) =
+            self.reasoner.atomic_subsumed_by_union_with_known(self.manager, child, candidates);
+        Some(crate::quasi_order::UnionTestResult { subsumed, query_known: known })
+    }
+}
+
+/// The raw, `Send` read-off a worker produces: the query's deterministic known
+/// subsumers and the model's per-node concept labels, all as interned
+/// `AtomicConcept` handles (process-global `&'static`, valid + identical across
+/// threads). The coordinator-side conversion into `Class<A>` (via the shared,
+/// single-threaded `class_cache`) happens in [`ConceptStreamingPool::recv`].
+type StreamingRawReadOff = (
+    std::collections::HashSet<crate::model::AtomicConcept>,
+    Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
+);
+
+/// The streaming worker pool backing the leaf-node strategy's continuous
+/// coordinator/worker pipeline (replaces the per-round barrier). It owns a fixed
+/// set of persistent worker threads, each with its OWN replica `Reasoner` + manager
+/// (own tableau/reuse set, so nothing `!Send` crosses a thread boundary), reused
+/// across every concept the worker builds. Workers loop: receive a concept on the
+/// work channel -> `concept_model_read_off` -> send the raw read-off on the results
+/// channel. The coordinator (the classifier thread) [`dispatch`]es concepts and
+/// [`recv`]s completed results ONE at a time, harvesting each immediately -- a slow
+/// dense model occupies exactly one worker while the others keep flowing.
+///
+/// RAM: at most `worker_count` concurrent multi-GB tableaux plus a tiny results
+/// channel. There is NO reorder buffer (results are handed back in arrival order),
+/// so no completed read-offs accumulate.
+///
+/// # Safety / lifetimes
+/// The workers borrow the read-only `&DLOntology` and the `Configuration` to spin
+/// up their replica reasoners. These are extended to `'static` for the spawned
+/// `std::thread`s, which is sound because [`Drop`] joins every worker before the
+/// pool is dropped, and the pool is dropped (inside the classifier's streaming
+/// loop) strictly before the borrowed [`Reasoner`] -- so the threads never outlive
+/// the data they borrow. (The existing `build_models_batch` relies on the same
+/// `&DLOntology: Sync` property via scoped threads.)
+struct ConceptStreamingPool<'r> {
+    /// Sender on the work channel; `Some` until [`Drop`] closes it to signal the
+    /// workers to exit. A bounded channel sized to `worker_count` keeps the
+    /// in-flight count (which the coordinator already caps) from ever backing up.
+    work_tx: Option<std::sync::mpsc::SyncSender<crate::model::AtomicConcept>>,
+    /// Receiver on the results channel: `(concept, raw read-off)` in completion
+    /// order. `None` raw read-off means the concept is unsatisfiable.
+    result_rx: std::sync::mpsc::Receiver<(crate::model::AtomicConcept, Option<StreamingRawReadOff>)>,
+    /// Worker join handles, joined on drop.
+    workers: Vec<std::thread::JoinHandle<()>>,
+    /// `owl:Thing`, injected into every satisfiable read-off's known subsumers
+    /// (matching the serial `build_model`).
+    thing: horned_owl::model::Class<crate::structural::A>,
+    /// The oracle's shared, single-threaded class cache, reused so each distinct
+    /// concept's `Class<A>` is built exactly once for the whole classification
+    /// (value-identical to the serial path).
+    class_cache: &'r std::cell::RefCell<
+        HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+    >,
+    /// Reverse map from each dispatched concept's `Class<A>` back to the interned
+    /// `AtomicConcept` -- so `dispatch` interns once and `recv` returns the exact
+    /// `Class<A>` the coordinator dispatched (its in-flight key).
+    dispatched: HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+    worker_count: usize,
+}
+
+impl<'r> ConceptStreamingPool<'r> {
+    fn new<'d>(
+        reasoner: &Reasoner<'d>,
+        thing: horned_owl::model::Class<crate::structural::A>,
+        class_cache: &'r std::cell::RefCell<
+            HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+        >,
+        worker_count: usize,
+    ) -> ConceptStreamingPool<'r> {
+        // Extend the shared, read-only ontology + configuration borrows to 'static
+        // for the worker threads. SOUND: every worker is joined in `Drop` before
+        // this pool is dropped, and the pool is dropped before `reasoner` -- so the
+        // threads never read freed data. See the type-level safety note.
+        let dl_ontology: &'static DLOntology =
+            unsafe { std::mem::transmute::<&DLOntology, &'static DLOntology>(reasoner.dl_ontology()) };
+        let configuration = reasoner.configuration().clone();
+
+        // Bounded work channel: at most `worker_count` concepts queued, matching the
+        // coordinator's in-flight cap, so RAM stays bounded by the workers' tableaux.
+        let (work_tx, work_rx) =
+            std::sync::mpsc::sync_channel::<crate::model::AtomicConcept>(worker_count);
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<(
+            crate::model::AtomicConcept,
+            Option<StreamingRawReadOff>,
+        )>();
+        let work_rx = std::sync::Arc::new(std::sync::Mutex::new(work_rx));
+
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let work_rx = std::sync::Arc::clone(&work_rx);
+            let result_tx = result_tx.clone();
+            let configuration = configuration.clone();
+            let handle = std::thread::spawn(move || {
+                // One replica reasoner + manager per worker, reused across every
+                // concept it builds (one tableau allocation per worker, not per
+                // concept) -- exactly the serial/batch path's per-worker setup.
+                let worker = Reasoner::with_configuration(dl_ontology, configuration);
+                let mut manager = worker.new_manager();
+                loop {
+                    // Claim the next concept. The lock is held only for the recv,
+                    // negligible next to the multi-millisecond tableau saturation.
+                    let concept = {
+                        let rx = work_rx.lock().unwrap();
+                        rx.recv()
+                    };
+                    let concept = match concept {
+                        Ok(c) => c,
+                        // Work channel closed (pool dropping): exit.
+                        Err(_) => break,
+                    };
+                    let result = worker.concept_model_read_off(&mut manager, &concept);
+                    // Drop this worker's tableau now if that build blew it up, so an
+                    // idle worker does not pin a multi-GB allocation while the memory
+                    // governor throttles dispatch (the throttle relies on quiescent
+                    // workers shrinking).
+                    worker.release_oversized_test_tableau();
+                    // If the coordinator has gone away (result channel closed), stop.
+                    if result_tx.send((concept, result)).is_err() {
+                        break;
+                    }
+                }
+            });
+            workers.push(handle);
+        }
+
+        ConceptStreamingPool {
+            work_tx: Some(work_tx),
+            result_rx,
+            workers,
+            thing,
+            class_cache,
+            dispatched: HashMap::new(),
+            worker_count,
+        }
+    }
+
+    /// The cached `Class<A>` for `ac` (single-threaded, shared with the oracle).
+    fn class_of(
+        &self,
+        build: &Build<crate::structural::A>,
+        ac: crate::model::AtomicConcept,
+    ) -> horned_owl::model::Class<crate::structural::A> {
+        self.class_cache
+            .borrow_mut()
+            .entry(ac)
+            .or_insert_with(|| build.class(ac.iri()))
+            .clone()
+    }
+}
+
+impl<'r> crate::quasi_order::StreamingModelPool<horned_owl::model::Class<crate::structural::A>>
+    for ConceptStreamingPool<'r>
+{
+    fn dispatch(&mut self, concept: horned_owl::model::Class<crate::structural::A>) {
+        let ac = crate::model::AtomicConcept::create(concept.0.to_string());
+        // Remember the exact dispatched `Class<A>` keyed by its interned concept,
+        // so `recv` returns the identical value the coordinator put in flight.
+        self.dispatched.insert(ac.clone(), concept);
+        // `send` blocks only if all `worker_count` slots are full, which cannot
+        // happen given the coordinator's in-flight cap -- but if it ever did, this
+        // backpressure is exactly what bounds RAM.
+        if let Some(tx) = &self.work_tx {
+            // A worker panicking would close the channel; ignore the error (the
+            // coordinator will then never receive this concept's result and the
+            // pipeline drains via the in-flight count -- the panic is surfaced when
+            // the worker is joined on drop).
+            let _ = tx.send(ac);
+        }
+    }
+
+    fn recv(
+        &mut self,
+    ) -> Option<(
+        horned_owl::model::Class<crate::structural::A>,
+        Option<crate::quasi_order::ModelReadOff<horned_owl::model::Class<crate::structural::A>>>,
+    )> {
+        let (ac, raw) = self.result_rx.recv().ok()?;
+        // Recover the exact `Class<A>` the coordinator dispatched (its in-flight key).
+        let concept = self
+            .dispatched
+            .remove(&ac)
+            .unwrap_or_else(|| self.class_of(&Build::new_arc(), ac));
+        // Convert the raw interned read-off into the classifier's `Class<A>` sets,
+        // single-threaded via the shared class cache -- value-identical to serial.
+        let build = Build::new_arc();
+        let model = raw.map(|(known_concepts, label_concepts)| {
+            let mut query_known: std::collections::HashSet<
+                horned_owl::model::Class<crate::structural::A>,
+            > = known_concepts.into_iter().map(|c| self.class_of(&build, c)).collect();
+            query_known.insert(self.thing.clone());
+            let node_labels: Vec<
+                std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>,
+            > = label_concepts
+                .into_iter()
+                .map(|acs| acs.into_iter().map(|c| self.class_of(&build, c)).collect())
+                .collect();
+            crate::quasi_order::ModelReadOff {
+                query_known,
+                query_possible: std::collections::HashSet::new(),
+                node_labels: Some(node_labels),
+            }
+        });
+        Some((concept, model))
+    }
+
+    fn worker_count(&self) -> usize {
+        self.worker_count
+    }
+}
+
+impl<'r> Drop for ConceptStreamingPool<'r> {
+    fn drop(&mut self) {
+        // Close the work channel so idle workers' `recv` returns `Err` and they
+        // exit; then join every worker. This MUST complete before the borrowed
+        // `&'static DLOntology` (transmuted from the reasoner) is invalidated, which
+        // it is, because the pool is dropped before the reasoner outlives it.
+        self.work_tx = None;
+        for handle in self.workers.drain(..) {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// The persistent resolution-phase worker pool (the resolution analogue of
+/// [`ConceptStreamingPool`]). Each worker owns a replica reasoner + manager and
+/// loops: receive a [`ResolveTask`] -> run `quasi_order::resolve_picked_isolated`
+/// over the read-only TBox via a [`RawResolveOracle`] -> send the
+/// [`ResolveDelta`]. Tasks/deltas are `AtomicConcept`-native (Send); the
+/// coordinator converts each delta to `Class<A>` via the shared single-threaded
+/// class cache on `recv`. Same safety story as the streaming pool: the borrowed
+/// `&DLOntology`/elements are extended to `'static` for the threads, which are all
+/// joined in `Drop` before the pool (and thus before the reasoner) goes away.
+struct ConceptResolutionPool<'r> {
+    work_tx: Option<std::sync::mpsc::SyncSender<crate::quasi_order::ResolveTask<crate::model::AtomicConcept>>>,
+    result_rx: std::sync::mpsc::Receiver<crate::quasi_order::ResolveDelta<crate::model::AtomicConcept>>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+    class_cache: &'r std::cell::RefCell<
+        HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+    >,
+    worker_count: usize,
+}
+
+impl<'r> ConceptResolutionPool<'r> {
+    fn new<'d>(
+        reasoner: &Reasoner<'d>,
+        class_cache: &'r std::cell::RefCell<
+            HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+        >,
+        worker_count: usize,
+        top: &horned_owl::model::Class<crate::structural::A>,
+        bottom: &horned_owl::model::Class<crate::structural::A>,
+        elements: &std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>,
+    ) -> ConceptResolutionPool<'r> {
+        let to_atom = |c: &horned_owl::model::Class<crate::structural::A>| {
+            crate::model::AtomicConcept::create(c.0.to_string())
+        };
+        let dl_ontology: &'static DLOntology =
+            unsafe { std::mem::transmute::<&DLOntology, &'static DLOntology>(reasoner.dl_ontology()) };
+        let configuration = reasoner.configuration().clone();
+        let top_a = to_atom(top);
+        let bottom_a = to_atom(bottom);
+        let elements_a: std::sync::Arc<std::collections::HashSet<crate::model::AtomicConcept>> =
+            std::sync::Arc::new(elements.iter().map(&to_atom).collect());
+
+        let (work_tx, work_rx) = std::sync::mpsc::sync_channel::<
+            crate::quasi_order::ResolveTask<crate::model::AtomicConcept>,
+        >(worker_count);
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<
+            crate::quasi_order::ResolveDelta<crate::model::AtomicConcept>,
+        >();
+        let work_rx = std::sync::Arc::new(std::sync::Mutex::new(work_rx));
+
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let work_rx = std::sync::Arc::clone(&work_rx);
+            let result_tx = result_tx.clone();
+            let configuration = configuration.clone();
+            let elements_a = std::sync::Arc::clone(&elements_a);
+            let top_a = top_a.clone();
+            let bottom_a = bottom_a.clone();
+            let handle = std::thread::spawn(move || {
+                let worker = Reasoner::with_configuration(dl_ontology, configuration);
+                let mut manager = worker.new_manager();
+                loop {
+                    let task = {
+                        let rx = work_rx.lock().unwrap();
+                        rx.recv()
+                    };
+                    let task = match task {
+                        Ok(t) => t,
+                        Err(_) => break,
+                    };
+                    let mut raw_oracle = RawResolveOracle {
+                        reasoner: &worker,
+                        manager: &mut manager,
+                    };
+                    let delta = crate::quasi_order::resolve_picked_isolated(
+                        task, &top_a, &bottom_a, &elements_a, &mut raw_oracle,
+                    );
+                    if result_tx.send(delta).is_err() {
+                        break;
+                    }
+                }
+            });
+            workers.push(handle);
+        }
+
+        ConceptResolutionPool { work_tx: Some(work_tx), result_rx, workers, class_cache, worker_count }
+    }
+
+    fn class_of(
+        &self,
+        build: &Build<crate::structural::A>,
+        ac: crate::model::AtomicConcept,
+    ) -> horned_owl::model::Class<crate::structural::A> {
+        self.class_cache
+            .borrow_mut()
+            .entry(ac)
+            .or_insert_with(|| build.class(ac.iri()))
+            .clone()
+    }
+}
+
+impl<'r> crate::quasi_order::ResolutionPool<horned_owl::model::Class<crate::structural::A>>
+    for ConceptResolutionPool<'r>
+{
+    fn dispatch(
+        &mut self,
+        task: crate::quasi_order::ResolveTask<horned_owl::model::Class<crate::structural::A>>,
+    ) {
+        let to_atom = |c: &horned_owl::model::Class<crate::structural::A>| {
+            crate::model::AtomicConcept::create(c.0.to_string())
+        };
+        let atomic = crate::quasi_order::ResolveTask {
+            picked: to_atom(&task.picked),
+            unknown: task.unknown.iter().map(&to_atom).collect(),
+            known_map: task
+                .known_map
+                .into_iter()
+                .map(|(k, v)| (to_atom(&k), v.iter().map(&to_atom).collect()))
+                .collect(),
+        };
+        if let Some(tx) = &self.work_tx {
+            let _ = tx.send(atomic);
+        }
+    }
+
+    fn recv(
+        &mut self,
+    ) -> Option<crate::quasi_order::ResolveDelta<horned_owl::model::Class<crate::structural::A>>> {
+        let d = self.result_rx.recv().ok()?;
+        let build = Build::new_arc();
+        Some(crate::quasi_order::ResolveDelta {
+            picked: self.class_of(&build, d.picked),
+            new_knowns: d.new_knowns.into_iter().map(|a| self.class_of(&build, a)).collect(),
+            pruned_labels: d
+                .pruned_labels
+                .into_iter()
+                .map(|s| s.into_iter().map(|a| self.class_of(&build, a)).collect())
+                .collect(),
+        })
+    }
+
+    fn worker_count(&self) -> usize {
+        self.worker_count
+    }
+}
+
+impl<'r> Drop for ConceptResolutionPool<'r> {
+    fn drop(&mut self) {
+        self.work_tx = None;
+        for handle in self.workers.drain(..) {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -6137,6 +6792,15 @@ impl<'a> Reasoner<'a> {
         &self.configuration
     }
 
+    /// The (read-only, shareable) clausified ontology this reasoner runs over.
+    /// Used to spin up independent per-thread reasoner replicas for the parallel
+    /// leaf-node model builds (each replica owns its own tableau/manager/reuse set,
+    /// so nothing `!Send` crosses a thread boundary, while the `&'a DLOntology` and
+    /// its interned `&'static` clause handles are shared by reference).
+    pub fn dl_ontology(&self) -> &'a DLOntology {
+        self.dl_ontology
+    }
+
     /// Sets the per-tableau datatype flags, mirroring the relevant lines of
     /// `Tableau.updateFlagsDependentOnAdditionalOntology` (Tableau.java:246-255):
     /// `m_checkDatatypes` from `hasDatatypes()` and `m_checkUnknownDatatypeRestrictions`
@@ -6468,10 +7132,41 @@ impl<'a> Reasoner<'a> {
     ) -> Option<TableauGuard<'_>> {
         let mut tableau = match self.test_tableau.borrow_mut().take() {
             Some(mut cached) => {
-                // Faithful port of HermiT reusing `m_tableau`: wipe per-test state
-                // (and fire tableauCleared) instead of reallocating.
-                cached.clear();
-                cached
+                if cached.is_oversized() {
+                    // A hard test grew the reused tableau's arrays to hundreds of
+                    // MB+; `clear()` would keep that capacity for every later test,
+                    // ratcheting per-worker RAM to OOM on EFO. Drop it and rebuild a
+                    // fresh, right-sized tableau (the cache-miss path) so the memory
+                    // is returned to the allocator.
+                    if std::env::var_os("HERMIT_DEBUG_TABLEAU").is_some() {
+                        eprintln!("[tableau] rebuild: retained_capacity={}", cached.retained_capacity());
+                    }
+                    // The oversized node/tuple ARRAYS are what we want returned to the
+                    // allocator -- but the `BlockingSignatureCache` is small (sorted
+                    // concept-id vecs) and is precisely the cross-test optimization
+                    // that keeps every model after the first one shallow: a node whose
+                    // signature a prior model already witnessed is blocked immediately
+                    // (`signature_is_cached`). HermiT keeps one `m_tableau` (hence one
+                    // signature cache) for the reasoner's whole lifetime, so preserving
+                    // it here is the faithful behaviour. Dropping it (as a naive rebuild
+                    // does) is catastrophic on cyclic inverse-role TBoxes: each full
+                    // model trips the oversize limit, the cache is wiped, so the *next*
+                    // model is full-size again and also trips it -- an unbounded
+                    // rebuild loop (the EFO-scale `reason -r hermit` blow-up) where
+                    // HermiT, reusing the cache, makes every later model tiny.
+                    let preserved_signature_cache = cached.blocking_signature_cache.take();
+                    drop(cached);
+                    let mut fresh = self.build_test_tableau(manager);
+                    if preserved_signature_cache.is_some() {
+                        fresh.blocking_signature_cache = preserved_signature_cache;
+                    }
+                    fresh
+                } else {
+                    // Faithful port of HermiT reusing `m_tableau`: wipe per-test
+                    // state (and fire tableauCleared) instead of reallocating.
+                    cached.clear();
+                    cached
+                }
             }
             None => self.build_test_tableau(manager),
         };
@@ -6488,6 +7183,21 @@ impl<'a> Reasoner<'a> {
             cache: &self.test_tableau,
             tableau: Some(tableau),
         })
+    }
+
+    /// Releases the cached per-test tableau *now* if a hard test grew it past the
+    /// oversize threshold, returning the memory to the allocator immediately
+    /// instead of at the next checkout (which is where `checkout_test_tableau`
+    /// would otherwise rebuild it). Streaming workers call this after every model
+    /// build so a worker that just saturated a multi-GB tableau does not keep that
+    /// capacity pinned while it blocks idle waiting for its next concept. This is
+    /// what makes the coordinator's memory governor effective: throttling dispatch
+    /// only lowers resident memory if the quiescent workers actually shrink.
+    pub fn release_oversized_test_tableau(&self) {
+        let mut slot = self.test_tableau.borrow_mut();
+        if slot.as_ref().is_some_and(|t| t.is_oversized()) {
+            *slot = None;
+        }
     }
 
     /// Saturates `concept(x)` on the reused per-test tableau and, on a model,

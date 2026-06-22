@@ -383,8 +383,8 @@ fn equivalent_and_inverse_object_properties_getters() {
     }));
     // inv = r⁻
     o.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        OPE::ObjectProperty(r.clone()),
-        OPE::ObjectProperty(inv.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(r.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(inv.clone()),
     )));
     // getters now return ObjectPropertyExpression nodes (so inverse
     // members survive). The named members r, s are present as OPE::ObjectProperty.

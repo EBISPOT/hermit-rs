@@ -34,6 +34,24 @@ pub trait ClassificationProgressMonitor<E> {
     /// `ClassificationProgressMonitor.elementClassified`: invoked once as
     /// `element` is classified.
     fn element_classified(&mut self, element: &E);
+
+    /// owlmake extension (no Java counterpart): coarse progress through the
+    /// *expensive* classification phase — `done` of `total` concepts settled so
+    /// far. Fired from the per-concept model-build loops (the deterministic
+    /// classifier and the quasi-order leaf-node strategy / possible-subsumer
+    /// resolution), which is where a large-ontology classification actually
+    /// spends its time — unlike `element_classified`, which only fires during
+    /// the cheap final hierarchy build. Default no-op, so it is answer-neutral
+    /// and existing monitors are unaffected.
+    fn classification_progress(&mut self, _done: usize, _total: usize) {}
+
+    /// owlmake extension (no Java counterpart): announce the current phase of
+    /// classification by a short label — `clausify`, `compile`, `consistency`,
+    /// `classify` — so a progress display can show what the otherwise-silent
+    /// setup steps (which on a large ontology dominate the wall-clock time) are
+    /// doing before the per-concept `classification_progress` bar starts.
+    /// Default no-op.
+    fn classification_phase(&mut self, _phase: &str) {}
 }
 
 /// A no-op progress monitor (the default when a caller passes none).

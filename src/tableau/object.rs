@@ -20,6 +20,45 @@ pub enum TableauObject {
 }
 
 impl TableauObject {
+    /// A cheap raw integer key uniquely identifying this object, consistent with
+    /// `Eq`/`Hash` (equal objects -> equal keys). The label variants delegate to
+    /// the interned-pointer-based `raw_key()` of their inner value; `Node` uses
+    /// its (already small-integer) id. This lets the hot tuple-index hash avoid
+    /// constructing a hasher and dispatching the derived `Hash` per call -- Java
+    /// HermiT likewise caches `object.hashCode()` rather than rehashing.
+    #[inline]
+    pub fn raw_key(&self) -> usize {
+        match self {
+            TableauObject::Concept(c) => c.raw_key().wrapping_mul(5),
+            TableauObject::DLPredicate(p) => p.raw_key().wrapping_mul(7),
+            TableauObject::NegatedAtomicRole(r) => r.intern_ptr().wrapping_mul(11),
+            TableauObject::DescriptionGraph(g) => g.intern_ptr().wrapping_mul(13),
+            TableauObject::Node(id) => id.wrapping_mul(17),
+        }
+    }
+
+    /// A *collision-free* 64-bit key: equal objects -> equal keys AND distinct
+    /// objects -> distinct keys (unlike `raw_key`, whose `*5/*7/...` variant
+    /// spreading can alias across variants). The inner per-value id is interned (a
+    /// heap address < 2^48) or a small node id, so it fits in the low 61 bits; the
+    /// 3-bit variant tag goes in the top bits. This exactness lets the tuple index
+    /// match a trie edge on `(parent, unique_key)` ALONE -- never storing or
+    /// dereferencing the object to confirm -- since two distinct objects can never
+    /// share a key. (The binary table's column 0 genuinely mixes `Concept` and
+    /// `DLPredicate`, so cross-variant exactness is required, not just per-variant.)
+    #[inline]
+    pub fn unique_key(&self) -> u64 {
+        let (tag, inner): (u64, u64) = match self {
+            TableauObject::Concept(c) => (0, c.raw_key() as u64),
+            TableauObject::DLPredicate(p) => (1, p.raw_key() as u64),
+            TableauObject::NegatedAtomicRole(r) => (2, r.intern_ptr() as u64),
+            TableauObject::DescriptionGraph(g) => (3, g.intern_ptr() as u64),
+            TableauObject::Node(id) => (4, *id as u64),
+        };
+        debug_assert!(inner < (1u64 << 61), "interned id does not fit in 61 bits");
+        (tag << 61) | (inner & ((1u64 << 61) - 1))
+    }
+
     pub fn as_node(&self) -> Option<NodeId> {
         match self {
             TableauObject::Node(id) => Some(*id),

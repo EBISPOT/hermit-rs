@@ -116,14 +116,17 @@ struct VmRetrieval {
     view: View,
     /// Matching tuple indices for the current open (reused across opens). Java's
     /// retrieval walks the tuple table lazily; we keep the matching indices and
-    /// read the *current* tuple's objects into the reused `cur_objects` buffer on
-    /// demand, instead of materialising a `RetrievalRow` (with an owned `Vec`) for
-    /// every matching tuple up front. The dependency set is read straight from the
-    /// table only when a full clause match needs it (`CopyDependencySet`), since
-    /// most iterated tuples are filtered out by a join branch first.
+    /// read the *current* tuple's objects straight from the extension table on
+    /// demand (per column, when a worker actually reads it), instead of
+    /// materialising every matching row up front *or* eagerly copying the whole
+    /// tuple into a side buffer on each `next()`. Most iterated tuples are filtered
+    /// out by an early join branch after touching only one or two columns, so
+    /// per-column on-demand reads avoid copying columns that are never inspected
+    /// (the prior `cur_objects` buffer cleared + re-pushed every column on every
+    /// advance). The dependency set is likewise read straight from the table only
+    /// when a full clause match needs it (`CopyDependencySet`).
     indices: Vec<usize>,
     position: usize,
-    cur_objects: Vec<TableauObject>,
 }
 
 impl VmRetrieval {
@@ -131,45 +134,34 @@ impl VmRetrieval {
         self.position >= self.indices.len()
     }
 
+    /// The extension table this retrieval ranges over (binary vs ternary).
     #[inline]
-    fn current_object(&self, column: usize) -> TableauObject {
-        self.cur_objects[column]
+    fn table<'a>(&self, tableau: &'a Tableau) -> &'a crate::tableau::extension_table::ExtensionTable {
+        if self.table_arity == 2 {
+            &tableau.binary_extension_table
+        } else {
+            &tableau.ternary_extension_table
+        }
+    }
+
+    /// Reads column `column` of the current tuple directly from the table.
+    #[inline]
+    fn current_object(&self, column: usize, tableau: &Tableau) -> TableauObject {
+        let tuple_index = self.indices[self.position];
+        *self.table(tableau).get_tuple_object(tuple_index, column)
     }
 
     /// The current tuple's dependency set, read on demand from the table.
     fn current_dependency_set(&self, tableau: &Tableau) -> PermanentDependencySet {
         let tuple_index = self.indices[self.position];
-        let table = if self.table_arity == 2 {
-            &tableau.binary_extension_table
-        } else {
-            &tableau.ternary_extension_table
-        };
-        table.get_dependency_set(tuple_index, &tableau.dependency_set_factory.empty_set())
+        self.table(tableau)
+            .get_dependency_set(tuple_index, &tableau.dependency_set_factory.empty_set())
     }
 
-    /// Loads the current tuple's objects into the reused buffer (Java's `next()`
-    /// reading into its shared tuple buffer). A no-op past the last tuple.
-    fn load_current(&mut self, tableau: &Tableau) {
-        if self.position >= self.indices.len() {
-            return;
-        }
-        let tuple_index = self.indices[self.position];
-        let arity = self.table_arity;
-        let table = if arity == 2 {
-            &tableau.binary_extension_table
-        } else {
-            &tableau.ternary_extension_table
-        };
-        self.cur_objects.clear();
-        for c in 0..arity {
-            self.cur_objects.push(*table.get_tuple_object(tuple_index, c));
-        }
-    }
-
-    /// `next()`: advance to the next matching tuple and read it into the buffer.
-    fn advance(&mut self, tableau: &Tableau) {
+    /// `next()`: advance to the next matching tuple.
+    #[inline]
+    fn advance(&mut self) {
         self.position += 1;
-        self.load_current(tableau);
     }
 }
 
@@ -184,6 +176,9 @@ pub struct DLClauseEvaluator {
     values_buffer: Rc<RefCell<Vec<Option<TableauObject>>>>,
     core_variables: Vec<bool>,
     union_constituents: Vec<Option<PermanentDependencySet>>,
+    /// Reused scratch for `union_dependency_set`'s branching-point gather, so a
+    /// derived fact's dependency set does not allocate a fresh `Vec` per match.
+    union_scratch: Vec<i32>,
 }
 
 impl DLClauseEvaluator {
@@ -218,6 +213,7 @@ impl DLClauseEvaluator {
             values_buffer: Rc::clone(&values_buffer_manager.values_buffer),
             core_variables,
             union_constituents,
+            union_scratch: Vec::new(),
         }
     }
 
@@ -234,30 +230,59 @@ impl DLClauseEvaluator {
         delta_objects: &[TableauObject],
         delta_dependency_set: &PermanentDependencySet,
     ) {
+        // Borrow the shared `values_buffer` once for the whole clause run rather
+        // than per worker op. The VM is single-threaded and never re-enters the
+        // buffer through `tableau` (it owns no `values_buffer` handle), so holding
+        // the borrow across the join loop is sound and removes a `RefCell` borrow
+        // (and `Rc` deref) from every binding read/write in the tightest loop.
+        let values_rc = Rc::clone(&self.values_buffer);
+        let mut values = values_rc.borrow_mut();
+        let workers_len = self.workers.len();
         let mut program_counter: usize = 0;
-        while program_counter < self.workers.len() && !tableau.contains_clash() {
-            // Mirror DLClauseEvaluator.java:84: poll the interrupt flag on every
-            // worker step so a long join can be cancelled promptly. note_interrupt()
-            // is a no-op with the default -1 timeout; pending_interrupt is checked
-            // to bail early so run_calculus can surface the latched Err.
-            tableau.note_interrupt();
-            if tableau.pending_interrupt.is_some() {
-                return;
+        // Hoist the interrupt deadline out of the per-op poll: with the default
+        // (no-timeout, never-interrupted) configuration there is nothing to check,
+        // so skip the per-step atomic load + method call entirely while staying
+        // byte-identical (the only observable effect of note_interrupt is latching
+        // pending_interrupt, which cannot become Some when polling is disabled).
+        let poll_interrupt = tableau.interrupt_polling_active();
+        while program_counter < workers_len && !tableau.contains_clash() {
+            if poll_interrupt {
+                // Mirror DLClauseEvaluator.java:84: poll the interrupt flag on every
+                // worker step so a long join can be cancelled promptly.
+                tableau.note_interrupt();
+                if tableau.pending_interrupt.is_some() {
+                    return;
+                }
             }
-            let worker = self.workers[program_counter];
-            program_counter =
-                self.execute(worker, program_counter, tableau, delta_objects, delta_dependency_set);
+            // `program_counter < workers_len` is the loop guard and `workers` (the
+            // compiled program) is immutable during evaluation, so this read is
+            // provably in bounds; elide its per-op bounds check.
+            let worker = unsafe { *self.workers.get_unchecked(program_counter) };
+            program_counter = self.execute(
+                worker,
+                program_counter,
+                tableau,
+                delta_objects,
+                delta_dependency_set,
+                &mut values,
+            );
         }
     }
 
     /// Reads column `column` of `from_retrieval`'s current row -- the shared delta
     /// buffer for retrieval 0, else the join retrieval's current tuple.
     #[inline]
-    fn retrieval_object(&self, from_retrieval: usize, column: usize, delta_objects: &[TableauObject]) -> TableauObject {
+    fn retrieval_object(
+        &self,
+        from_retrieval: usize,
+        column: usize,
+        delta_objects: &[TableauObject],
+        tableau: &Tableau,
+    ) -> TableauObject {
         if from_retrieval == 0 {
             delta_objects[column]
         } else {
-            self.retrievals[from_retrieval].current_object(column)
+            self.retrievals[from_retrieval].current_object(column, tableau)
         }
     }
 
@@ -268,11 +293,12 @@ impl DLClauseEvaluator {
         tableau: &mut Tableau,
         delta_objects: &[TableauObject],
         delta_dependency_set: &PermanentDependencySet,
+        values: &mut Vec<Option<TableauObject>>,
     ) -> usize {
         match worker {
             Worker::CopyValues { from_retrieval, from_column, to_index } => {
-                let value = self.retrieval_object(from_retrieval, from_column, delta_objects);
-                self.values_buffer.borrow_mut()[to_index] = Some(value);
+                let value = self.retrieval_object(from_retrieval, from_column, delta_objects, tableau);
+                values[to_index] = Some(value);
                 program_counter + 1
             }
             Worker::CopyDependencySet { from_retrieval, target_index } => {
@@ -285,8 +311,8 @@ impl DLClauseEvaluator {
                 program_counter + 1
             }
             Worker::BranchIfNotEqual { jump, from_retrieval, column1, column2 } => {
-                let lhs = self.retrieval_object(from_retrieval, column1, delta_objects);
-                let rhs = self.retrieval_object(from_retrieval, column2, delta_objects);
+                let lhs = self.retrieval_object(from_retrieval, column1, delta_objects, tableau);
+                let rhs = self.retrieval_object(from_retrieval, column2, delta_objects, tableau);
                 if lhs == rhs {
                     program_counter + 1
                 } else {
@@ -294,8 +320,8 @@ impl DLClauseEvaluator {
                 }
             }
             Worker::BranchIfNotNodeIdLessEqualThan { jump, var1, var2 } => {
-                let id1 = self.node_id_at(var1, tableau);
-                let id2 = self.node_id_at(var2, tableau);
+                let id1 = node_id_at(values, var1, tableau);
+                let id2 = node_id_at(values, var2, tableau);
                 if id1 <= id2 {
                     program_counter + 1
                 } else {
@@ -306,9 +332,9 @@ impl DLClauseEvaluator {
                 let node_vars = &self.node_var_lists[node_vars as usize];
                 let mut strictly_ascending = true;
                 let mut all_equal = true;
-                let mut last_id = self.node_id_at(node_vars[0], tableau);
+                let mut last_id = node_id_at(values, node_vars[0], tableau);
                 for &var in &node_vars[1..] {
-                    let id = self.node_id_at(var, tableau);
+                    let id = node_id_at(values, var, tableau);
                     if last_id >= id {
                         strictly_ascending = false;
                     }
@@ -324,13 +350,11 @@ impl DLClauseEvaluator {
                 }
             }
             Worker::OpenRetrieval { retrieval } => {
-                let vb = Rc::clone(&self.values_buffer);
-                let vb_ref = vb.borrow();
-                open_retrieval(&mut self.retrievals[retrieval], &vb_ref, tableau);
+                open_retrieval(&mut self.retrievals[retrieval], values, tableau);
                 program_counter + 1
             }
             Worker::NextRetrieval { retrieval } => {
-                self.retrievals[retrieval].advance(tableau);
+                self.retrievals[retrieval].advance();
                 program_counter + 1
             }
             Worker::HasMoreRetrieval { eof, retrieval } => {
@@ -355,23 +379,23 @@ impl DLClauseEvaluator {
                 program_counter + 1
             }
             Worker::DeriveUnaryFact { predicate, argument_index } => {
-                let node = self.node_at(argument_index);
+                let node = node_at(values, argument_index);
                 let is_core = self.core_variables[argument_index];
                 let dependency_set = self.union_dependency_set(&mut tableau.dependency_set_factory);
                 tableau.add_unary_from_predicate(predicate, node, &dependency_set, is_core);
                 program_counter + 1
             }
             Worker::DeriveBinaryFact { predicate, argument1, argument2 } => {
-                let node1 = self.node_at(argument1);
-                let node2 = self.node_at(argument2);
+                let node1 = node_at(values, argument1);
+                let node2 = node_at(values, argument2);
                 let dependency_set = self.union_dependency_set(&mut tableau.dependency_set_factory);
                 tableau.add_binary_from_predicate(predicate, node1, node2, &dependency_set, true);
                 program_counter + 1
             }
             Worker::DeriveTernaryFact { predicate, argument1, argument2, argument3 } => {
-                let node1 = self.node_at(argument1);
-                let node2 = self.node_at(argument2);
-                let node3 = self.node_at(argument3);
+                let node1 = node_at(values, argument1);
+                let node2 = node_at(values, argument2);
+                let node3 = node_at(values, argument3);
                 let dependency_set = self.union_dependency_set(&mut tableau.dependency_set_factory);
                 tableau.add_ternary_from_predicate(
                     predicate,
@@ -388,7 +412,7 @@ impl DLClauseEvaluator {
                 let arguments: Vec<NodeId> = d
                     .copy_values_to_arguments
                     .iter()
-                    .map(|&i| self.node_at(i))
+                    .map(|&i| node_at(values, i))
                     .collect();
                 let is_core: Vec<bool> = d
                     .copy_is_core
@@ -405,7 +429,7 @@ impl DLClauseEvaluator {
                 // shallowest tree node; everything strictly below it cannot be core.
                 let mut potential_non_core: Option<NodeId> = None;
                 for variable_index in (0..variable_count).rev() {
-                    let Some(node) = self.values_buffer.borrow()[variable_index]
+                    let Some(node) = values[variable_index]
                         .as_ref()
                         .and_then(|o| o.as_node())
                     else {
@@ -425,7 +449,7 @@ impl DLClauseEvaluator {
                 if let Some(potential_non_core) = potential_non_core {
                     let root_depth = tableau.nodes[potential_non_core].get_tree_depth();
                     for variable_index in (0..variable_count).rev() {
-                        let Some(node) = self.values_buffer.borrow()[variable_index]
+                        let Some(node) = values[variable_index]
                             .as_ref()
                             .and_then(|o| o.as_node())
                         else {
@@ -444,31 +468,38 @@ impl DLClauseEvaluator {
         }
     }
 
-    fn node_at(&self, variable_index: usize) -> NodeId {
-        self.values_buffer.borrow()[variable_index]
-            .as_ref()
-            .and_then(|o| o.as_node())
-            .expect("variable bound to a node")
-    }
-    fn node_id_at(&self, variable_index: usize, tableau: &Tableau) -> i32 {
-        tableau.nodes[self.node_at(variable_index)].get_node_id()
-    }
     /// The derived fact's dependency set: the interned permanent union of the
     /// copied body-atom constituents. Built directly (no throwaway
     /// `UnionDependencySet`), and returned as a `Permanent` so the consuming
     /// `get_permanent` takes its fast path.
     fn union_dependency_set(
-        &self,
+        &mut self,
         factory: &mut crate::tableau::dependency_set::DependencySetFactory,
     ) -> DependencySet {
-        DependencySet::Permanent(factory.permanent_union_of(&self.union_constituents))
+        DependencySet::Permanent(
+            factory.permanent_union_of_scratch(&self.union_constituents, &mut self.union_scratch),
+        )
     }
 }
 
+#[inline]
+fn node_at(values: &[Option<TableauObject>], variable_index: usize) -> NodeId {
+    values[variable_index]
+        .as_ref()
+        .and_then(|o| o.as_node())
+        .expect("variable bound to a node")
+}
+
+#[inline]
+fn node_id_at(values: &[Option<TableauObject>], variable_index: usize, tableau: &Tableau) -> i32 {
+    tableau.nodes[node_at(values, variable_index)].get_node_id()
+}
+
 /// `open()`: collect the matching tuple indices for this retrieval into its
-/// reused `indices` buffer and load the first one. The tuples themselves are read
-/// lazily (one at a time, on `advance`) into the retrieval's reused buffer rather
-/// than materialised up front, mirroring Java's `Retrieval.open`/`next`.
+/// reused `indices` buffer. The tuple *objects* themselves are not materialised
+/// here; each is read straight from the extension table on demand as a worker
+/// inspects it (`current_object` / `current_dependency_set`), mirroring Java's
+/// lazy `Retrieval.open`/`next` while avoiding any per-tuple buffer copy.
 fn open_retrieval(
     retrieval: &mut VmRetrieval,
     values_buffer: &[Option<TableauObject>],
@@ -521,7 +552,6 @@ fn open_retrieval(
         // No usable index: scan the view window, filtering as we go.
         retrieval.indices.extend((start..after_last).filter(|&t| keep(t)));
     }
-    retrieval.load_current(tableau);
 }
 
 fn head_variables(head_dl_clauses: &[DLClause]) -> Vec<Variable> {
@@ -661,7 +691,6 @@ impl<'a> Compiler<'a> {
             view: View::DeltaOld,
             indices: Vec::new(),
             position: 0,
-            cur_objects: Vec::new(),
         });
         let after_rule = self.add_label();
         let first_atom = self.body_atoms[0].clone();
@@ -732,7 +761,6 @@ impl<'a> Compiler<'a> {
                 view: View::ExtensionThis,
                 indices: Vec::new(),
                 position: 0,
-                cur_objects: Vec::new(),
             });
             let retrieval_index = self.retrievals.len() - 1;
             self.workers.push(Worker::OpenRetrieval { retrieval: retrieval_index });

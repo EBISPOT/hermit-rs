@@ -485,8 +485,8 @@ fn entailment_of_property_and_class_axioms() {
     }));
     // parent ≡ Inv(child).
     ontology.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        horned_owl::model::ObjectPropertyExpression::ObjectProperty(parent.clone()),
-        horned_owl::model::ObjectPropertyExpression::ObjectProperty(child.clone()),
+        ObjectPropertyExpression::ObjectProperty(parent.clone()),
+        ObjectPropertyExpression::ObjectProperty(child.clone()),
     )));
     // married symmetric and functional.
     ontology.insert(Component::SymmetricObjectProperty(SymmetricObjectProperty(married_e.clone())));
@@ -514,8 +514,8 @@ fn entailment_of_property_and_class_axioms() {
     assert!(is_entailed(
         &ontology,
         &Component::InverseObjectProperties(InverseObjectProperties(
-            horned_owl::model::ObjectPropertyExpression::ObjectProperty(parent.clone()),
-            horned_owl::model::ObjectPropertyExpression::ObjectProperty(child.clone()),
+            ObjectPropertyExpression::ObjectProperty(parent.clone()),
+            ObjectPropertyExpression::ObjectProperty(child.clone()),
         ))
     )
     .unwrap());

@@ -228,6 +228,7 @@ dependencies = [
  "pest_derive",
  "pretty_rdf",
  "quick-xml 0.37.5",
+ "rustc-hash",
  "thiserror 1.0.69",
  "ureq",
 ]

@@ -35,6 +35,21 @@ pub struct Tableau {
     pub(crate) number_of_nodes_in_tableau: i32,
     pub(crate) number_of_merged_or_pruned_nodes: i32,
     pub(crate) number_of_node_creations: i32,
+    /// Strictly-monotonic source of `Node::tableau_seq` stamps (never decremented),
+    /// used only for tableau-order comparisons by the existential-expansion cursor.
+    pub(crate) tableau_seq_counter: u64,
+    /// Existential-expansion cursor: the earliest node (by `tableau_seq`) that may
+    /// still carry an unprocessed existential. The `expand_existentials` node-walk
+    /// resumes from here instead of `first_tableau_node`, so already-fully-processed
+    /// prefix nodes are not re-walked every iteration (turning an O(n^2) sweep into
+    /// O(remaining work)). Maintained as a *lower bound*: it is only moved EARLIER
+    /// when a node before it gains expandable work (`note_unprocessed_existential`,
+    /// called from every existential push and every blocking-pass unblock /
+    /// reactivation), and advanced forward by the walk itself over nodes that are
+    /// not expandable here (settled, blocked, or inactive). A `None` value means
+    /// "no node currently has an unprocessed existential" -- the walk does nothing.
+    pub(crate) existential_cursor: Option<NodeId>,
+    pub(crate) existential_cursor_seq: u64,
 
     // Extension tables (the ExtensionManager state).
     pub(crate) binary_extension_table: ExtensionTable,
@@ -81,6 +96,13 @@ pub struct Tableau {
         crate::tableau::hyperresolution::GroundDisjunctionHeaderManager,
     pub(crate) expanded_existentials: Vec<(crate::model::ExistentialConcept, NodeId)>,
     pub(crate) expanded_existentials_by_branching_point: Vec<usize>,
+    /// Reusable copy of a node's unprocessed existentials for the expansion walk,
+    /// mirroring HermiT's persistent `m_processedExistentials` list on
+    /// `AbstractExpansionStrategy`. The walk must iterate a snapshot (expansion
+    /// mutates the node's own list), so this buffer is `mem::take`n out, refilled
+    /// per node, and restored -- avoiding a fresh `Vec` allocation per processed
+    /// node across the tens of thousands of successor nodes.
+    pub(crate) processed_existentials_buffer: Vec<crate::model::ExistentialConcept>,
 
     /// Canonical NI root nodes for the nominal-introduction rule, keyed by
     /// `(owning root node, annotated equality, slot number)` -- the port of
@@ -341,6 +363,9 @@ impl Tableau {
             number_of_nodes_in_tableau: 0,
             number_of_merged_or_pruned_nodes: 0,
             number_of_node_creations: 0,
+            tableau_seq_counter: 0,
+            existential_cursor: None,
+            existential_cursor_seq: 0,
             binary_extension_table: new_binary_extension_table(needs_dependency_sets),
             ternary_extension_table: new_ternary_extension_table(needs_dependency_sets),
             clash_dependency_set: None,
@@ -362,6 +387,7 @@ impl Tableau {
                 crate::tableau::hyperresolution::GroundDisjunctionHeaderManager::new(),
             expanded_existentials: Vec::new(),
             expanded_existentials_by_branching_point: Vec::new(),
+            processed_existentials_buffer: Vec::new(),
             first_changed_node: None,
             last_validated_unchanged_node: None,
             validated_blockers_by_signature: rustc_hash::FxHashMap::default(),
@@ -443,6 +469,14 @@ impl Tableau {
     pub fn start_task(&mut self) {
         self.pending_interrupt = None;
         self.interrupt_flag.start_task();
+    }
+
+    /// Whether the per-worker-step interrupt poll can possibly fire during the
+    /// current clause evaluation (see `InterruptFlag::poll_can_fire`). When false,
+    /// the DL-clause VM skips the per-op `note_interrupt` poll entirely.
+    #[inline]
+    pub(crate) fn interrupt_polling_active(&self) -> bool {
+        self.interrupt_flag.poll_can_fire()
     }
 
     /// Latches an interrupt at a hook site that cannot return a `Result`.
@@ -853,7 +887,10 @@ impl Tableau {
         node_type: NodeType,
         tree_depth: i32,
     ) {
+        self.tableau_seq_counter += 1;
+        let seq = self.tableau_seq_counter;
         let n = &mut self.nodes[node];
+        n.tableau_seq = seq;
         n.node_id = node_id;
         n.node_state = Some(NodeState::Active);
         n.parent = parent;
@@ -924,6 +961,12 @@ impl Tableau {
             self.nodes[node].merged_into_dependency_set = None;
         }
         self.nodes[node].node_state = Some(NodeState::Active);
+        // A node reactivated by backtracking may carry unprocessed existentials
+        // that the cursor advanced past while it was inactive; pull the cursor
+        // back so the walk reconsiders it.
+        if self.nodes[node].has_unprocessed_existentials() {
+            self.note_unprocessed_existential(node);
+        }
         self.last_merged_or_pruned_node = self.nodes[node].previous_merged_or_pruned_node;
         self.nodes[node].previous_merged_or_pruned_node = None;
         self.number_of_merged_or_pruned_nodes -= 1;
@@ -939,6 +982,17 @@ impl Tableau {
     pub(crate) fn destroy_last_tableau_node(&mut self) {
         let node = self.last_tableau_node.expect("no tableau node");
         debug_assert_eq!(self.nodes[node].node_state, Some(NodeState::Active));
+        // If the existential-expansion cursor points at the node about to be
+        // destroyed, retreat it to the predecessor so it never references a freed
+        // slot. `backtrack_existentials` re-pushes restored existentials onto
+        // surviving nodes afterwards (pulling the cursor back further if needed),
+        // so this conservative retreat cannot skip work.
+        if self.existential_cursor == Some(node) {
+            let prev = self.nodes[node].previous_tableau_node;
+            self.existential_cursor = prev;
+            self.existential_cursor_seq =
+                prev.map(|p| self.nodes[p].tableau_seq).unwrap_or(0);
+        }
         // ExistentialExpansionStrategy.nodeDestroyed: drop the node from the
         // blockers cache and roll `first_changed_node` back past it.
         self.note_blocking_node_destroyed(node);
@@ -1233,6 +1287,29 @@ impl Tableau {
     /// manager, whose `clear()` does NOT reset compiled programs / interned
     /// headers), and the configuration-derived flags (`use_disjunction_learning`,
     /// `existential_strategy_type`, interrupt/monitor).
+    /// Total retained backing-store capacity (node arena + both extension tables
+    /// + ground-disjunction arena), in elements.
+    pub(crate) fn retained_capacity(&self) -> usize {
+        self.nodes.capacity()
+            + self.binary_extension_table.retained_capacity()
+            + self.ternary_extension_table.retained_capacity()
+            + self.ground_disjunctions.capacity()
+    }
+
+    /// Whether a single hard satisfiability test has grown this (reused) tableau's
+    /// buffers past the point where keeping them for reuse is worth the resident
+    /// memory. `clear()` only empties the buffers (retaining capacity), so without
+    /// releasing oversized ones the per-worker tableau ratchets to the largest
+    /// class's size and never shrinks — 4 workers then OOM on EFO. The caller
+    /// rebuilds a fresh tableau instead of clear-reusing this one when true.
+    pub(crate) fn is_oversized(&self) -> bool {
+        // ~8M retained element slots ≈ several hundred MB across Node/TrieNode/
+        // tuple-slot arrays; well above a normal test's working set, so only a
+        // genuine blow-up triggers a rebuild (normal tests keep clear-reuse).
+        const OVERSIZE_LIMIT: usize = 8_000_000;
+        self.retained_capacity() > OVERSIZE_LIMIT
+    }
+
     pub fn clear(&mut self) {
         // m_allocatedNodes=0; m_numberOf...=0; node-list heads = null.
         self.allocated_nodes = 0;
@@ -1243,6 +1320,11 @@ impl Tableau {
         self.first_tableau_node = None;
         self.last_tableau_node = None;
         self.last_merged_or_pruned_node = None;
+        // Reset the existential-expansion cursor for the next test. The seq counter
+        // is left monotonically increasing across tests (it only ever needs to be
+        // internally consistent within a single test's node-creation order).
+        self.existential_cursor = None;
+        self.existential_cursor_seq = 0;
         // The node arena: Java keeps the `Node` objects on a free list and reuses
         // them; here the arena is a `Vec` that the (now-empty) free/tableau lists
         // no longer reference, so dropping it is the faithful reset.

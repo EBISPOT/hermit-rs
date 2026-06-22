@@ -790,6 +790,7 @@ impl Tableau {
         while self.expanded_existentials.len() > new_len {
             let (existential, node) = self.expanded_existentials.pop().unwrap();
             self.nodes[node].unprocessed_existentials.push(existential);
+            self.note_unprocessed_existential(node);
         }
     }
 

@@ -1008,8 +1008,8 @@ fn forall_propagates_along_inverse_of_complex_role() {
         sup: ope(s.clone()),
     }));
     ontology.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        ObjectPropertyExpression::ObjectProperty(r.clone()),
-        ObjectPropertyExpression::ObjectProperty(s.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(r.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(s.clone()),
     )));
     ontology.insert(Component::ObjectPropertyAssertion(ObjectPropertyAssertion {
         ope: ope(p.clone()),
@@ -1548,8 +1548,8 @@ fn cyclic_existential_with_inverse_roles_present_terminates() {
         sup: CE::ObjectSomeValuesFrom { ope: r_e.clone(), bce: Box::new(CE::Class(a.clone())) },
     }));
     ontology.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        ObjectPropertyExpression::ObjectProperty(r.clone()),
-        ObjectPropertyExpression::ObjectProperty(s.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(r.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(s.clone()),
     )));
 
     assert!(is_concept_satisfiable(&ontology, CE::Class(a.clone())).unwrap());
@@ -2659,8 +2659,8 @@ fn universal_propagates_along_inverse_of_complex_role() {
     // the mirror of its complex inverse s's automaton.
     let mut base: SetOntology<_> = SetOntology::new();
     base.insert(Component::InverseObjectProperties(InverseObjectProperties(
-        ObjectPropertyExpression::ObjectProperty(r.clone()),
-        ObjectPropertyExpression::ObjectProperty(s.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(r.clone()),
+        horned_owl::model::ObjectPropertyExpression::ObjectProperty(s.clone()),
     )));
     base.insert(Component::TransitiveObjectProperty(TransitiveObjectProperty(s_e.clone())));
     base.insert(Component::SubClassOf(SubClassOf {

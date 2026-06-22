@@ -78,6 +78,12 @@ pub struct Node {
     /// validation-relevant state changes after the last `validateBlocks`, cleared
     /// at the end of that pass.
     pub(crate) has_changed_since_validation: bool,
+    /// A strictly-monotonic creation stamp used only to compare two nodes'
+    /// positions in the tableau linked list (which equals creation order, since
+    /// nodes are always appended at the tail and never reordered). Lets the
+    /// existential-expansion cursor decide cheaply whether a node that just
+    /// gained an unprocessed existential lies before the cursor's current wall.
+    pub(crate) tableau_seq: u64,
 }
 
 impl Node {
@@ -110,6 +116,7 @@ impl Node {
             blocking_to_parent_cache: None,
             has_blocking_info_changed: false,
             has_changed_since_validation: false,
+            tableau_seq: 0,
         }
     }
 

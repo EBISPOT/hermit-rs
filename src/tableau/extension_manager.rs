@@ -220,6 +220,7 @@ impl Tableau {
                 _ => {
                     if let Some(existential) = concept_to_existential(concept) {
                         self.nodes[node].unprocessed_existentials.push(existential);
+                        self.note_unprocessed_existential(node);
                     }
                 }
             }
@@ -619,6 +620,38 @@ impl Tableau {
             tuple_indices.extend((start..after_last).filter(|&t| keep(t)));
         }
         Retrieval { tuple_indices, position: 0, view }
+    }
+
+    /// Short-circuiting twin of `create_ternary_retrieval` for the existential
+    /// satisfaction probe: drives the trie cursor directly, invoking
+    /// `visit(tuple_index)` per active, selection-matching tuple and stopping at the
+    /// first for which `visit` returns `true`. No `Vec` is allocated per call and
+    /// the trie walk halts at the first witness. Falls back to an ascending scan
+    /// (matching `create_ternary_retrieval`) when no index has a bound leading
+    /// prefix. Returns whether any visited tuple satisfied `visit`.
+    pub fn visit_ternary_retrieval<F: FnMut(usize) -> bool>(
+        &self,
+        binding_positions: [i32; 3],
+        bindings_buffer: [Option<TableauObject>; 3],
+        view: View,
+        mut visit: F,
+    ) -> bool {
+        let table = &self.ternary_extension_table;
+        let mut keep_and_visit = |tuple_index: usize| -> bool {
+            let n1 = table.get_tuple_object(tuple_index, 1).as_node().unwrap();
+            let n2 = table.get_tuple_object(tuple_index, 2).as_node().unwrap();
+            self.nodes[n1].is_active()
+                && self.nodes[n2].is_active()
+                && self.selection_matches(table, tuple_index, &binding_positions, &bindings_buffer)
+                && visit(tuple_index)
+        };
+        match table.indexed_visit(&binding_positions, &bindings_buffer, view, &mut keep_and_visit) {
+            Some(found) => found,
+            None => {
+                let (start, after_last) = table.view_range(view);
+                (start..after_last).any(&mut keep_and_visit)
+            }
+        }
     }
 
     fn selection_matches(

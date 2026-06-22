@@ -76,6 +76,59 @@ fn prop_sort_key(ope: &ObjectPropExpr) -> (u8, String) {
     }
 }
 
+/// Java `String.hashCode()` over UTF-16 code units.
+fn java_string_hash(s: &str) -> i32 {
+    let mut h: i32 = 0;
+    for u in s.encode_utf16() {
+        h = h.wrapping_mul(31).wrapping_add(u as i32);
+    }
+    h
+}
+
+/// OWLAPI `IRI.hashCode()` = prefix.hashCode() + remainder.hashCode(), splitting the
+/// IRI at the last '#'/'/' (the NCName boundary for OBO/EFO IRIs).
+fn owlapi_iri_hash(iri: &str) -> i32 {
+    let split = iri.rfind(|c| c == '#' || c == '/').map(|i| i + 1).unwrap_or(0);
+    java_string_hash(&iri[..split]).wrapping_add(java_string_hash(&iri[split..]))
+}
+
+/// OWLAPI `OWLObjectPropertyExpression.hashCode()`. Reverse-engineered from the
+/// bundled OWLAPI: a named property hashes to `IRI.hashCode() + 128743`, and an
+/// inverse to the named hash `+ 131471`.
+fn owlapi_prop_hash(ope: &ObjectPropExpr) -> i32 {
+    use horned_owl::model::ObjectPropertyExpression as OPE;
+    match ope {
+        OPE::ObjectProperty(p) => owlapi_iri_hash(&p.0.to_string()).wrapping_add(128743),
+        OPE::InverseObjectProperty(p) => {
+            owlapi_iri_hash(&p.0.to_string()).wrapping_add(128743).wrapping_add(131471)
+        }
+    }
+}
+
+/// The `java.util.HashMap` table capacity holding `n` entries (default 16, doubling
+/// whenever `0.75 * capacity` would be below the entry count).
+fn java_hashmap_capacity(n: usize) -> usize {
+    let mut cap = 16usize;
+    while (cap as f64) * 0.75 < n as f64 {
+        cap <<= 1;
+    }
+    cap
+}
+
+/// A `java.util.HashMap` iteration-order key for `ope` among a collection of `n`
+/// entries: HermiT's automaton maps are `HashMap`s, iterated in bucket order
+/// `spread(hash) & (capacity-1)`. The construction is order-sensitive, so to match
+/// HermiT bit-for-bit we iterate in this order. `prop_sort_key` breaks bucket
+/// collisions deterministically (Java orders those by insertion; collisions are
+/// absent in the role boxes we target, and the tiebreak keeps us deterministic).
+fn java_map_order_key(ope: &ObjectPropExpr, n: usize) -> (i32, u8, String) {
+    let h = owlapi_prop_hash(ope);
+    let spread = h ^ ((h as u32 >> 16) as i32);
+    let bucket = spread & (java_hashmap_capacity(n) as i32 - 1);
+    let (tag, iri) = prop_sort_key(ope);
+    (bucket, tag, iri)
+}
+
 pub struct ObjectPropertyInclusionManager {
     automata_by_property: HashMap<ObjectPropExpr, Automaton>,
     build: Build<super::A>,
@@ -422,7 +475,8 @@ fn create_automata(
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        existing.sort_by_key(|(k, _)| prop_sort_key(k));
+        let n_existing = existing.len();
+        existing.sort_by_key(|(k, _)| java_map_order_key(k, n_existing));
         let mut extra_inverse: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
         for (property, automaton) in existing {
             let inverse = inverse_property(&property);
@@ -452,12 +506,14 @@ fn create_automata(
         // (overwrite) and only merged into the live map at the closing `putAll`, so
         // they are not visible to the in-loop live-map reads.
         let mut keys: Vec<ObjectPropExpr> = automata_by_property.keys().cloned().collect();
-        keys.sort_by_key(prop_sort_key);
+        let n_keys = keys.len();
+        keys.sort_by_key(|k| java_map_order_key(k, n_keys));
         let mut extra: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
         for property in keys {
             let Some(inverses) = inverse_map.get(&property) else { continue };
             let mut inverses: Vec<&ObjectPropExpr> = inverses.iter().collect();
-            inverses.sort_by_key(|p| prop_sort_key(p));
+            let n_inv = inverses.len();
+            inverses.sort_by_key(|p| java_map_order_key(p, n_inv));
             for inverse_prop in inverses {
                 if let Some(inverse_automaton) = automata_by_property.get(inverse_prop).cloned() {
                     // Java line 363-364: enrich the live entry in place.
@@ -480,12 +536,14 @@ fn create_automata(
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
-    snapshot.sort_by_key(|(k, _)| prop_sort_key(k));
+    let n_snap = snapshot.len();
+    snapshot.sort_by_key(|(k, _)| java_map_order_key(k, n_snap));
     let mut equivalent_automata: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
     for (property, automaton) in snapshot {
         if let Some(equiv_set) = equivalent.get(&property) {
             let mut equiv_set: Vec<&ObjectPropExpr> = equiv_set.iter().collect();
-            equiv_set.sort_by_key(|p| prop_sort_key(p));
+            let n_eq = equiv_set.len();
+            equiv_set.sort_by_key(|p| java_map_order_key(p, n_eq));
             for equiv_property in equiv_set {
                 if *equiv_property != property
                     && !automata_by_property.contains_key(equiv_property)
@@ -888,7 +946,7 @@ fn connect_all_automata(
 
     let mut properties_to_start: Vec<ObjectPropExpr> = Vec::new();
     for prop in trans_closed.get_elements() {
-        if trans_closed.successors(prop).is_empty() {
+        if trans_closed.successors_is_empty(prop) {
             properties_to_start.push(prop.clone());
         }
     }
@@ -912,7 +970,8 @@ fn connect_all_automata(
     }
     // Iterate in a fixed order (see `prop_sort_key`): the recursion start order is
     // not answer-neutral, so a stable order reproduces Java's deterministic result.
-    properties_to_start.sort_by_key(prop_sort_key);
+    let n_pts = properties_to_start.len();
+    properties_to_start.sort_by_key(|p| java_map_order_key(p, n_pts));
     // HermiT iterates `propertiesToStartRecursion` as a `HashSet`. Java's hashing
     // is content-based and so stable across runs; our `std::HashSet` randomises its
     // iteration order per run. The order is NOT answer-neutral here: building a
@@ -951,7 +1010,8 @@ fn connect_all_automata(
     // automaton before storing it, so `∀property.C` propagates along the
     // inverse of a complex role even when the property is only a leftover leaf.
     let mut individual_keys: Vec<&ObjectPropExpr> = individual_automata.keys().collect();
-    individual_keys.sort_by_key(|p| prop_sort_key(p));
+    let n_ik = individual_keys.len();
+    individual_keys.sort_by_key(|p| java_map_order_key(p, n_ik));
     for property in individual_keys {
         let automaton = &individual_automata[property];
         if complete_automata.contains_key(property) {

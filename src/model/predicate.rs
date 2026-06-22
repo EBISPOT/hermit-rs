@@ -142,6 +142,33 @@ impl DLPredicate {
         }
     }
 
+    /// A cheap raw integer key uniquely identifying this predicate, mixing the
+    /// variant discriminant with the canonical interned-allocation address of the
+    /// inner value (every non-unit variant is interned, so its `intern_ptr()` is a
+    /// collision-free per-value id; the three unit variants get a fixed id). Equal
+    /// predicates -> equal keys, so this is consistent with `Eq`/`Hash`; it skips
+    /// building a hasher and the nested `Hash` dispatch on the hot tuple-index path.
+    #[inline]
+    pub fn raw_key(&self) -> usize {
+        match self {
+            DLPredicate::AtomicConcept(p) => p.intern_ptr() ^ (0 << 4),
+            DLPredicate::AtomicRole(p) => p.intern_ptr() ^ (1 << 4),
+            DLPredicate::AtLeastConcept(p) => p.intern_ptr() ^ (2 << 4),
+            DLPredicate::AtLeastDataRange(p) => p.intern_ptr() ^ (3 << 4),
+            DLPredicate::Equality => 4 << 4,
+            DLPredicate::Inequality => 5 << 4,
+            DLPredicate::AnnotatedEquality(p) => p.intern_ptr() ^ (6 << 4),
+            DLPredicate::NodeIdLessEqualThan => 7 << 4,
+            DLPredicate::NodeIDsAscendingOrEqual(p) => p.intern_ptr() ^ (8 << 4),
+            DLPredicate::DatatypeRestriction(p) => p.intern_ptr() ^ (9 << 4),
+            DLPredicate::ConstantEnumeration(p) => p.intern_ptr() ^ (10 << 4),
+            DLPredicate::InternalDatatype(p) => p.intern_ptr() ^ (11 << 4),
+            DLPredicate::AtomicNegationDataRange(p) => p.intern_ptr() ^ (12 << 4),
+            DLPredicate::DescriptionGraph(p) => p.intern_ptr() ^ (13 << 4),
+            DLPredicate::ExistsDescriptionGraph(p) => p.intern_ptr() ^ (14 << 4),
+        }
+    }
+
     /// Port of `Equality.toOrderedString(Prefixes)`. In Java only the
     /// `Equality` predicate defines `toOrderedString`, which simply delegates
     /// to `toString(prefixes)` (yielding `"=="`). Provided for parity; like the

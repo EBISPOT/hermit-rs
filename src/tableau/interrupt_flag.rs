@@ -51,6 +51,19 @@ impl InterruptFlag {
         Ok(())
     }
 
+    /// Whether `check_interrupt` could possibly report an interrupt in the near
+    /// future, used to skip the per-worker-step poll in the hottest VM loop when
+    /// there is provably nothing to detect. True if a timeout is configured (it may
+    /// elapse) or the interrupt latch is already set. When this is false the loop
+    /// may legitimately defer its poll to the next outer step: an interrupt that
+    /// arrives mid-loop is still caught at the next `check_interrupt`, and the
+    /// derived facts are unaffected either way (cancellation is best-effort, with
+    /// the same latched-`Err` surfaced by `run_calculus`).
+    #[inline]
+    pub fn poll_can_fire(&self) -> bool {
+        self.timeout.is_some() || self.interrupted.load(Ordering::Acquire)
+    }
+
     /// Returns a handle that can be used from another thread to interrupt the
     /// current task.
     pub fn interrupt_handle(&self) -> InterruptHandle {

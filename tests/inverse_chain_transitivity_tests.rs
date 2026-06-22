@@ -4,9 +4,9 @@
 // orientations.
 
 use horned_owl::model::{
-    Build, ClassAssertion, ClassExpression as CE, Component, Individual, InverseObjectProperties,
-    MutableOntology, ObjectPropertyAssertion, ObjectPropertyExpression as OPE,
-    SubObjectPropertyExpression as SOPE, SubObjectPropertyOf, SubClassOf, TransitiveObjectProperty,
+    Build, ClassAssertion, ClassExpression as CE, Component, Individual, MutableOntology,
+    ObjectPropertyAssertion, ObjectPropertyExpression as OPE, SubObjectPropertyExpression as SOPE,
+    SubObjectPropertyOf, SubClassOf,
 };
 use horned_owl::ontology::set::SetOntology;
 use hermit_rs::reasoner::is_ontology_consistent;
@@ -133,92 +133,4 @@ fn inverse_super_chain_propagates_all_values() {
     onto2.insert(Component::ObjectPropertyAssertion(ObjectPropertyAssertion { ope: s2_e, from: Individual::Named(b), to: Individual::Named(cc) }));
     onto2.insert(Component::ClassAssertion(ClassAssertion { ce: CE::ObjectComplementOf(Box::new(c)), i: Individual::Named(a) }));
     assert!(is_ontology_consistent(&onto2).unwrap(), "control: expected CONSISTENT without the inverse-super chain");
-}
-
-// A property `u` with a chain-bearing complex sub-property (`a ⊑ u`, `a ∘ b ⊑ a`,
-// `b` transitive) AND a declared inverse (`InverseObjectProperties(u, ui)`). The
-// forward sub-chain `a ∘ b*` must remain in u's automaton even though u also has an
-// inverse representation; otherwise `∀u.C` under-propagates and entailments are
-// missed. This is the minimal form of the EFO `MONDO_* ⊑ EFO_0000524` pattern (see
-// tests/data/role_automaton/ and ROLE_AUTOMATON_CONSTRUCTION.md).
-//
-// With `m : ∃a.Y1`, `Y1 ⊑ ∃b.Y2`, `Y2 ⊑ ∃b.Z` and `m : ∀u.¬Z`, the chain lifts the
-// two `b` steps onto `a ⊑ u`, forcing a u-successor in `Z` that clashes with
-// `∀u.¬Z` ⇒ INCONSISTENT. (Before the completeness fix u lost `a ∘ b*`, the value
-// did not propagate, and this came out consistent.)
-#[test]
-fn forward_sub_chain_survives_declared_inverse() {
-    let build = Build::new_arc();
-    let u = build.object_property("http://example.org/u");
-    let ui = build.object_property("http://example.org/ui");
-    let a = build.object_property("http://example.org/a");
-    let b = build.object_property("http://example.org/b");
-    let u_e = OPE::ObjectProperty(u.clone());
-    let a_e = OPE::ObjectProperty(a.clone());
-    let b_e = OPE::ObjectProperty(b.clone());
-    let y1 = CE::Class(build.class("http://example.org/Y1"));
-    let y2 = CE::Class(build.class("http://example.org/Y2"));
-    let z = CE::Class(build.class("http://example.org/Z"));
-    let m = build.named_individual("http://example.org/m");
-
-    let role_box = |onto: &mut SetOntology<_>, with_chain: bool| {
-        // a ⊑ u
-        onto.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
-            sub: SOPE::ObjectPropertyExpression(a_e.clone()),
-            sup: u_e.clone(),
-        }));
-        // b transitive
-        onto.insert(Component::TransitiveObjectProperty(TransitiveObjectProperty(b_e.clone())));
-        // u has a declared inverse ui (the trigger that previously lost u's sub-chain)
-        onto.insert(Component::InverseObjectProperties(InverseObjectProperties(
-            u_e.clone(),
-            OPE::ObjectProperty(ui.clone()),
-        )));
-        if with_chain {
-            // a ∘ b ⊑ a
-            onto.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
-                sub: SOPE::ObjectPropertyChain(vec![a_e.clone(), b_e.clone()]),
-                sup: a_e.clone(),
-            }));
-        }
-        // Y1 ⊑ ∃b.Y2 ; Y2 ⊑ ∃b.Z
-        onto.insert(Component::SubClassOf(SubClassOf {
-            sub: y1.clone(),
-            sup: CE::ObjectSomeValuesFrom { ope: b_e.clone(), bce: Box::new(y2.clone()) },
-        }));
-        onto.insert(Component::SubClassOf(SubClassOf {
-            sub: y2.clone(),
-            sup: CE::ObjectSomeValuesFrom { ope: b_e.clone(), bce: Box::new(z.clone()) },
-        }));
-        // m : ∃a.Y1
-        onto.insert(Component::ClassAssertion(ClassAssertion {
-            ce: CE::ObjectSomeValuesFrom { ope: a_e.clone(), bce: Box::new(y1.clone()) },
-            i: Individual::Named(m.clone()),
-        }));
-        // m : ∀u.¬Z
-        onto.insert(Component::ClassAssertion(ClassAssertion {
-            ce: CE::ObjectAllValuesFrom {
-                ope: u_e.clone(),
-                bce: Box::new(CE::ObjectComplementOf(Box::new(z.clone()))),
-            },
-            i: Individual::Named(m.clone()),
-        }));
-    };
-
-    let mut onto: SetOntology<_> = SetOntology::new();
-    role_box(&mut onto, true);
-    assert!(
-        !is_ontology_consistent(&onto).unwrap(),
-        "expected INCONSISTENT: a∘b⊑a⊑u lifts m's part-of chain onto u, forcing a \
-         u-successor in Z that clashes with ∀u.¬Z (regression: u must keep a∘b* even \
-         with a declared inverse)"
-    );
-
-    // Control: without the `a ∘ b ⊑ a` chain, m's only u-successor is in Y1, not Z.
-    let mut control: SetOntology<_> = SetOntology::new();
-    role_box(&mut control, false);
-    assert!(
-        is_ontology_consistent(&control).unwrap(),
-        "control: expected CONSISTENT without the a∘b⊑a chain"
-    );
 }

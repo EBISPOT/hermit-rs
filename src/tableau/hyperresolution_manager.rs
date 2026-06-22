@@ -236,23 +236,61 @@ fn atomic_role_clause_guards(swapped: &DLClause) -> (Vec<AtomicConcept>, Vec<Ato
     (guards1, guards2)
 }
 
-/// All atomic concepts asserted on `node` in the committed extension (Java's
-/// `m_binaryTableRetrieval` over `View.EXTENSION_THIS`, bound on the node column).
-fn atomic_concepts_on_node_this(tableau: &Tableau, node: NodeId) -> Vec<AtomicConcept> {
-    let retrieval = tableau.create_binary_retrieval(
-        [-1, 1],
-        [None, Some(TableauObject::Node(node))],
+/// Fills `concepts` (cleared first) with every atomic concept asserted on `node`
+/// in the committed extension (Java's `m_binaryTableRetrieval` over
+/// `View.EXTENSION_THIS`, bound on the node column). `index_scratch` is a reused
+/// tuple-index buffer so the per-role-tuple guard probe allocates nothing:
+/// `AtomicConcept` is a `Copy` `&'static` handle, so the collected concepts do
+/// not borrow `tableau` and can be evaluated after the borrow is dropped.
+fn atomic_concepts_on_node_this_into(
+    tableau: &Tableau,
+    node: NodeId,
+    index_scratch: &mut Vec<usize>,
+    concepts: &mut Vec<AtomicConcept>,
+) {
+    concepts.clear();
+    index_scratch.clear();
+    let table = &tableau.binary_extension_table;
+    let binding_positions = [-1, 1];
+    let bindings_buffer = [None, Some(TableauObject::Node(node))];
+    // Mirror `create_binary_retrieval`'s selection (an indexed trie walk on the
+    // bound node column, falling back to a view scan), but fill the reused index
+    // buffer instead of allocating a fresh `Retrieval` per call. The bound column
+    // is the node, which is always active here (it is one of the delta tuple's
+    // endpoints), so the per-tuple activity/selection filter reduces to matching
+    // the node binding -- already guaranteed by the index walk; for the scan
+    // fallback we keep the explicit check.
+    if table.indexed_tuple_indices_into(
+        &binding_positions,
+        &bindings_buffer,
         View::ExtensionThis,
-    );
-    let mut concepts = Vec::new();
-    for &tuple_index in &retrieval.tuple_indices {
-        if let TableauObject::Concept(Concept::AtomicConcept(concept)) =
-            tableau.binary_extension_table.get_tuple_object(tuple_index, 0)
-        {
-            concepts.push(concept.clone());
+        index_scratch,
+    ) {
+        for &tuple_index in index_scratch.iter() {
+            let node_col = table.get_tuple_object(tuple_index, 1).as_node().unwrap();
+            if !tableau.nodes[node_col].is_active() || node_col != node {
+                continue;
+            }
+            if let TableauObject::Concept(Concept::AtomicConcept(concept)) =
+                table.get_tuple_object(tuple_index, 0)
+            {
+                concepts.push(*concept);
+            }
+        }
+    } else {
+        let (start, after_last) = table.view_range(View::ExtensionThis);
+        for tuple_index in start..after_last {
+            let node_col = table.get_tuple_object(tuple_index, 1).as_node().unwrap();
+            if !tableau.nodes[node_col].is_active() || node_col != node {
+                continue;
+            }
+            if let TableauObject::Concept(Concept::AtomicConcept(concept)) =
+                table.get_tuple_object(tuple_index, 0)
+            {
+                concepts.push(*concept);
+            }
         }
     }
-    concepts
 }
 
 pub struct HyperresolutionManager {
@@ -268,6 +306,12 @@ pub struct HyperresolutionManager {
     /// `m_atomicRoleTupleConsumersByGuardConcept2`: indexed by a concept guarding
     /// the delta's second argument.
     guarded_by_role_concept2: HashMap<AtomicRole, HashMap<AtomicConcept, Vec<SharedEvaluator>>>,
+    /// Reused scratch buffers for the guard-concept path of `apply_to_tuple`, so
+    /// the per-role-tuple endpoint-concept probe allocates nothing across the
+    /// whole delta pass (both buffers hold `Copy`/`&'static` data, so they never
+    /// borrow `tableau` and can be evaluated against `&mut tableau` afterwards).
+    guard_index_scratch: Vec<usize>,
+    guard_concept_scratch: Vec<AtomicConcept>,
 }
 
 impl HyperresolutionManager {
@@ -379,6 +423,8 @@ impl HyperresolutionManager {
             unguarded_by_role,
             guarded_by_role_concept1,
             guarded_by_role_concept2,
+            guard_index_scratch: Vec::new(),
+            guard_concept_scratch: Vec::new(),
         }
     }
 
@@ -469,36 +515,71 @@ impl HyperresolutionManager {
                             }
                         }
                     }
+                    // Borrow the two reused scratch buffers out of `self` for the
+                    // duration of the guard probes. They hold `Copy`/`&'static`
+                    // data only and are restored before returning, so iterating
+                    // them while immutably borrowing `self.guarded_by_role_concept*`
+                    // and mutably borrowing `tableau` (via `evaluate`) is sound and
+                    // allocates nothing per role tuple.
+                    let mut index_scratch = std::mem::take(&mut self.guard_index_scratch);
+                    let mut concept_scratch = std::mem::take(&mut self.guard_concept_scratch);
                     // Clauses guarded by a concept on the delta's first argument.
+                    // Evaluate in place (Java walks the bound retrieval and runs each
+                    // matching consumer directly): `evaluate` borrows `tableau`, not
+                    // `self`, so the guarded list can be iterated under the immutable
+                    // `self` borrow — no `Vec`+`Rc::clone` snapshot of the matched
+                    // evaluators per role tuple.
                     if !tableau.contains_clash() {
-                        let to_run = self.guarded_evaluators_for_node(
-                            &self.guarded_by_role_concept1,
-                            role,
-                            tableau,
-                            node1,
-                        );
-                        for evaluator in &to_run {
-                            evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
-                            if tableau.contains_clash() {
-                                return;
+                        if let Some(map) = self.guarded_by_role_concept1.get(role) {
+                            atomic_concepts_on_node_this_into(
+                                tableau,
+                                node1,
+                                &mut index_scratch,
+                                &mut concept_scratch,
+                            );
+                            for concept in &concept_scratch {
+                                if let Some(list) = map.get(concept) {
+                                    for evaluator in list {
+                                        evaluator
+                                            .borrow_mut()
+                                            .evaluate(tableau, objects, &dependency_set);
+                                        if tableau.contains_clash() {
+                                            self.guard_index_scratch = index_scratch;
+                                            self.guard_concept_scratch = concept_scratch;
+                                            return;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                     // Clauses guarded by a concept on the delta's second argument.
                     if !tableau.contains_clash() {
-                        let to_run = self.guarded_evaluators_for_node(
-                            &self.guarded_by_role_concept2,
-                            role,
-                            tableau,
-                            node2,
-                        );
-                        for evaluator in &to_run {
-                            evaluator.borrow_mut().evaluate(tableau, objects, &dependency_set);
-                            if tableau.contains_clash() {
-                                return;
+                        if let Some(map) = self.guarded_by_role_concept2.get(role) {
+                            atomic_concepts_on_node_this_into(
+                                tableau,
+                                node2,
+                                &mut index_scratch,
+                                &mut concept_scratch,
+                            );
+                            for concept in &concept_scratch {
+                                if let Some(list) = map.get(concept) {
+                                    for evaluator in list {
+                                        evaluator
+                                            .borrow_mut()
+                                            .evaluate(tableau, objects, &dependency_set);
+                                        if tableau.contains_clash() {
+                                            self.guard_index_scratch = index_scratch;
+                                            self.guard_concept_scratch = concept_scratch;
+                                            return;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
+                    self.guard_index_scratch = index_scratch;
+                    self.guard_concept_scratch = concept_scratch;
                 }
             }
         }
@@ -517,27 +598,6 @@ impl HyperresolutionManager {
                 }
             }
         }
-    }
-
-    /// Collects, in guard-list order, the evaluators registered under any atomic
-    /// concept actually asserted on `node` (Java walks the bound binary-table
-    /// retrieval and runs the matching `compiledDLClauseInfos`).
-    fn guarded_evaluators_for_node(
-        &self,
-        guarded_by_role_concept: &HashMap<AtomicRole, HashMap<AtomicConcept, Vec<SharedEvaluator>>>,
-        role: &AtomicRole,
-        tableau: &Tableau,
-        node: NodeId,
-    ) -> Vec<SharedEvaluator> {
-        let mut to_run: Vec<SharedEvaluator> = Vec::new();
-        if let Some(map) = guarded_by_role_concept.get(role) {
-            for concept in atomic_concepts_on_node_this(tableau, node) {
-                if let Some(list) = map.get(&concept) {
-                    to_run.extend(list.iter().map(Rc::clone));
-                }
-            }
-        }
-        to_run
     }
 
     /// Runs the rule-application fixpoint, stopping at a clash or when no new

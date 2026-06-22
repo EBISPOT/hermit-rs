@@ -15,6 +15,12 @@ pub struct TupleTable<T> {
 }
 
 impl<T> TupleTable<T> {
+    /// Retained backing-store capacity in element slots (diagnostic / oversize
+    /// detection).
+    pub(crate) fn objects_capacity(&self) -> usize {
+        self.objects.capacity()
+    }
+
     pub fn new(arity: usize) -> TupleTable<T> {
         let mut table = TupleTable {
             arity,

@@ -93,6 +93,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use rustc_hash::FxHashSet;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -269,8 +270,8 @@ impl<A: ForIRI> IRI<A> {
 /// without consequences except for increased memory use.
 #[derive(Debug, Default)]
 pub struct Build<A: ForIRI>(
-    RefCell<BTreeSet<IRI<A>>>,
-    RefCell<BTreeSet<AnonymousIndividual<A>>>,
+    RefCell<FxHashSet<IRI<A>>>,
+    RefCell<FxHashSet<AnonymousIndividual<A>>>,
     // Last anon individual
     RefCell<i64>,
 );
@@ -278,8 +279,8 @@ pub struct Build<A: ForIRI>(
 impl<A: ForIRI> Build<A> {
     pub fn new() -> Build<A> {
         Build(
-            RefCell::new(BTreeSet::new()),
-            RefCell::new(BTreeSet::new()),
+            RefCell::new(FxHashSet::default()),
+            RefCell::new(FxHashSet::default()),
             RefCell::new(0),
         )
     }

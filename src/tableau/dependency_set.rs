@@ -238,6 +238,24 @@ impl DependencySetFactory {
         set
     }
 
+    /// Interns the branching points held in a borrowed scratch buffer, canonical-
+    /// ising in place. Identical result to `intern` but avoids consuming/owning a
+    /// fresh `Vec`: the lookup is by slice (no allocation when the set already
+    /// exists, which is the common case), and a `Vec` is only materialised when a
+    /// genuinely new canonical set is inserted.
+    fn intern_scratch(&mut self, branching_points: &mut Vec<i32>) -> PermanentDependencySet {
+        branching_points.sort_unstable_by(|a, b| b.cmp(a));
+        branching_points.dedup();
+        if let Some(entry) = self.canonical.get(branching_points.as_slice()) {
+            return entry.set.clone();
+        }
+        let owned = branching_points.clone();
+        let set = PermanentDependencySet(Arc::new(owned.clone()));
+        self.canonical
+            .insert(owned, CanonicalEntry { set: set.clone(), usage: 0 });
+        set
+    }
+
     /// Flattens any union into a canonical permanent dependency set.
     /// The interned permanent union of the (present) `constituents` -- the
     /// branching points of every `Some` constituent, canonicalised. This is what
@@ -255,6 +273,44 @@ impl DependencySetFactory {
             }
         }
         self.intern(branching_points)
+    }
+
+    /// `permanent_union_of` that reuses a caller-owned scratch buffer for the
+    /// gathered branching points, avoiding a fresh heap allocation on every
+    /// derived fact (the clause evaluator calls this once per full match). The
+    /// scratch is cleared on entry and left holding the (now interned) points on
+    /// return; `intern` only borrows it, so the allocation survives across calls.
+    pub fn permanent_union_of_scratch(
+        &mut self,
+        constituents: &[Option<PermanentDependencySet>],
+        scratch: &mut Vec<i32>,
+    ) -> PermanentDependencySet {
+        scratch.clear();
+        // Fast path: a single present constituent is already canonical, so it can
+        // be returned without gathering/sorting/hashing at all (its interned set is
+        // reused directly). This is the overwhelmingly common clause-body shape.
+        let mut only: Option<&PermanentDependencySet> = None;
+        let mut count = 0usize;
+        for constituent in constituents {
+            if let Some(dependency_set) = constituent {
+                count += 1;
+                if count == 1 {
+                    only = Some(dependency_set);
+                } else {
+                    only = None;
+                    break;
+                }
+            }
+        }
+        if count == 1 {
+            return only.unwrap().clone();
+        }
+        for constituent in constituents {
+            if let Some(dependency_set) = constituent {
+                scratch.extend(dependency_set.0.iter().copied());
+            }
+        }
+        self.intern_scratch(scratch)
     }
 
     pub fn get_permanent(&mut self, dependency_set: &DependencySet) -> PermanentDependencySet {
