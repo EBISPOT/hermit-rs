@@ -6,7 +6,13 @@ description = "A Rust port of the HermiT OWL 2 DL reasoner, built on horned-owl.
 license = "LGPL-3.0-or-later"
 
 [dependencies]
-horned-owl = "1.4.0"
+# default-features = false drops horned-owl's `remote` feature (its ureq/rustls
+# HTTP import resolver, which this crate never uses and which does not build on
+# wasm32-unknown-unknown). Requesting it without `remote` keeps hermit-rs out of
+# the way of a wasm consumer that builds horned-owl with default-features = false;
+# a native consumer that wants `remote` still gets it via its own horned-owl dep
+# (Cargo unions features).
+horned-owl = { version = "1.4.0", default-features = false }
 regex = "1"
 # SCOPE-OUT 1: the XSD-Schema regex `\p{...}` / `\P{...}` Unicode general-category
 # and `Is<Block>` properties are resolved to their exact (char,char) range sets via
@@ -42,6 +48,12 @@ rustc-hash = "2"
 # manifest (tests/owl_wg/all.rdf). The embedded premise/conclusion ontologies are
 # parsed by horned-owl, not by this crate.
 quick-xml = "0.37"
+
+# web-time: drop-in std::time Instant/SystemTime that works on wasm (where the
+# std clock traps). Used via the crate::time shim (src/lib.rs) so the
+# interrupt/timing clocks and the witness-IRI nonce don't abort the wasm module.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"
 
 # horned-owl widened to the OWL 2 spec-correct
 # InverseObjectProperties(ObjectPropertyExpression, ObjectPropertyExpression).

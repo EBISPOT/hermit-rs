@@ -39,3 +39,14 @@ pub mod debugger;
 pub mod string_automaton;
 pub mod structural;
 pub mod tableau;
+
+/// `Instant` / `SystemTime` that also work on wasm (where the std clock would
+/// trap), via `web-time`; plain `std::time` everywhere else. Used for the
+/// interrupt/timing clocks and the witness-IRI nonce so those paths don't abort
+/// the wasm module merely by reading the clock. No behavioural change off wasm.
+pub(crate) mod time {
+    #[cfg(target_arch = "wasm32")]
+    pub use web_time::{Instant, SystemTime, UNIX_EPOCH};
+    #[cfg(not(target_arch = "wasm32"))]
+    pub use std::time::{Instant, SystemTime, UNIX_EPOCH};
+}

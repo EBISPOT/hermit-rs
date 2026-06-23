@@ -9,7 +9,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::time::Instant;
+use std::time::Duration;
 
 /// The reason a task was interrupted (mirrors the OWL-API exceptions thrown by
 /// HermiT's `checkInterrupt`).

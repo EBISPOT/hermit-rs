@@ -32,16 +32,26 @@ const LEAF_BUILD_MAX_WORKERS_CAP: usize = 8;
 /// The effective worker cap: `min(cap, available_parallelism)`, optionally
 /// overridden (and still clamped to the cap) by `OWLMAKE_CLASSIFY_THREADS`.
 fn leaf_build_max_workers() -> usize {
-    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-    let mut cap = std::cmp::min(LEAF_BUILD_MAX_WORKERS_CAP, cores);
-    if let Ok(v) = std::env::var("OWLMAKE_CLASSIFY_THREADS") {
-        if let Ok(n) = v.parse::<usize>() {
-            if n >= 1 {
-                cap = std::cmp::min(n, LEAF_BUILD_MAX_WORKERS_CAP);
+    // wasm32-unknown-unknown has no thread support (thread::spawn traps), so force
+    // serial classification: a worker count of 1 makes both the streaming and the
+    // resolution pool return None, and the classifier takes its serial fallback.
+    #[cfg(target_arch = "wasm32")]
+    {
+        return 1;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let mut cap = std::cmp::min(LEAF_BUILD_MAX_WORKERS_CAP, cores);
+        if let Ok(v) = std::env::var("OWLMAKE_CLASSIFY_THREADS") {
+            if let Ok(n) = v.parse::<usize>() {
+                if n >= 1 {
+                    cap = std::cmp::min(n, LEAF_BUILD_MAX_WORKERS_CAP);
+                }
             }
         }
+        cap.max(1)
     }
-    cap.max(1)
 }
 
 /// One iteration of HermiT's `doIteration`: returns whether work was done.
@@ -215,7 +225,7 @@ use horned_owl::ontology::set::SetOntology;
 /// with the process start nanos so witnesses are unique within and across queries.
 fn fresh_witness_iri(tag: &str) -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use crate::time::{SystemTime, UNIX_EPOCH};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now()
@@ -6878,7 +6888,7 @@ impl<'a> Reasoner<'a> {
         self.configure_tableau_description_graphs(&mut tableau);
         self.configure_tableau_blocking(&mut tableau);
         // Java: m_problemStartTime = System.currentTimeMillis() in isSatisfiableStarted.
-        let problem_start = std::time::Instant::now();
+        let problem_start = crate::time::Instant::now();
         tableau.monitor_event(|m| m.is_satisfiable_started());
         self.load_abox(&mut tableau);
         let result = if tableau.contains_clash() {
