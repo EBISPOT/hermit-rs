@@ -952,12 +952,12 @@ fn connect_all_automata(
     }
     // Java seeds the recursion with the SINKS of the transitively-closed
     // dependency graph only (`propertiesToStartRecursion`), and everything else is
-    // reached by the descent from them. Seeding every element instead changes which
-    // automaton a property is built from and over-enriches: EFO's transitive
-    // `has_disease_location` then subsumed classes Java leaves alone. Gated behind
-    // the env var while the faithful behaviour is verified.
-    // Iterate in a fixed order (see `prop_sort_key`): the recursion start order is
-    // not answer-neutral, so a stable order reproduces Java's deterministic result.
+    // reached by the descent from them. Which seed is walked first decides whether
+    // a property or its inverse is built directly and which one becomes the
+    // mirror; `build_complete_automaton_inner` splices the sub-properties of both
+    // sides into whichever is built first, so the answer no longer depends on that
+    // order (EBISPOT/hermit-rs#5). The order still shapes the automaton, so it is
+    // fixed to Java's for a like-for-like clause dump.
     let n_pts = properties_to_start.len();
     properties_to_start.sort_by_key(|p| java_map_order_key(p, n_pts));
     // HermiT iterates `propertiesToStartRecursion` as a `HashSet`. Java's hashing
@@ -1140,8 +1140,16 @@ fn build_complete_automaton_inner(
 
     // Java 390: a property is a "leaf" only when neither it nor its inverse has
     // any complex sub-property in the dependency graph.
-    let sub_properties = inverse_dependency_graph.get_successors(property);
-    let inverse_sub_properties = inverse_dependency_graph.get_successors(&inverse_property(property));
+    // Both sets are walked below; sort them so the automaton (state numbering,
+    // splice order) does not depend on `HashSet` iteration order.
+    let mut sub_properties: Vec<ObjectPropExpr> =
+        inverse_dependency_graph.get_successors(property).into_iter().collect();
+    sub_properties.sort_by_key(prop_sort_key);
+    let mut inverse_sub_properties: Vec<ObjectPropExpr> = inverse_dependency_graph
+        .get_successors(&inverse_property(property))
+        .into_iter()
+        .collect();
+    inverse_sub_properties.sort_by_key(prop_sort_key);
 
     if sub_properties.is_empty() && inverse_sub_properties.is_empty() {
         // Leaf property.
@@ -1290,6 +1298,44 @@ fn build_complete_automaton_inner(
         bigger
     };
 
+    // Sub-properties of `Inv(R)` are sub-chains of `R` read backwards: `t ⊑ Inv(R)`
+    // makes every `t`-chain `x → y` an `R`-edge `y → x`, so `mirror(L(t)) ⊆ L(R)`.
+    // Java consults `Inv(R)`'s sub-properties only to decide that `R` is not a
+    // leaf, then splices `R`'s own sub-properties alone; the inverse-side chains
+    // reached `R` only when `Inv(R)` happened to be built first (the mirror
+    // shortcut at the top of this function), and when `R` was built first they
+    // were dropped, so the answer depended on the walk order — Java's `HashSet`
+    // bucketing of the property IRIs (EBISPOT/hermit-rs#5). Splicing them here
+    // makes `R`'s automaton the same whichever side the recursion enters from.
+    //
+    // A *declared* inverse of `R` (`InverseObjectProperties(R, t)`, so `t ⊑ Inv(R)`
+    // is in the graph too) is left out: `create_automata`'s final inverse-map pass
+    // already enriches `R` with the mirror of `t`'s complete automaton and vice
+    // versa, and splicing it here as well doubles every branch of both automata
+    // (measurably slower on EFO) without adding to the language.
+    let mut bigger = bigger;
+    let declared_inverses = inverse_map.get(property);
+    for smaller_property in &inverse_sub_properties {
+        if smaller_property == property
+            || declared_inverses.is_some_and(|s| s.contains(smaller_property))
+        {
+            continue;
+        }
+        let smaller = build_complete_automaton(
+            smaller_property,
+            individual_automata,
+            complete_automata,
+            inverse_dependency_graph,
+            inverse_map,
+            symmetric_properties,
+            transitive_properties,
+            building,
+        );
+        let initial = bigger.initial_state();
+        let finalst = bigger.final_state();
+        automata_connector(&mut bigger, &mirrored_copy(&smaller), initial, finalst);
+    }
+
     // Java applies the inverse-handling + finalize tail to the no-own-automaton
     // non-leaf case TWICE: once inside the `biggerPropertyAutomaton==null` block
     // (lines 471-485) and once at the shared tail (lines 506-520). The has-own
@@ -1371,15 +1417,14 @@ fn apply_inverse_and_finalize(
                 transitive_properties,
             );
         }
-        // Java 509-512: when `R` is ALREADY in completeAutomata (cached, typically
-        // as the bare mirror written by the inverse's `finalizeConstruction` at
-        // Java 539 during the `buildCompleteAutomataForProperties(Inv(R))` call
-        // above), Java DISCARDS the locally built automaton and adopts the cached
-        // one (`biggerPropertyAutomaton = completeAutomata.get(R)`). The local
-        // `increaseAutomatonWithInversePropertyAutomaton` mutated a SEPARATE object,
-        // so its effect is thrown away. We must NOT write `automaton` back over the
-        // cached entry — doing so reinstates a chain-embedded automaton that Java
-        // deliberately drops (the EFO_0000784 over-classification bug).
+        // Java 509-512: when `R` is ALREADY in completeAutomata (cached, as the
+        // mirror written by the inverse's `finalizeConstruction` at Java 539 during
+        // the `buildCompleteAutomataForProperties(Inv(R))` call above), Java
+        // DISCARDS the locally built automaton and adopts the cached one
+        // (`biggerPropertyAutomaton = completeAutomata.get(R)`). We do the same;
+        // because `Inv(R)` was built with `R`'s sub-properties spliced in (see the
+        // inverse-side splice in `build_complete_automaton_inner`), that mirror
+        // already carries `R`'s sub-chains and nothing is lost here.
     } else {
         increase_with_defined_inverse_if_necessary(
             property,
