@@ -5198,6 +5198,25 @@ fn node_value_space<D>(
                 LiteralDataRange::DatatypeRestriction(dr) => (dr, false),
                 LiteralDataRange::AtomicNegationDataRange(n) => match n.get_negated_data_range() {
                     crate::model::AtomicDataRange::DatatypeRestriction(dr) => (dr, true),
+                    // Excluded values (Java's m_forbiddenDataValues). An anyURI value
+                    // is its character sequence, so it excludes the string with the
+                    // same characters. Values of other datatypes and ill-typed
+                    // literals are not anyURI values and exclude nothing; a literal
+                    // of an unrecognized datatype may denote anything, so scope out.
+                    crate::model::AtomicDataRange::ConstantEnumeration(e) => {
+                        let mut strings = Vec::new();
+                        for i in 0..e.number_of_constants() {
+                            match parse_value(e.constant(i)) {
+                                Some(DataValue::Typed { kind: "anyURI", canonical, .. }) => {
+                                    strings.push(Constant::create(canonical, format!("{XSD}string")));
+                                }
+                                Some(_) => {}
+                                None if is_ill_typed(e.constant(i)) => {}
+                                None => return None,
+                            }
+                        }
+                        return Some((crate::model::ConstantEnumeration::create(strings).get_negation(), ()));
+                    }
                     _ => return None,
                 },
                 _ => return None,
@@ -5210,11 +5229,16 @@ fn node_value_space<D>(
         }).collect();
         if let Some(mapped) = string_ranges {
             if let Some(NodeValueSpace::Finite { values: Some(values), .. }) = string_automaton_value_space(&mapped) {
-                let values: Vec<_> = values.into_iter().filter_map(|v| match v {
-                    DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.encode_utf16().count(),canonical:s}),
-                    _ => None,
-                }).collect();
-                return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
+                // The string automata lack some characters an anyURI may contain.
+                // When the patterns admit one, the automata miss values, so the
+                // enumeration below decides instead.
+                if !anyuri_patterns_exceed_string_alphabet(&restrictions) {
+                    let values: Vec<_> = values.into_iter().filter_map(|v| match v {
+                        DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.encode_utf16().count(),canonical:s}),
+                        _ => None,
+                    }).collect();
+                    return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
+                }
             }
         }
         let mut min_len: u64 = 0;
@@ -5344,6 +5368,37 @@ fn node_value_space<D>(
     }
 
     NodeValueSpace::Infinite
+}
+
+/// Whether the pattern facets of these positive anyURI restrictions jointly admit
+/// a character that `is_valid_any_uri` accepts but the string automata cannot
+/// represent: U+FFFE, U+FFFF or a supplementary-plane character. The string
+/// automata use the XML alphabet of HermiT's string handler, so a value space
+/// built from them would miss the values containing such characters. (`.` is
+/// modelled over that alphabet too, so this check cannot see it.)
+fn anyuri_patterns_exceed_string_alphabet(restrictions: &[&DatatypeRestriction]) -> bool {
+    use crate::string_automaton::{xsd_pattern_to_automaton, Automaton};
+    let mut patterns: Option<Automaton> = None;
+    for r in restrictions {
+        for i in 0..r.number_of_facet_restrictions() {
+            if r.facet_uri(i) != format!("{XSD}pattern") {
+                continue;
+            }
+            let Some(pattern) = xsd_pattern_to_automaton(r.facet_value(i).lexical_form()) else {
+                return true;
+            };
+            patterns = Some(match patterns {
+                Some(conjunction) => conjunction.intersection(&pattern),
+                None => pattern,
+            });
+        }
+    }
+    let Some(patterns) = patterns else {
+        return false;
+    };
+    let any = Automaton::char_range(0, 0x10_FFFF).repeat();
+    let beyond = Automaton::ranges(&[(0xFFFE, 0xFFFF), (0x1_0000, 0x10_FFFF)]);
+    !patterns.intersection(&any.concatenate(&beyond).concatenate(&any)).is_empty()
 }
 
 /// URI-1: the single-character ASCII alphabet that `is_valid_any_uri` admits for a
@@ -6212,6 +6267,155 @@ mod tests {
             &no_specifics(2),
             &[],
         ));
+    }
+
+    #[test]
+    fn excluded_uris_leave_finite_pattern_value_spaces() {
+        // Issues #10 and #11: a negated oneOf removes its anyURI members from an
+        // anyURI value space that a length window, or the complement of a length
+        // restriction, makes finite. An anyURI value is its character sequence
+        // (XSD 1.1 Part 2 §3.3.17), so it excludes the string with the same
+        // characters. Values of other datatypes, and ill-typed literals, are not
+        // anyURI values and exclude nothing.
+        let uri_dr = |facets: &[(&str, Constant)]| {
+            crate::model::DatatypeRestriction::create(
+                format!("{XSD}anyURI"),
+                facets.iter().map(|(f, _)| format!("{XSD}{f}")).collect(),
+                facets.iter().map(|(_, v)| *v).collect(),
+            )
+        };
+        let int = |n: &str| Constant::create(n, format!("{XSD}integer"));
+        let string = |s: &str| Constant::create(s, format!("{XSD}string"));
+        let uri = |s: &str| Constant::create(s, format!("{XSD}anyURI"));
+        let excluded =
+            |members: Vec<Constant>| crate::model::ConstantEnumeration::create(members).get_negation();
+        let values = |ranges: &[(LiteralDataRange, ())]| -> Vec<String> {
+            let NodeValueSpace::Finite { count, values: Some(values) } = node_value_space(None, ranges)
+            else {
+                panic!("expected an enumerated finite value space");
+            };
+            assert_eq!(count as usize, values.len());
+            let mut words: Vec<String> = values
+                .into_iter()
+                .map(|v| match v {
+                    DataValue::Typed { kind: "anyURI", canonical, .. } => canonical,
+                    other => panic!("not an anyURI value: {other:?}"),
+                })
+                .collect();
+            words.sort();
+            words
+        };
+
+        // #10: ab(c+) with lengths 4..5 is {abcc, abccc}.
+        let window = LiteralDataRange::DatatypeRestriction(uri_dr(&[
+            ("pattern", string("ab(c+)")),
+            ("minLength", int("4")),
+            ("maxLength", int("5")),
+        ]));
+        assert_eq!(values(&[(window.clone(), ())]), ["abcc", "abccc"]);
+        assert!(values(&[
+            (window.clone(), ()),
+            (excluded(vec![uri("abcc"), uri("abccc")]), ()),
+        ])
+        .is_empty());
+        assert_eq!(values(&[(window.clone(), ()), (excluded(vec![uri("abcc")]), ())]), ["abccc"]);
+        assert_eq!(
+            values(&[
+                (window.clone(), ()),
+                (excluded(vec![string("abcc"), uri("ab cc"), uri("abccc")]), ()),
+            ]),
+            ["abcc"]
+        );
+
+        // #11: ab(c*) minus anyURI[minLength 5] is {ab, abc, abcc}.
+        let pattern = LiteralDataRange::DatatypeRestriction(uri_dr(&[("pattern", string("ab(c*)"))]));
+        let shorter_than_5 = uri_dr(&[("minLength", int("5"))]).get_negation();
+        assert_eq!(
+            values(&[(pattern.clone(), ()), (shorter_than_5.clone(), ())]),
+            ["ab", "abc", "abcc"]
+        );
+        assert!(values(&[
+            (pattern.clone(), ()),
+            (shorter_than_5.clone(), ()),
+            (excluded(vec![uri("ab"), uri("abc"), uri("abcc")]), ()),
+        ])
+        .is_empty());
+        assert_eq!(
+            values(&[(pattern, ()), (shorter_than_5, ()), (excluded(vec![uri("abc")]), ())]),
+            ["ab", "abcc"]
+        );
+
+        // The issue #9 range is {""}; excluding the empty URI empties it.
+        let empty_uri_only = [
+            (LiteralDataRange::DatatypeRestriction(uri_dr(&[("minLength", int("0"))])), ()),
+            (uri_dr(&[("minLength", int("1"))]).get_negation(), ()),
+        ];
+        assert_eq!(values(&empty_uri_only), [""]);
+        let mut without_it = empty_uri_only.to_vec();
+        without_it.push((excluded(vec![uri("")]), ()));
+        assert!(values(&without_it).is_empty());
+
+        // Cardinality and assignment see the same remaining value, abccc: one
+        // node fits but two distinct ones do not, and the node can differ from
+        // abcc but not from abccc.
+        let one_left = [(window, ()), (excluded(vec![uri("abcc")]), ())];
+        let space = || node_value_space(None, &one_left);
+        let constant = |s: &str| node_value_space::<()>(parse_value(&uri(s)).as_ref(), &[]);
+        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[]));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &space()],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &constant("abccc")],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+        assert!(!component_is_unsatisfiable(
+            &[&space(), &constant("abcc")],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+    }
+
+    #[test]
+    fn uri_patterns_beyond_the_string_alphabet_are_enumerated() {
+        // The string automata have only the XML characters of HermiT's string
+        // handler, but an anyURI value may also contain a supplementary-plane
+        // character. `[𐀀-𐀐a]` denotes 18 anyURI values; the automata see only
+        // `a`, so they would count 1, and 0 after excluding `a`.
+        let pattern = |p: &str| {
+            crate::model::DatatypeRestriction::create(
+                format!("{XSD}anyURI"),
+                vec![format!("{XSD}pattern")],
+                vec![Constant::create(p, format!("{XSD}string"))],
+            )
+        };
+        let wide = pattern("[\u{10000}-\u{10010}a]");
+        assert!(anyuri_patterns_exceed_string_alphabet(&[&wide]));
+        assert!(!anyuri_patterns_exceed_string_alphabet(&[&pattern("ab(c+)")]));
+        // A conjunction is judged as a whole: `[𐀀a]` and `[ab]` share only `a`.
+        assert!(!anyuri_patterns_exceed_string_alphabet(&[&pattern("[\u{10000}a]"), &pattern("[ab]")]));
+        let uri = |s: &str| Constant::create(s, format!("{XSD}anyURI"));
+        let wide = LiteralDataRange::DatatypeRestriction(wide);
+        let supplementary = parse_value(&uri("\u{10000}")).unwrap();
+        match node_value_space(None, &[(wide.clone(), ())]) {
+            NodeValueSpace::Finite { count: 18, values: Some(values) } => {
+                assert!(values.iter().any(|v| values_equal(v, &supplementary)));
+            }
+            _ => panic!("expected the 18 URIs of the pattern"),
+        }
+        let without_a = crate::model::ConstantEnumeration::create(vec![uri("a")]).get_negation();
+        match node_value_space(None, &[(wide, ()), (without_a, ())]) {
+            NodeValueSpace::Finite { count: 17, values: Some(values) } => {
+                assert!(values.iter().any(|v| values_equal(v, &supplementary)));
+            }
+            _ => panic!("expected the 17 URIs other than a"),
+        }
     }
 
     #[test]

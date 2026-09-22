@@ -1,12 +1,4 @@
 {
-  "reasoner.AnyURITest.testPatternAndLength1_2": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.AnyURITest.testPatternAndLength1_2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.AnyURITest.testPatternAndLength1_2\" operation 1: \"isConsistent\""
-  },
-  "reasoner.AnyURITest.testPatternComplement1_3": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.AnyURITest.testPatternComplement1_3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.AnyURITest.testPatternComplement1_3\" operation 1: \"isConsistent\""
-  },
   "reasoner.BinaryDataTest.testIntersection_2": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.BinaryDataTest.testIntersection_2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.BinaryDataTest.testIntersection_2\" operation 1: \"isConsistent\""

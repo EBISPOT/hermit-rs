@@ -73,8 +73,8 @@ two overrides are empty in the original Java source.
 | Issue | Work | Cases |
 | --- | --- | ---: |
 | [#9](https://github.com/EBISPOT/hermit-rs/issues/9) | Correct the Java empty-URI cardinality expectation (**resolved**; see [corrections.json](corrections.json)) | 1 |
-| [#10](https://github.com/EBISPOT/hermit-rs/issues/10) | Respect excluded URI values in finite pattern/length intersections | 1 |
-| [#11](https://github.com/EBISPOT/hermit-rs/issues/11) | Respect URI exclusions after complementing a length restriction | 1 |
+| [#10](https://github.com/EBISPOT/hermit-rs/issues/10) | Respect excluded URI values in finite pattern/length intersections (**resolved**) | 1 |
+| [#11](https://github.com/EBISPOT/hermit-rs/issues/11) | Respect URI exclusions after complementing a length restriction (**resolved** with #10) | 1 |
 | [#12](https://github.com/EBISPOT/hermit-rs/issues/12) | Count finite binary ranges after subtracting length restrictions | 1 |
 | [#13](https://github.com/EBISPOT/hermit-rs/issues/13) | Keep individual-reuse classification of Dolce within the worker memory budget | 1 |
 | [#14](https://github.com/EBISPOT/hermit-rs/issues/14) | Count dateTime boundary values after subtracting an open interval | 1 |

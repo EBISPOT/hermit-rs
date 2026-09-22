@@ -1,21 +1,21 @@
 # Imported suite results
 
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
-the issue #8 inverse-role fix and the issue #9 expectation correction. All 598
-declared Java methods are accounted for; inherited methods also run under their
-individual-reuse and core-blocking suites.
+the issue #8 inverse-role fix, the issue #9 expectation correction and the issue
+#10/#11 excluded-URI fix. All 598 declared Java methods are accounted for;
+inherited methods also run under their individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 863 | 59 | 2 |
+| Query/structural replay | 865 | 57 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 913 | 62 | 2 |
+| Total, excluding OWL WG | 915 | 60 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 62 failures are:
+The Rust port does **not** yet have full Java test parity. The 60 failures are:
 
-* **42 Rust/Java discrepancies**, including inherited repetitions: datatype
-  consistency (URI, binary, datetime, numeric, plain/XML literals); property
+* **40 Rust/Java discrepancies**, including inherited repetitions: datatype
+  consistency (binary, datetime, numeric, plain/XML literals); property
   hierarchy and entailment results; direct results and hierarchy printing;
   three core-blocking Widmann scenarios; and description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
@@ -52,6 +52,17 @@ string enumeration traversing dead cycles, invalid language-tag membership,
 finite URI intersections, and singleton dateTime value enumeration. The issue
 #8 regressions separately cover the reproducer, reordered axioms, renamed roles,
 valid chain entailments and explanations of inconsistent ontologies.
+
+Issues #10 and #11 had one cause. An excluded value (a negated `DataOneOf`)
+stopped an `xsd:anyURI` value space from being built as a string automaton, so a
+pattern bounded only by a length window or a complemented length restriction
+counted as infinite, and its excluded values were never subtracted. Excluded
+anyURI values are now removed from the automaton; literals of other datatypes
+remove nothing. The string automaton lacks supplementary-plane characters (and
+U+FFFE/U+FFFF), which anyURI values may contain, so it is no longer used when the
+patterns admit one; the enumerating fallback counts those values instead. The
+regressions cover the remaining values, cardinality and distinct-value
+assignment.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
