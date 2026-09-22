@@ -3298,6 +3298,176 @@ fn length_value_space_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
 }
 
 // ===========================================================================
+// xsd:hexBinary / xsd:base64Binary length value space (port of
+// org.semanticweb.HermiT.datatypes.binarydata.{BinaryDataLengthInterval,
+// BinaryDataValueSpaceSubset} and BinaryDataDatatypeHandler.{getIntervalFor,
+// conjoinWithDR,conjoinWithDRNegation}, less DVariable's forbidden values).
+// The emptiness check and `node_value_space` both read this one value space, so
+// emptiness, cardinality and the enumerated values agree.
+// ===========================================================================
+
+/// The octet-length window `[min, max]` of a binary datatype restriction, from
+/// its length facets (`BinaryDataDatatypeHandler.getIntervalFor`). A `max` of
+/// `None` is unbounded, and `min > max` is an empty window. `None` when a facet
+/// is not a length facet or its value is not a non-negative integer.
+fn binary_length_window(dr: &DatatypeRestriction) -> Option<(u64, Option<u64>)> {
+    let mut min: u64 = 0;
+    let mut max: Option<u64> = None;
+    for i in 0..dr.number_of_facet_restrictions() {
+        let bound: u64 = dr.facet_value(i).lexical_form().trim().parse().ok()?;
+        match dr.facet_uri(i).strip_prefix(XSD)? {
+            "minLength" => min = min.max(bound),
+            "maxLength" => max = Some(max.map_or(bound, |m| m.min(bound))),
+            "length" => {
+                min = min.max(bound);
+                max = Some(max.map_or(bound, |m| m.min(bound)));
+            }
+            _ => return None,
+        }
+    }
+    Some((min, max))
+}
+
+/// The value space of a conjunction of binary data ranges, mirroring
+/// `DVariable.prepareAsValueSpaceSubset` over a `BinaryDataValueSpaceSubset`:
+/// the octet sequences of the positive restrictions' datatype whose length lies
+/// in every positive window and in no negated window of that datatype, less the
+/// excluded values. It is counted exactly and enumerated when small. `None`
+/// when some positive datatype restriction is not binary, when there is none,
+/// or when a length facet cannot be read.
+///
+/// The values are typed by the positive restrictions' datatype, and an excluded
+/// literal removes a value only when `parse_value` gives it that type.
+/// (`parse_value` follows HermiT in typing a base64Binary literal as
+/// hexBinary; see `parse_base64_binary`.)
+fn binary_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<NodeValueSpace> {
+    let binary_kind = |dr: &DatatypeRestriction| -> Option<&'static str> {
+        if is_hex_binary_datatype(dr.datatype_uri()) {
+            Some("hexBinary")
+        } else if is_base64_datatype(dr.datatype_uri()) {
+            Some("base64Binary")
+        } else {
+            None
+        }
+    };
+    // Intersect the positive windows (conjoinWithDR). No value is both a
+    // hexBinary and a base64Binary value.
+    let mut kind: Option<&'static str> = None;
+    let mut windows: Vec<(u64, Option<u64>)> = vec![(0, None)];
+    for (range, _) in ranges {
+        let LiteralDataRange::DatatypeRestriction(dr) = range else {
+            continue;
+        };
+        let this = binary_kind(dr)?;
+        if kind.is_some_and(|k| k != this) {
+            windows.clear();
+        }
+        kind = Some(this);
+        let (min, max) = binary_length_window(dr)?;
+        windows = windows
+            .into_iter()
+            .filter_map(|(lo, hi)| {
+                let lo = lo.max(min);
+                let hi = match (hi, max) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (a, b) => a.or(b),
+                };
+                hi.is_none_or(|hi| lo <= hi).then_some((lo, hi))
+            })
+            .collect();
+    }
+    let kind = kind?;
+    // Subtract each negated window of the same datatype (conjoinWithDRNegation),
+    // keeping the lengths below and above it. A negated restriction of another
+    // datatype removes nothing, since the value spaces are disjoint; HermiT skips
+    // it, as it skips a negated internal datatype.
+    for (range, _) in ranges {
+        let LiteralDataRange::AtomicNegationDataRange(n) = range else {
+            continue;
+        };
+        let crate::model::AtomicDataRange::DatatypeRestriction(dr) = n.get_negated_data_range()
+        else {
+            continue;
+        };
+        if binary_kind(dr) != Some(kind) {
+            continue;
+        }
+        let (min, max) = binary_length_window(dr)?;
+        if max.is_some_and(|max| min > max) {
+            continue; // the complement of an empty window is everything
+        }
+        let mut rest = Vec::with_capacity(windows.len() * 2);
+        for &(lo, hi) in &windows {
+            if lo < min {
+                rest.push((lo, Some(hi.map_or(min - 1, |hi| hi.min(min - 1)))));
+            }
+            if let Some(above) = max.and_then(|max| max.checked_add(1)) {
+                let lo = lo.max(above);
+                if hi.is_none_or(|hi| lo <= hi) {
+                    rest.push((lo, hi));
+                }
+            }
+        }
+        windows = rest;
+    }
+    // The excluded values that lie in the remaining windows, by canonical form,
+    // as DVariable.m_forbiddenDataValues keeps them. Any other literal excludes
+    // nothing here.
+    let in_windows = |length: u64| {
+        windows.iter().any(|&(lo, hi)| lo <= length && hi.is_none_or(|hi| length <= hi))
+    };
+    let mut excluded: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (range, _) in ranges {
+        let LiteralDataRange::AtomicNegationDataRange(n) = range else {
+            continue;
+        };
+        let crate::model::AtomicDataRange::ConstantEnumeration(e) = n.get_negated_data_range()
+        else {
+            continue;
+        };
+        for i in 0..e.number_of_constants() {
+            if let Some(DataValue::Typed { kind: value_kind, canonical, length }) =
+                parse_value(e.constant(i))
+            {
+                if value_kind == kind && in_windows(length as u64) {
+                    excluded.insert(canonical);
+                }
+            }
+        }
+    }
+    // A window that reaches seven octets holds at least 256^7 values, more than
+    // any tableau can require to be distinct, so it counts as infinite, as in
+    // BinaryDataLengthInterval.subtractSizeFrom.
+    let mut lengths: Vec<u64> = Vec::new();
+    for &(lo, hi) in &windows {
+        match hi {
+            Some(hi) if hi < 7 => lengths.extend(lo..=hi),
+            _ => return Some(NodeValueSpace::Infinite),
+        }
+    }
+    // The excluded values are distinct and lie in the windows.
+    let count = lengths.iter().map(|&length| 256u128.pow(length as u32)).sum::<u128>()
+        - excluded.len() as u128;
+    if count > MAX_ENUMERATED_VALUES as u128 {
+        return Some(NodeValueSpace::Finite { count, values: None });
+    }
+    // BinaryDataLengthInterval.enumerateValues, less the excluded values.
+    let mut values: Vec<DataValue> = Vec::new();
+    for length in lengths {
+        for index in 0..256u64.pow(length as u32) {
+            let canonical: String = (0..length)
+                .rev()
+                .map(|position| format!("{:02X}", (index >> (8 * position)) & 0xFF))
+                .collect();
+            if !excluded.contains(&canonical) {
+                values.push(DataValue::Typed { kind, canonical, length: length as usize });
+            }
+        }
+    }
+    Some(NodeValueSpace::Finite { count, values: Some(values) })
+}
+
+// ===========================================================================
 // FIX C: string / rdf:PlainLiteral pattern + langRange value-space emptiness.
 //
 // Faithful port of the AUTOMATON branch of RDFPlainLiteralDatatypeHandler
@@ -4084,6 +4254,13 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
         if datetime_value_space_is_empty(&datetime_restrictions) {
             return true;
         }
+    }
+    // xsd:hexBinary / xsd:base64Binary: the value space `node_value_space`
+    // counts, so a negated length restriction or an excluded value can empty it.
+    if (kinds.contains("hexBinary") || kinds.contains("base64Binary"))
+        && matches!(binary_value_space(ranges), Some(NodeValueSpace::Finite { count: 0, .. }))
+    {
+        return true;
     }
     false
 }
@@ -5108,75 +5285,12 @@ fn node_value_space<D>(
         return NodeValueSpace::Infinite;
     }
 
-    // xsd:hexBinary / xsd:base64Binary: length-bounded intervals have an exact
-    // cardinality (BinaryDataLengthInterval.subtractSizeFrom / getNumberOfValuesOfLength).
-    // If maxLength is unbounded or either bound >=7, treat as infinite (count overflows long).
+    // xsd:hexBinary / xsd:base64Binary: the length windows left after the negated
+    // binary restrictions are subtracted, less the excluded values, counted
+    // exactly and enumerated when small (see `binary_value_space`).
     let is_binary = |r: &&DatatypeRestriction| is_hex_binary_datatype(r.datatype_uri()) || is_base64_datatype(r.datatype_uri());
     if restrictions.iter().all(is_binary) {
-        // A conjunction that mixes xsd:hexBinary and xsd:base64Binary restrictions
-        // is empty: `BinaryDataLengthInterval.intersectWith` returns null across
-        // differing `m_binaryDataType`s, so no value lies in both value spaces.
-        let any_hex = restrictions.iter().any(|r| is_hex_binary_datatype(r.datatype_uri()));
-        let any_base64 = restrictions.iter().any(|r| is_base64_datatype(r.datatype_uri()));
-        if any_hex && any_base64 {
-            return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
-        }
-        let mut min_len: u64 = 0;
-        let mut max_len: Option<u64> = None;
-        for r in &restrictions {
-            for i in 0..r.number_of_facet_restrictions() {
-                let Ok(b) = r.facet_value(i).lexical_form().trim().parse::<u64>() else { return NodeValueSpace::Infinite; };
-                match r.facet_uri(i).strip_prefix(XSD) {
-                    Some("minLength") => min_len = min_len.max(b),
-                    Some("maxLength") => max_len = Some(max_len.map_or(b, |m| m.min(b))),
-                    Some("length") => { min_len = min_len.max(b); max_len = Some(max_len.map_or(b, |m| m.min(b))); }
-                    _ => return NodeValueSpace::Infinite,
-                }
-            }
-        }
-        let Some(max_len) = max_len else { return NodeValueSpace::Infinite; };
-        if min_len > max_len { return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) }; }
-        if min_len >= 7 || max_len >= 7 { return NodeValueSpace::Infinite; }
-        let values_up_to = |l: i64| -> u128 {
-            if l < 0 { return 0; }
-            let mut total: u128 = 1; let mut term: u128 = 1;
-            for _ in 1..=l { term *= 256; total += term; } total
-        };
-        let count = values_up_to(max_len as i64) - values_up_to(min_len as i64 - 1);
-        // The value-space subset is typed by its datatype (HEX_BINARY vs
-        // BASE_64_BINARY): `BinaryDataLengthInterval.contains` requires the value's
-        // `m_binaryDataType` to match. HermiT's `BinaryData.parseBase64Binary` tags
-        // parsed base64 literals HEX_BINARY (a quirk), so a base64Binary value space
-        // contains none of its own parseable literals and an interval intersection
-        // across the two types is empty (`intersectWith` returns null on a type
-        // mismatch). We reproduce this by tagging the enumerated members with the
-        // positive restrictions' datatype: a mixed hex/base64 conjunction then
-        // empties out (every member is excluded by the other-typed restriction), and
-        // a base64Binary value space never matches a (HEX_BINARY-tagged) negated
-        // enumeration value, so such values are not subtracted.
-        let binary_kind: &'static str =
-            if restrictions.iter().all(|r| is_base64_datatype(r.datatype_uri())) {
-                "base64Binary"
-            } else {
-                "hexBinary"
-            };
-        if count <= MAX_ENUMERATED_VALUES as u128 {
-            // Enumerate by iterating byte-arrays of each length in [min_len, max_len].
-            let mut out: Vec<DataValue> = Vec::new();
-            for len in min_len..=max_len {
-                // Recursive enumeration of all byte-arrays of exactly `len` bytes.
-                let total = 256u64.pow(len as u32);
-                for idx in 0..total {
-                    let bytes: Vec<u8> = (0..len).rev().map(|pos| ((idx / 256u64.pow(pos as u32)) % 256) as u8).collect();
-                    let canonical: String = bytes.iter().map(|b| format!("{:02X}", b)).collect();
-                    let candidate = DataValue::Typed { kind: binary_kind, canonical, length: bytes.len() };
-                    if !excluded(&candidate) { out.push(candidate); }
-                    if out.len() > MAX_ENUMERATED_VALUES { return NodeValueSpace::Finite { count, values: None }; }
-                }
-            }
-            return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
-        }
-        return NodeValueSpace::Finite { count, values: None };
+        return binary_value_space(ranges).unwrap_or(NodeValueSpace::Infinite);
     }
 
     // URI-1: xsd:anyURI with a length facet. Java AnyURIValueSpaceSubset.hasCardinalityAtLeast
@@ -6416,6 +6530,140 @@ mod tests {
             }
             _ => panic!("expected the 17 URIs other than a"),
         }
+    }
+
+    #[test]
+    fn binary_value_spaces_subtract_negated_lengths_and_excluded_values() {
+        // Issue #12: a negated binary length restriction removes its lengths from
+        // the value space, and an excluded value removes itself. hexBinary values
+        // are finite octet sequences whose length counts octets (XSD 1.1 Part 2
+        // §3.3.15), so hexBinary[minLength 0] minus hexBinary[minLength 1] is
+        // exactly the empty sequence. Emptiness, cardinality and the enumerated
+        // values all see the subtraction.
+        let dr = |datatype: &str, facets: &[(&str, &str)]| {
+            crate::model::DatatypeRestriction::create(
+                format!("{XSD}{datatype}"),
+                facets.iter().map(|(f, _)| format!("{XSD}{f}")).collect(),
+                facets.iter().map(|(_, v)| integer(v)).collect(),
+            )
+        };
+        let hex = |facets: &[(&str, &str)]| LiteralDataRange::DatatypeRestriction(dr("hexBinary", facets));
+        let not_hex = |facets: &[(&str, &str)]| dr("hexBinary", facets).get_negation();
+        let hex_value = |lexical: &str| Constant::create(lexical, format!("{XSD}hexBinary"));
+        let excluded =
+            |members: Vec<Constant>| crate::model::ConstantEnumeration::create(members).get_negation();
+        // The enumerated values, checked against the count and the emptiness test.
+        let values = |ranges: &[(LiteralDataRange, ())]| -> Vec<String> {
+            let NodeValueSpace::Finite { count, values: Some(values) } = node_value_space(None, ranges)
+            else {
+                panic!("expected an enumerated finite value space");
+            };
+            assert_eq!(count as usize, values.len());
+            assert_eq!(conjunction_is_empty(ranges), values.is_empty());
+            let mut canonicals: Vec<String> = values
+                .into_iter()
+                .map(|v| match v {
+                    DataValue::Typed { kind: "hexBinary", canonical, .. } => canonical,
+                    other => panic!("not a hexBinary value: {other:?}"),
+                })
+                .collect();
+            canonicals.sort();
+            canonicals
+        };
+        let count = |ranges: &[(LiteralDataRange, ())]| match node_value_space(None, ranges) {
+            NodeValueSpace::Finite { count, .. } => {
+                assert_eq!(conjunction_is_empty(ranges), count == 0);
+                Some(count)
+            }
+            NodeValueSpace::Infinite => None,
+        };
+
+        // The issue #12 range is {""}. Excluding "" empties it, and so does
+        // subtracting every length.
+        let only_empty = [(hex(&[("minLength", "0")]), ()), (not_hex(&[("minLength", "1")]), ())];
+        assert_eq!(values(&only_empty), [""]);
+        let mut without_it = only_empty.to_vec();
+        without_it.push((excluded(vec![hex_value("")]), ()));
+        assert!(values(&without_it).is_empty());
+        assert!(values(&[(hex(&[("minLength", "1")]), ()), (not_hex(&[("minLength", "0")]), ())])
+            .is_empty());
+
+        // Lengths 0..3 minus lengths 1..2 leave length 0 and length 3. An excluded
+        // value counts once, and only when it is in the space: "00" is too short
+        // and a string is not a hexBinary value.
+        let two_windows = [
+            (hex(&[("maxLength", "3")]), ()),
+            (not_hex(&[("minLength", "1"), ("maxLength", "2")]), ()),
+        ];
+        assert_eq!(count(&two_windows), Some(1 + 256u128.pow(3)));
+        let mut fewer = two_windows.to_vec();
+        fewer.push((
+            excluded(vec![
+                hex_value(""),
+                hex_value("0a0b0c"),
+                hex_value("0A0B0C"),
+                hex_value("00"),
+                Constant::create("0a0b0c", format!("{XSD}string")),
+            ]),
+            (),
+        ));
+        assert_eq!(count(&fewer), Some(256u128.pow(3) - 1));
+
+        // A negated window of the other binary datatype removes nothing, since
+        // the value spaces are disjoint; neither does an empty negated window.
+        let short = hex(&[("maxLength", "1")]);
+        assert_eq!(count(&[(short.clone(), ())]), Some(257));
+        let not_base64 = dr("base64Binary", &[("maxLength", "0")]).get_negation();
+        assert_eq!(count(&[(short.clone(), ()), (not_base64, ())]), Some(257));
+        let empty_window = not_hex(&[("minLength", "2"), ("maxLength", "1")]);
+        assert_eq!(count(&[(short.clone(), ()), (empty_window, ())]), Some(257));
+        assert_eq!(count(&[(short, ()), (not_hex(&[("maxLength", "0")]), ())]), Some(256));
+
+        // Lengths from 4 up are infinitely many. As in HermiT, so is a window
+        // that reaches seven octets; six octets are counted exactly.
+        assert_eq!(count(&[(hex(&[]), ()), (not_hex(&[("maxLength", "3")]), ())]), None);
+        assert_eq!(count(&[(hex(&[("maxLength", "7")]), ())]), None);
+        assert_eq!(count(&[(hex(&[("length", "6")]), ())]), Some(256u128.pow(6)));
+
+        // base64Binary is subtracted the same way.
+        let base64_only_empty = [
+            (LiteralDataRange::DatatypeRestriction(dr("base64Binary", &[("minLength", "0")])), ()),
+            (dr("base64Binary", &[("minLength", "1")]).get_negation(), ()),
+        ];
+        let NodeValueSpace::Finite { count: 1, values: Some(base64_values) } =
+            node_value_space(None, &base64_only_empty)
+        else {
+            panic!("expected the empty base64Binary value");
+        };
+        assert_eq!(
+            base64_values,
+            [DataValue::Typed { kind: "base64Binary", canonical: String::new(), length: 0 }]
+        );
+
+        // Cardinality and assignment agree: one node fits in {""} but two distinct
+        // ones do not, and the node can differ from "00" but not from "".
+        let space = || node_value_space(None, &only_empty);
+        let constant =
+            |lexical: &str| node_value_space::<()>(parse_value(&hex_value(lexical)).as_ref(), &[]);
+        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[]));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &space()],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &constant("")],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+        assert!(!component_is_unsatisfiable(
+            &[&space(), &constant("00")],
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
     }
 
     #[test]
