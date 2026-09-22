@@ -1,0 +1,11 @@
+Prefix(obo:=<http://purl.obolibrary.org/obo/>)
+Ontology(<http://example.org/hermit-rs-inconsistency>
+InverseObjectProperties(obo:BFO_0000050 obo:BFO_0000051)
+TransitiveObjectProperty(obo:BFO_0000050)
+InverseObjectProperties(obo:RO_0000056 obo:RO_0000057)
+ObjectPropertyDomain(obo:RO_0000056 obo:BFO_0000002)
+ObjectPropertyRange(obo:RO_0000056 obo:BFO_0000003)
+DisjointClasses(obo:BFO_0000002 ObjectSomeValuesFrom(obo:BFO_0000050 obo:BFO_0000003))
+ObjectPropertyAssertion(obo:BFO_0000050 obo:ENVO_01001600 obo:ENVO_01001583)
+SubObjectPropertyOf(ObjectPropertyChain(obo:BFO_0000051 obo:RO_0000057) obo:RO_0000057)
+)

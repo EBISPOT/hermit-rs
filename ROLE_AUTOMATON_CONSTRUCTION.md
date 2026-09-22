@@ -28,44 +28,20 @@ sub-property iterations into a different deterministic (sorted) order changes it
 clause output too (e.g. on an EFO STAR module it goes from its default result to a
 different one), confirming the fragility is in the algorithm.
 
-**How it is handled:** every order-sensitive collection in the construction is
-iterated in a fixed order — `java_map_order_key` (Java's `HashMap` bucket order over
-the OWLAPI hash codes, to keep the automaton *shape* close to Java's) for the seed
-and map walks, `prop_sort_key` (named properties before their inverses, then by
-IRI) for the sub-property splices. The output is fully deterministic across runs and, on small
-EFO modules, byte-identical to Java HermiT's `--dump-clauses` (modulo
-internal-concept renaming).
-
-## 2. Forward sub-chains survive inverse + chain hierarchies (completeness)
-
-Sub-property edges are recorded only forward in the dependency graph: `a ⊑ R` is
-stored, but its mirror `Inv(a) ⊑ Inv(R)` is not. A declared inverse
-`InverseObjectProperties(R, Ri)` adds the edges `R → Inv(Ri)` and `Ri → Inv(R)`, so
-`Inv(R)` and `Inv(Ri)` become sinks of the graph and therefore recursion seeds.
-When `R` also has a chain-bearing complex sub-property (`a ⊑ R` with `a ∘ b ⊑ a`),
-Java's `buildCompleteAutomataForProperties` behaves differently depending on which
-seed it walks first:
-
-* `Inv(Ri)` first: its sub-property `R` is built directly from `a`, keeps `a ∘ b*`,
-  and `finalizeConstruction` stores `Inv(R)` as the mirror. Correct.
-* `Inv(R)` first: Java splices only `Inv(R)`'s **own** sub-properties (`Ri`); the
-  sub-properties of `Inv(Inv(R)) = R` are consulted only to decide that `Inv(R)` is
-  not a leaf. `finalizeConstruction` then stores `R` as the plain mirror of that
-  automaton, so `a ∘ b*` is silently dropped, `∀R.C` under-propagates and valid
-  subsumptions are missed.
-
-The walk order is `java.util.HashSet` bucket order over the property IRIs, so
-Java's answer changes under renaming (12 of the 24 spellings of the four-property
-pattern in EBISPOT/hermit-rs#5 fail in Java) and is non-monotonic: deleting the
-inverse axiom, which the derivation does not use, makes every spelling succeed.
-
 **How it is handled:** when a non-leaf property `R` is built,
-`build_complete_automaton_inner` splices the mirrored complete automaton of every
-`t ⊑ Inv(R)` into `R` alongside `R`'s own sub-properties. `t ⊑ Inv(R)` makes every
-`t`-chain `x → y` an `R`-edge `y → x`, so `mirror(L(t)) ⊆ L(R)` and the splice is
-sound. With both sides present in whichever automaton is built first, the mirror
-written by `finalizeConstruction` is complete too, and the result no longer depends
-on the seed order. Both sub-property sets are iterated in `prop_sort_key` order.
+`build_complete_automaton_inner` also completes the individual automaton for
+`Inv(R)` and mirrors that complete fragment into `R`. Dependencies that label
+transitions are substituted at those transitions. A dependency absent from the
+individual chain automaton represents a simple inclusion and contributes a
+complete initial-to-final path.
+
+The dependency graph contains chain operands as well as simple inclusions. For
+example, `S ∘ Inv(R) ⊑ Inv(R)` adds a dependency from `S` to `Inv(R)`, but does
+**not** entail `Inv(S) ⊑ R`. The earlier implementation mirrored every dependency
+directly into a complete `R` path, discarding the rest of the chain. This caused
+the false inconsistency in issue #8. Preserving the inverse fragment's transition
+positions fixes that error while retaining the completeness correction for #5.
+Both dependency sets are iterated in `prop_sort_key` order.
 
 The one `t ⊑ Inv(R)` left out is `R`'s *declared* inverse (`InverseObjectProperties(R, t)`
 puts both `R → Inv(t)` and `t → Inv(R)` in the graph). Those pairs are reconciled by
@@ -107,6 +83,19 @@ depends on IRI spelling via HashMap bucketing. ROBOT remains useful for *soundne
 ROBOT on an **IRI-renamed** copy of the ontology, or against a hand-checked
 entailment. Each EFO `MONDO_* ⊑ EFO_0000524` was confirmed by walking the part-of +
 subclass graph to head/neck.
+
+## Issue #8 regressions
+
+`tests/issue8_role_automata.rs` checks the reported eight-axiom RO fragment,
+16 axiom orderings, 32 property renamings, absence of the invented participation
+relationship, and the valid inverse/transitive chain entailments. It also checks
+that `reasoner::explain` returns a minimal inconsistency justification.
+
+The explanation entry point accepts an inconsistent ontology directly. To obtain
+an inconsistency justification, pass `SubClassOf(owl:Thing owl:Nothing)` to
+`explain` without first calling the default `is_entailed` entry point. The latter
+retains Java's default policy of rejecting queries on inconsistent inputs;
+`IncrementalReasoner` exposes the configurable consistency policy.
 
 ## Validation
 

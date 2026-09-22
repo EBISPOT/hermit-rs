@@ -960,16 +960,9 @@ fn connect_all_automata(
     // fixed to Java's for a like-for-like clause dump.
     let n_pts = properties_to_start.len();
     properties_to_start.sort_by_key(|p| java_map_order_key(p, n_pts));
-    // HermiT iterates `propertiesToStartRecursion` as a `HashSet`. Java's hashing
-    // is content-based and so stable across runs; our `std::HashSet` randomises its
-    // iteration order per run. The order is NOT answer-neutral here: building a
-    // property `R` finalises (and caches the mirror of) `Inv(R)`, so processing
-    // `Inv(R)` before any super-property `S ⊒ R` (whose recursion descends into `R`)
-    // means that descent hits the cached, correctly-built automaton for `R` instead
-    // of re-building it directly and wrongly embedding `R`'s complex sub-property
-    // chains (which would make `∀S.C` over-propagate — an order-dependent
-    // unsoundness). A fixed order reproduces Java's stable, sound behaviour.
-    // successors in this graph = sub-properties.
+    // Seed order shapes the NFA, so keep it reproducible. Completeness and
+    // soundness come from completing both orientations with their chain paths
+    // intact, not from relying on a particular property IRI hash order.
     let inverse_dependency_graph = property_dependency_graph.get_inverse();
 
     // Tracks the properties currently on the recursion stack, so a cyclic
@@ -1298,42 +1291,49 @@ fn build_complete_automaton_inner(
         bigger
     };
 
-    // Sub-properties of `Inv(R)` are sub-chains of `R` read backwards: `t ⊑ Inv(R)`
-    // makes every `t`-chain `x → y` an `R`-edge `y → x`, so `mirror(L(t)) ⊆ L(R)`.
-    // Java consults `Inv(R)`'s sub-properties only to decide that `R` is not a
-    // leaf, then splices `R`'s own sub-properties alone; the inverse-side chains
-    // reached `R` only when `Inv(R)` happened to be built first (the mirror
-    // shortcut at the top of this function), and when `R` was built first they
-    // were dropped, so the answer depended on the walk order — Java's `HashSet`
-    // bucketing of the property IRIs (EBISPOT/hermit-rs#5). Splicing them here
-    // makes `R`'s automaton the same whichever side the recursion enters from.
-    //
-    // A *declared* inverse of `R` (`InverseObjectProperties(R, t)`, so `t ⊑ Inv(R)`
-    // is in the graph too) is left out: `create_automata`'s final inverse-map pass
-    // already enriches `R` with the mirror of `t`'s complete automaton and vice
-    // versa, and splicing it here as well doubles every branch of both automata
-    // (measurably slower on EFO) without adding to the language.
+    // Dependencies of Inv(R) include both genuine sub-properties and roles
+    // occurring inside chains. Preserve the inverse's path structure while
+    // completing those dependencies: a chain S o Inv(R) <= Inv(R) does NOT
+    // entail Inv(S) <= R. Splicing each dependency directly between R's initial
+    // and final states loses the rest of the chain and invents that inclusion.
     let mut bigger = bigger;
     let declared_inverses = inverse_map.get(property);
-    for smaller_property in &inverse_sub_properties {
-        if smaller_property == property
-            || declared_inverses.is_some_and(|s| s.contains(smaller_property))
-        {
-            continue;
+    let inverse_dependencies: Vec<_> = inverse_sub_properties.iter().filter(|smaller| {
+        *smaller != property && !declared_inverses.is_some_and(|s| s.contains(*smaller))
+    }).collect();
+    if !inverse_dependencies.is_empty() {
+        let inverse = inverse_property(property);
+        let mut fragment = individual_automata.get(&inverse).cloned().unwrap_or_else(|| {
+            let mut a = Automaton::new();
+            let start = a.add_state(true, false);
+            let end = a.add_state(false, true);
+            a.add_transition(start, Some(inverse), end);
+            a
+        });
+        for smaller_property in inverse_dependencies {
+            let smaller = build_complete_automaton(
+                smaller_property, individual_automata, complete_automata,
+                inverse_dependency_graph, inverse_map, symmetric_properties,
+                transitive_properties, building,
+            );
+            let transitions: Vec<_> = fragment.delta().into_iter().filter(|t| {
+                t.label.as_ref() == Some(smaller_property)
+            }).collect();
+            if transitions.is_empty() {
+                // A dependency absent from the individual chain automaton came
+                // from a simple sub-property inclusion and contributes a full path.
+                let start = fragment.initial_state();
+                let end = fragment.final_state();
+                automata_connector(&mut fragment, &smaller, start, end);
+            } else {
+                for transition in transitions {
+                    automata_connector(&mut fragment, &smaller, transition.start, transition.end);
+                }
+            }
         }
-        let smaller = build_complete_automaton(
-            smaller_property,
-            individual_automata,
-            complete_automata,
-            inverse_dependency_graph,
-            inverse_map,
-            symmetric_properties,
-            transitive_properties,
-            building,
-        );
         let initial = bigger.initial_state();
         let finalst = bigger.final_state();
-        automata_connector(&mut bigger, &mirrored_copy(&smaller), initial, finalst);
+        automata_connector(&mut bigger, &mirrored_copy(&fragment), initial, finalst);
     }
 
     // Java applies the inverse-handling + finalize tail to the no-own-automaton
