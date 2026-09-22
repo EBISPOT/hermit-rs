@@ -1503,6 +1503,8 @@ mod tests {
         let diff = astar.minus(&aplus);
         assert!(!diff.is_empty());
         assert_eq!(diff.cardinality(), Some(1)); // {""}
+        // Unlike dk.brics getFiniteStrings (issue #9), the empty word is listed.
+        assert_eq!(diff.finite_strings(10), Some(vec![String::new()]));
         assert!(diff.run(""));
         assert!(!diff.run("a"));
         // a+ minus a+ = ∅
