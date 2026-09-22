@@ -1,5 +1,8 @@
 # Java test parity
 
+Remaining work is indexed in [HANDOFF.md](HANDOFF.md), with a GitHub issue for every outstanding item.
+
+
 These tests are ported from the `java` branch of EBISPOT/hermit-rs at
 `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`. The original Java test sources and
 resources are preserved under `upstream/`, under the repository's LGPL license.
