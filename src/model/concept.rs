@@ -319,20 +319,17 @@ impl Concept {
         }
     }
 
-    /// A cheap raw integer key uniquely identifying this concept, mixing the
-    /// variant discriminant with the canonical interned-allocation address of the
-    /// inner value (every inner variant is interned, so its `intern_ptr()` is a
-    /// collision-free per-value id). Equal concepts -> equal interned pointers ->
-    /// equal keys, so this is consistent with `Eq`/`Hash`; it just skips building
-    /// a hasher and the nested `Hash` dispatch on the hot tuple-index path.
+    /// The identity of the live, non-zero-sized allocation backing this concept.
+    /// Distinct variants have distinct allocations, so no variant mixing is needed.
+    /// XORing a variant into the address would introduce collisions between them.
     #[inline]
     pub fn raw_key(&self) -> usize {
         match self {
-            Concept::AtomicConcept(c) => c.intern_ptr() ^ (0 << 3),
-            Concept::AtomicNegationConcept(c) => c.intern_ptr() ^ (1 << 3),
-            Concept::AtLeastConcept(c) => c.intern_ptr() ^ (2 << 3),
-            Concept::AtLeastDataRange(c) => c.intern_ptr() ^ (3 << 3),
-            Concept::ExistsDescriptionGraph(c) => c.intern_ptr() ^ (4 << 3),
+            Concept::AtomicConcept(c) => c.intern_ptr(),
+            Concept::AtomicNegationConcept(c) => c.intern_ptr(),
+            Concept::AtLeastConcept(c) => c.intern_ptr(),
+            Concept::AtLeastDataRange(c) => c.intern_ptr(),
+            Concept::ExistsDescriptionGraph(c) => c.intern_ptr(),
         }
     }
 }

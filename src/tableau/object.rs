@@ -55,7 +55,7 @@ impl TableauObject {
             TableauObject::DescriptionGraph(g) => (3, g.intern_ptr() as u64),
             TableauObject::Node(id) => (4, *id as u64),
         };
-        debug_assert!(inner < (1u64 << 61), "interned id does not fit in 61 bits");
+        assert!(inner < (1u64 << 61), "interned id does not fit in 61 bits");
         (tag << 61) | (inner & ((1u64 << 61) - 1))
     }
 
