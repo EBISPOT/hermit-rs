@@ -1,10 +1,9 @@
 // tests for the read-off `InstanceManager` path.
 //
-// `realize` / `instances` / `get_types` / `object_property_instances` now build a
-// seeded `InstanceManager` by reading the saturated initial-consistency-check
-// model (known/possible class instances + same-as), confirming only the POSSIBLE
-// instances with the entailment oracle -- mirroring HermiT's
-// `InstanceManager.initializeKnowAndPossibleClassInstances` + `realize`.
+// Class queries build a seeded `InstanceManager` from the saturated model's
+// known/possible class instances and same-as groups. Property queries read the
+// model's known/possible relation pairs. Only possible instances need an oracle
+// test, as in HermiT's InstanceManager.
 //
 // These tests assert the InstanceManager path produces the SAME answers as the
 // old per-pair entailment oracle, on:
@@ -263,7 +262,24 @@ fn object_property_instances_match_oracle() {
         .iter()
         .map(|(f, t)| (f.0.to_string(), t.0.to_string()))
         .collect();
-    assert!(pair_iris.contains(&("http://ex/alice".to_string(), "http://ex/fido".to_string())));
+    let mut expected = HashSet::new();
+    for from in [&alice, &fido] {
+        for to in [&alice, &fido] {
+            if hermit_rs::reasoner::is_entailed(
+                &o,
+                &Component::ObjectPropertyAssertion(ObjectPropertyAssertion {
+                    ope: ope.clone(),
+                    from: Individual::Named(from.clone()),
+                    to: Individual::Named(to.clone()),
+                }),
+            )
+            .unwrap()
+            {
+                expected.insert((from.0.to_string(), to.0.to_string()));
+            }
+        }
+    }
+    assert_eq!(pair_iris, expected);
     // And alice is a Person via the domain (a known/possible class instance).
     let people = iris(&instances(&o, &person, false).unwrap());
     assert!(people.contains(&"http://ex/alice".to_string()));

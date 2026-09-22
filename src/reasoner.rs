@@ -4347,8 +4347,9 @@ fn role_assertion_is_deterministic(
 }
 
 /// The pairs of named individuals `(a, b)` for which `ope(a, b)` is entailed
-/// (HermiT's `getObjectPropertyInstances` / `getObjectPropertyValues`). This is
-/// the role-instance side of `InstanceManager`.
+/// (HermiT's `getObjectPropertyInstances` / `getObjectPropertyValues`). Known
+/// pairs are read directly from a model; only possible pairs need entailment
+/// tests. A pair absent from the model is already refuted by that model.
 pub fn object_property_instances(
     ontology: &SetOntology<crate::structural::A>,
     ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
@@ -4359,136 +4360,171 @@ pub fn object_property_instances(
     )>,
     String,
 > {
-    use horned_owl::model::{Component, Individual, ObjectPropertyAssertion};
-    use std::collections::HashSet;
+    object_property_instances_with_oracle(ontology, &ope, |from, to| {
+        is_entailed_core(
+            ontology,
+            &Component::ObjectPropertyAssertion(horned_owl::model::ObjectPropertyAssertion {
+                ope: ope.clone(),
+                from: OwlIndividual::Named(from),
+                to: OwlIndividual::Named(to),
+            }),
+        )
+    })
+}
 
-    // `Reasoner.getObjectPropertyInstances` (Reasoner.java:1779) calls
-    // `checkPreConditions` first, so it throws on an inconsistent ontology under
-    // the default flag (the `!m_isConsistent` all-pairs branch only runs when the
-    // flag is off).
-    check_pre_conditions(ontology)?;
+/// Keep the candidate selection shared with the call-count regressions: an
+/// exhaustive oracle fallback would give correct answers on many small tests
+/// while making a property sweep quadratic in the number of individuals.
+fn object_property_instances_with_oracle<F>(
+    ontology: &SetOntology<crate::structural::A>,
+    ope: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
+    mut is_instance: F,
+) -> Result<
+    std::collections::HashSet<(
+        NamedIndividual<crate::structural::A>,
+        NamedIndividual<crate::structural::A>,
+    )>,
+    String,
+>
+where
+    F: FnMut(
+        NamedIndividual<crate::structural::A>,
+        NamedIndividual<crate::structural::A>,
+    ) -> Result<bool, String>,
+{
+    // The read-off also performs the initial consistency check, preserving
+    // getObjectPropertyInstances' default InconsistentOntologyException behavior.
+    let ObjectPropertyPairs { known, possible } = build_object_property_pairs(ontology, ope)?;
     let build = Build::new_arc();
-    let dl_ontology = clausify_for_query(ontology)?;
-    let individuals: Vec<NamedIndividual<crate::structural::A>> = dl_ontology
-        .get_all_individuals()
-        .iter()
-        .filter(|i| !i.iri().starts_with("internal:"))
-        .map(|i| build.named_individual(i.iri()))
+    let mut result: std::collections::HashSet<_> = known
+        .into_iter()
+        .map(|(s, t)| (build.named_individual(s), build.named_individual(t)))
         .collect();
-
-    // Read the KNOWN role pairs off the saturated model
-    // (`InstanceManager.readOffPropertyInstances` -- a deterministic ternary
-    // assertion between two named-individual nodes is a known role instance). For a
-    // KNOWN pair we skip the entailment test; otherwise the pair is treated as a
-    // POSSIBLE one and confirmed with the oracle. The known set is computed only for
-    // the plain (non-inverse) atomic-role projection; under inverse / complex roles
-    // the known set is just empty and every pair falls through to the oracle, so the
-    // ANSWERS are identical either way.
-    let known = build_known_object_property_pairs(ontology, &ope)?;
-
-    let mut result: HashSet<(
-        NamedIndividual<crate::structural::A>,
-        NamedIndividual<crate::structural::A>,
-    )> = HashSet::new();
-    for from in &individuals {
-        for to in &individuals {
-            let pair = (from.0.to_string(), to.0.to_string());
-            if known.contains(&pair)
-                || is_entailed_core(
-                    ontology,
-                    &Component::ObjectPropertyAssertion(ObjectPropertyAssertion {
-                        ope: ope.clone(),
-                        from: Individual::Named(from.clone()),
-                        to: Individual::Named(to.clone()),
-                    }),
-                )?
-            {
-                result.insert((from.clone(), to.clone()));
-            }
+    for (source, target) in possible {
+        let from = build.named_individual(source);
+        let to = build.named_individual(target);
+        if is_instance(from.clone(), to.clone())? {
+            result.insert((from, to));
         }
     }
     Ok(result)
 }
 
-/// Reads the KNOWN `ope` role pairs off the saturated model, returning them as
-/// `(source_iri, target_iri)` pairs (the role analogue of the class read-off).
-/// Port of `InstanceManager.readOffPropertyInstances` plus
-/// `readOffComplexRoleSuccessors`: a deterministic (empty dependency set)
-/// `role(source, target)` between named-individual nodes is a *known* role
-/// instance. For a *complex* (e.g. transitive) role the direct ternary assertions
-/// miss transitively-implied successors, so -- exactly as HermiT does -- we add
-/// the read-off axioms `A_a(a)` and `A_a ⊑ ∀role.A_a^role` for each named
-/// individual `a`, saturate, and read off the `A_a^role`-labelled named successors
-/// (the ∀ propagates along the full role automaton, capturing the transitive
-/// closure). An inverse role reuses the forward read-off with the pairs swapped.
-fn build_known_object_property_pairs(
+#[derive(Default)]
+struct ObjectPropertyPairs {
+    known: std::collections::HashSet<(String, String)>,
+    possible: std::collections::HashSet<(String, String)>,
+}
+
+impl ObjectPropertyPairs {
+    fn insert(&mut self, source: &str, target: &str, known: bool) {
+        let pair = (source.to_owned(), target.to_owned());
+        if known {
+            self.possible.remove(&pair);
+            self.known.insert(pair);
+        } else if !self.known.contains(&pair) {
+            self.possible.insert(pair);
+        }
+    }
+}
+
+/// Read known and possible pairs as in InstanceManager.readOffPropertyInstances
+/// and readOffComplexRoleSuccessors. Inverse expressions swap both projections.
+fn build_object_property_pairs(
     ontology: &SetOntology<crate::structural::A>,
     ope: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-) -> Result<std::collections::HashSet<(String, String)>, String> {
+) -> Result<ObjectPropertyPairs, String> {
     use crate::model::{AtomicRole, Role};
     use horned_owl::model::ObjectPropertyExpression as OPE;
 
     let (role_iri, is_inverse) = match ope {
-        OPE::ObjectProperty(p) => (p.0.to_string(), false),
-        OPE::InverseObjectProperty(p) => (p.0.to_string(), true),
+        OPE::ObjectProperty(p) => (p.0.as_ref(), false),
+        OPE::InverseObjectProperty(p) => (p.0.as_ref(), true),
     };
-
-    // A complex object role needs the auxiliary-axiom read-off to capture
-    // transitively-implied successors; a simple role is read off directly.
-    let dl_check = clausify_for_query(ontology)?;
-    let is_complex = dl_check
-        .is_complex_object_role(&Role::AtomicRole(AtomicRole::create(role_iri.clone())));
-    let forward = if is_complex {
-        complex_role_known_forward_pairs(ontology, &role_iri)?
+    let dl_ontology = clausify_ontology(ontology)?;
+    let individuals: Vec<_> = dl_ontology
+        .get_all_individuals()
+        .iter()
+        .filter(|i| !i.iri().starts_with("internal:"))
+        .map(|i| i.iri().to_owned())
+        .collect();
+    let mut forward = if role_iri == "http://www.w3.org/2002/07/owl#topObjectProperty"
+        || role_iri == "http://www.w3.org/2002/07/owl#bottomObjectProperty"
+    {
+        // Top need not occur in the ontology (and hence need not have tuples in
+        // its model). Its extension is still the full cross product. Check
+        // consistency before either built-in shortcut, including an empty ABox.
+        if !Reasoner::new(&dl_ontology).is_consistent() {
+            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
+        }
+        let mut pairs = ObjectPropertyPairs::default();
+        if role_iri == "http://www.w3.org/2002/07/owl#topObjectProperty" {
+            for source in &individuals {
+                for target in &individuals {
+                    pairs.insert(source, target, true);
+                }
+            }
+        }
+        pairs
+    } else if dl_ontology.is_complex_object_role(&Role::AtomicRole(AtomicRole::create(role_iri))) {
+        complex_role_forward_pairs(ontology, role_iri, &individuals)?
     } else {
-        plain_role_known_forward_pairs(ontology, &role_iri)?
+        plain_role_forward_pairs(&dl_ontology, role_iri)?
     };
     if is_inverse {
-        Ok(forward.into_iter().map(|(s, t)| (t, s)).collect())
-    } else {
-        Ok(forward)
+        forward.known = forward.known.into_iter().map(|(s, t)| (t, s)).collect();
+        forward.possible = forward.possible.into_iter().map(|(s, t)| (t, s)).collect();
     }
+    Ok(forward)
 }
 
-/// `InstanceManager.readOffPropertyInstances`: the direct ternary read-off of a
-/// simple object role's known `(source, target)` pairs from the saturated model.
-fn plain_role_known_forward_pairs(
-    ontology: &SetOntology<crate::structural::A>,
+/// All result-relevant names for each canonical node, with the determinism of
+/// the entire merge chain. Keeping just one name loses sameAs answers and can
+/// mistake a branch-dependent alias for the owner of a deterministic tuple.
+/// This is Java's initializeIndividualsForNodes deterministic/possible grouping.
+fn names_for_canonical_nodes(
+    tableau: &Tableau,
+    nodes_for_individuals: &HashMap<crate::model::Individual, NodeId>,
+) -> HashMap<NodeId, Vec<(String, bool)>> {
+    let mut names: HashMap<NodeId, Vec<(String, bool)>> = HashMap::new();
+    for (individual, &raw_node) in nodes_for_individuals {
+        if !individual.iri().starts_with("internal:") {
+            names
+                .entry(tableau.get_canonical_node(raw_node))
+                .or_default()
+                .push((
+                    individual.iri().to_owned(),
+                    node_merge_chain_is_deterministic(tableau, raw_node),
+                ));
+        }
+    }
+    names
+}
+
+/// Direct ternary read-off for a simple role. Both aliases' merge dependencies
+/// must be empty, as well as the tuple's, before a pair can be marked known.
+fn plain_role_forward_pairs(
+    dl_ontology: &DLOntology,
     role_iri: &str,
-) -> Result<std::collections::HashSet<(String, String)>, String> {
-    use crate::instance_manager::RoleElementManager;
+) -> Result<ObjectPropertyPairs, String> {
     use crate::tableau::dependency_set::DependencySetOps;
     use crate::tableau::extension_table::View;
-    use std::collections::HashSet;
 
-    let dl_ontology = clausify_ontology(ontology)?;
-    let reasoner = Reasoner::new(&dl_ontology);
-    let Some((mut tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
-        return Ok(HashSet::new());
+    let reasoner = Reasoner::new(dl_ontology);
+    let Some((tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
+        return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
     };
-
-    // Canonical node -> named-individual IRI (skipping internal individuals).
-    let mut iri_for_canonical: HashMap<NodeId, String> = HashMap::new();
-    for (individual, &raw_node) in &nodes_for_individuals {
-        let iri = individual.iri();
-        if iri.starts_with("internal:") {
-            continue;
-        }
-        let canonical = tableau.get_canonical_node(raw_node);
-        iri_for_canonical.entry(canonical).or_insert_with(|| iri.to_string());
-    }
-
-    let mut role_manager = RoleElementManager::new();
-    let empty_set = tableau.dependency_set_factory().empty_set();
+    let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
+    let mut pairs = ObjectPropertyPairs::default();
+    let empty_set = tableau.dependency_set_factory.empty_set();
     let retrieval = tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
     for &tuple_index in &retrieval.tuple_indices {
-        // The role projection is stored as an AtomicRole DL predicate; match its IRI.
-        let is_role = match tableau.ternary_extension_table.get_tuple_object(tuple_index, 0) {
-            TableauObject::DLPredicate(DLPredicate::AtomicRole(r)) => r.iri() == role_iri,
-            _ => false,
-        };
-        if !is_role {
-            continue;
+        match tableau
+            .ternary_extension_table
+            .get_tuple_object(tuple_index, 0)
+        {
+            TableauObject::DLPredicate(DLPredicate::AtomicRole(r)) if r.iri() == role_iri => {}
+            _ => continue,
         }
         let Some(source) = tableau
             .ternary_extension_table
@@ -4504,81 +4540,52 @@ fn plain_role_known_forward_pairs(
         else {
             continue;
         };
-        // Both endpoints must be (active, unmerged) named-individual nodes.
-        if tableau.node(target).is_merged() || !tableau.node(target).is_active() {
+        // Merged or pruned nodes can retain stale extension-table tuples.
+        if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
             continue;
         }
-        let source_canonical = tableau.get_canonical_node(source);
-        let target_canonical = tableau.get_canonical_node(target);
-        let (Some(source_iri), Some(target_iri)) = (
-            iri_for_canonical.get(&source_canonical),
-            iri_for_canonical.get(&target_canonical),
-        ) else {
+        let (Some(sources), Some(targets)) = (names.get(&source), names.get(&target)) else {
             continue;
         };
         let known = tableau
             .ternary_extension_table
             .get_dependency_set(tuple_index, &empty_set)
             .is_empty();
-        if known {
-            role_manager
-                .get_role_element(role_iri)
-                .add_known(source_iri, target_iri);
-        }
-    }
-
-    // Collect the known pairs from the role element.
-    let mut pairs: HashSet<(String, String)> = HashSet::new();
-    let element = role_manager.get_role_element(role_iri);
-    for (source, targets) in element.known_relations() {
-        for target in targets {
-            pairs.insert((source.clone(), target.clone()));
+        for (source_iri, source_known) in sources {
+            for (target_iri, target_known) in targets {
+                pairs.insert(
+                    source_iri,
+                    target_iri,
+                    known && *source_known && *target_known,
+                );
+            }
         }
     }
     Ok(pairs)
 }
 
-/// `InstanceManager.getAxiomsForReadingOffCompexProperties` +
-/// `readOffComplexRoleSuccessors`: for a complex object role `role_iri`, add the
-/// read-off axioms `A_a(a)` and `A_a ⊑ ∀role.A_a^role` for every named individual
-/// `a`, saturate, and collect the known (`empty dependency set`) `A_a^role`-
-/// labelled named successors of each `a`. The universal restriction propagates
-/// along the full role automaton (so transitive/RIA-implied successors are
-/// captured), which the direct ternary read-off would miss.
-fn complex_role_known_forward_pairs(
+/// For a complex role, add A_a(a), A_a ⊑ ∀role.A_a^role for each named
+/// individual a. Universal propagation follows the role automaton, including
+/// transitivity and property chains which the direct ternary read-off misses.
+fn complex_role_forward_pairs(
     ontology: &SetOntology<crate::structural::A>,
     role_iri: &str,
-) -> Result<std::collections::HashSet<(String, String)>, String> {
+    individuals: &[String],
+) -> Result<ObjectPropertyPairs, String> {
     use crate::model::AtomicConcept;
     use crate::tableau::dependency_set::DependencySetOps;
     use crate::tableau::extension_table::View;
     use horned_owl::model::{ObjectPropertyExpression as OPE, SubClassOf};
-    use std::collections::HashSet;
 
     let build = Build::new_arc();
-
-    // The non-internal named individuals to read off (HermiT's m_individuals).
-    let dl_base = clausify_for_query(ontology)?;
-    let individuals: Vec<String> = dl_base
-        .get_all_individuals()
-        .iter()
-        .map(|i| i.iri().to_string())
-        .filter(|iri| !iri.starts_with("internal:"))
-        .collect();
-    if individuals.is_empty() {
-        return Ok(HashSet::new());
-    }
-
-    // A_a(a) and A_a ⊑ ∀role.A_a^role for each individual a.
     let mut augmented = ontology.clone();
-    let role_property = build.object_property(role_iri.to_string());
-    for ind_iri in &individuals {
+    let role_property = build.object_property(role_iri);
+    for ind_iri in individuals {
         let a_concept = build.class(format!("internal:individual-concept#{ind_iri}"));
         let ar_concept = build.class(format!("internal:individual-concept#{role_iri}#{ind_iri}"));
-        let named = build.named_individual(ind_iri.clone());
         augmented.insert(Component::ClassAssertion(ClassAssertion {
             ce: CE::Class(a_concept.clone()),
-            i: OwlIndividual::Named(named),
+            i: OwlIndividual::Named(build.named_individual(ind_iri.clone())),
         }));
         augmented.insert(Component::SubClassOf(SubClassOf {
             sub: CE::Class(a_concept),
@@ -4591,24 +4598,13 @@ fn complex_role_known_forward_pairs(
 
     let dl_ontology = clausify_ontology(&augmented)?;
     let reasoner = Reasoner::new(&dl_ontology);
-    let Some((mut tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
-        return Ok(HashSet::new());
+    let Some((tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
+        return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
     };
-
-    // Canonical node -> named-individual IRI (skipping internal individuals).
-    let mut iri_for_canonical: HashMap<NodeId, String> = HashMap::new();
-    for (individual, &raw_node) in &nodes_for_individuals {
-        let iri = individual.iri();
-        if iri.starts_with("internal:") {
-            continue;
-        }
-        let canonical = tableau.get_canonical_node(raw_node);
-        iri_for_canonical.entry(canonical).or_insert_with(|| iri.to_string());
-    }
-
-    let empty_set = tableau.dependency_set_factory().empty_set();
-    let mut pairs: HashSet<(String, String)> = HashSet::new();
-    for ind_iri in &individuals {
+    let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
+    let empty_set = tableau.dependency_set_factory.empty_set();
+    let mut pairs = ObjectPropertyPairs::default();
+    for ind_iri in individuals {
         let ar_concept = TableauObject::Concept(Concept::AtomicConcept(AtomicConcept::create(
             format!("internal:individual-concept#{role_iri}#{ind_iri}"),
         )));
@@ -4622,24 +4618,148 @@ fn complex_role_known_forward_pairs(
             else {
                 continue;
             };
-            if tableau.node(target).is_merged() || !tableau.node(target).is_active() {
+            if !tableau.node(target).is_active() {
                 continue;
             }
-            // Only KNOWN (empty dependency set) successors are read off as known.
             let known = tableau
                 .binary_extension_table
                 .get_dependency_set(tuple_index, &empty_set)
                 .is_empty();
-            if !known {
-                continue;
-            }
-            let target_canonical = tableau.get_canonical_node(target);
-            if let Some(target_iri) = iri_for_canonical.get(&target_canonical) {
-                pairs.insert((ind_iri.clone(), target_iri.clone()));
+            if let Some(targets) = names.get(&target) {
+                for (target_iri, target_known) in targets {
+                    // The source name is encoded in the auxiliary concept; its
+                    // merge dependencies have already propagated into this tuple.
+                    pairs.insert(ind_iri, target_iri, known && *target_known);
+                }
             }
         }
     }
     Ok(pairs)
+}
+
+#[cfg(test)]
+mod object_property_read_off_tests {
+    use super::*;
+    use horned_owl::model::{AnnotatedComponent, ObjectPropertyExpression as OPE};
+    use horned_owl::ontology::component_mapped::ComponentMappedOntology;
+
+    fn load(body: &str) -> SetOntology<crate::structural::A> {
+        let text = format!("Prefix(:=<http://ex/>) Ontology({body})");
+        let (onto, _): (
+            ComponentMappedOntology<crate::structural::A, AnnotatedComponent<crate::structural::A>>,
+            _,
+        ) = horned_owl::io::ofn::reader::read_with_build(
+            &mut std::io::Cursor::new(text),
+            &Build::new_arc(),
+        )
+        .unwrap();
+        onto.into()
+    }
+
+    #[test]
+    fn sparse_property_queries_do_not_test_absent_pairs() {
+        for n in [10, 100, 476] {
+            let mut body = "ObjectPropertyAssertion(:r :i0 :i1)".to_owned();
+            for i in 0..n {
+                body.push_str(&format!("Declaration(NamedIndividual(:i{i}))"));
+            }
+            let onto = load(&body);
+            let role = Build::new_arc().object_property("http://ex/r");
+            for ope in [
+                OPE::ObjectProperty(role.clone()),
+                OPE::InverseObjectProperty(role),
+            ] {
+                let result = object_property_instances_with_oracle(&onto, &ope, |_, _| {
+                    panic!("No oracle calls are needed for a deterministic sparse relation")
+                })
+                .unwrap();
+                assert_eq!(result.len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn only_possible_pairs_reach_the_oracle() {
+        for (body, entailed) in [
+            (
+                "SubObjectPropertyOf(:p :r) SubObjectPropertyOf(:q :r)
+              ClassAssertion(ObjectUnionOf(ObjectHasValue(:p :b) ObjectHasValue(:q :b)) :a)",
+                true,
+            ),
+            (
+                "ClassAssertion(ObjectUnionOf(ObjectHasValue(:r :b) ObjectHasValue(:r :c)) :a)",
+                false,
+            ),
+        ] {
+            let onto = load(body);
+            let build = Build::new_arc();
+            let role = build.object_property("http://ex/r");
+            for ope in [
+                OPE::ObjectProperty(role.clone()),
+                OPE::InverseObjectProperty(role),
+            ] {
+                let mut calls = 0;
+                let result = object_property_instances_with_oracle(&onto, &ope, |from, to| {
+                    calls += 1;
+                    let answer = is_entailed_core(
+                        &onto,
+                        &Component::ObjectPropertyAssertion(
+                            horned_owl::model::ObjectPropertyAssertion {
+                                ope: ope.clone(),
+                                from: OwlIndividual::Named(from),
+                                to: OwlIndividual::Named(to),
+                            },
+                        ),
+                    )?;
+                    assert_eq!(answer, entailed);
+                    Ok(answer)
+                })
+                .unwrap();
+                assert_eq!(
+                    calls, 1,
+                    "Only the pair present in the chosen model is a candidate"
+                );
+                assert_eq!(result.len(), usize::from(entailed));
+            }
+        }
+    }
+
+    #[test]
+    fn deterministic_aliases_need_no_oracle_confirmation() {
+        for complex in ["", "TransitiveObjectProperty(:r)"] {
+            let onto = load(&format!(
+                "ObjectPropertyAssertion(:r :a :b) SameIndividual(:a :aa)
+                 SameIndividual(:b :bb) {complex}"
+            ));
+            let ope = OPE::ObjectProperty(Build::new_arc().object_property("http://ex/r"));
+            let result = object_property_instances_with_oracle(&onto, &ope, |_, _| {
+                panic!("Deterministic equality must preserve all known pairs")
+            })
+            .unwrap();
+            assert_eq!(result.len(), 4);
+        }
+    }
+
+    #[test]
+    fn nondeterministic_aliases_are_always_possible() {
+        let onto = load(
+            "ObjectPropertyAssertion(:r :a :c)
+            ClassAssertion(ObjectOneOf(:a :b) :x)
+            ObjectPropertyAssertion(:r :b :d)",
+        );
+        let ope = OPE::ObjectProperty(Build::new_arc().object_property("http://ex/r"));
+        // Whichever nominal is chosen, x has an outgoing tuple in that model.
+        // Its uncertainty comes from the merge, not the asserted role tuple.
+        let pairs = build_object_property_pairs(&onto, &ope).unwrap();
+        assert!(pairs
+            .known
+            .iter()
+            .all(|(source, _)| source != "http://ex/x"));
+        assert!(pairs
+            .possible
+            .iter()
+            .any(|(source, _)| source == "http://ex/x"));
+    }
 }
 
 /// The named individuals that are instances of `class` (HermiT's
