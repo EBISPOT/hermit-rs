@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testObjectPropertySubsumptionsNoNominals",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3fcb582773911ac55aabab638cd016d5886327e0b28cbfc93202f6eca7284aef.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#op1>", true ],
+    "expected" : [ [ "<file:/c/test.owl#op2>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

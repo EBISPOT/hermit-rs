@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.ReasonerTest.testAnonymousIndividualConstraints2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: The axiom DifferentIndividuals(<file:/c/test.owl#a> _:genid2 ) contains anonymous individuals, which is not allowed in OWL 2. ",
+    "ontology" : "6b19d151991c22ed98dbae2432fc3996ae29548ec7a63ea3765019cd14f2ad9a.ofn",
+    "op" : "invalid"
+  } ]
+}

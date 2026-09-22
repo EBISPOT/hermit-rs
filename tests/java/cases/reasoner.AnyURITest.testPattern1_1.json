@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.AnyURITest.testPattern1_1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "63a988a6415ef9fb87f9a243b21824d8820aa40a7808ab08b860c871e0508aca.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

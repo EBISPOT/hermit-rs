@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanMergeTest2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "fa355c865340acc61f36d3b69a0ba79472d36ad380633053e106873a4e309abf.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#c1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#c18>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c10>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c11>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c12>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c13>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c14>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c15>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c16>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c17>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c3>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c4>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c5>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c6>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c7>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c8>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#c9>)) ObjectMaxCardinality(1 <file:/c/test.owl#r> <file:/c/test.owl#d>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

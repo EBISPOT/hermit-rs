@@ -1,0 +1,62 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIncrementalWithFreshNames",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bb4dec8bf3efaf04c54f83ca18af22a619e3dc7962e4038743f8b1f0bb8a35eb.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "class assertions", "class hierarchy" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#A>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "id" : 0,
+    "ontology" : "1bdc3fbf58406d52a41c540b4fc51319e2f8ea0b92f3c10b3ea8f3c79d7cd6e4.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#A>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#D>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#A>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#B>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.ReasonerTest.testEmptyChain",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: Error: In OWL 2 DL, an empty property chain in property chain axioms is not allowd, but the ontology contains an axiom that the empty chain is a subproperty of <http://onlyness#R>.",
+    "ontology" : "345fc85016cb027cb72895106a9b3a3b9720138fc6bdfa036a46ad2bf13456ab.ofn",
+    "op" : "invalid"
+  } ]
+}

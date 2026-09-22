@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanT6",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "96a38c4a95e5b4a05d52de5ff25f629dcbe7ae479a57f058afd77728a6717b38.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

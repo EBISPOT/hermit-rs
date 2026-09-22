@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.NumericsTest.testMinMaxEqual_1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c99f79f12d6d06653eef89ff8cc48a59d368567032e54283cb1adaa6c0ad4e49.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

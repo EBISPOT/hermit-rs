@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.NumericsTest.testDecimalNotInteger_2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "616444dab67b29be869b63621cc5ed5bbe6e8a2e5f5b9906b350837d1791c7cb.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

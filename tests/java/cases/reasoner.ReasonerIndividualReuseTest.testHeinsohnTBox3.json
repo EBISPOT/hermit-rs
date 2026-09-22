@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testHeinsohnTBox3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "48ba821cc6f9b5897098bf4b0e97f73ac4fdede41d0f907b50cac2a06a4f2c27.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#complex1a> <file:/c/test.owl#complex1b>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#complex2a> <file:/c/test.owl#complex2b>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#complex3a> <file:/c/test.owl#complex3b>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#complex4a> <file:/c/test.owl#complex4b>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testBottomObjectPropertyAssertion",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "902183704071eb2ee73adef2bcba565c7401f15a465648804e84399b9df8e586.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

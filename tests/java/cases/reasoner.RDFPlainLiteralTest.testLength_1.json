@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testLength_1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "e65865525f969ef52db7074ad0fb147acf1807147ee72304dfb334e1aa26e89d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

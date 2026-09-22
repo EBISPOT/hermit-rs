@@ -1,0 +1,85 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testLangRange2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "abc"
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ [ "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "*"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abc@de"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ [ "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "*"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abc@en"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ [ "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "*"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abc@enn"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ [ "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "*"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abc@en-us"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ [ "http://www.w3.org/1999/02/22-rdf-syntax-ns#langRange", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "*"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

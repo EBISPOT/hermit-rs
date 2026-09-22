@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.BinaryDataTest.testParsing_1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "5eb5e461df53a1ab46df46d297c8eaddc23d938511fb3883c828715ffb732ce6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

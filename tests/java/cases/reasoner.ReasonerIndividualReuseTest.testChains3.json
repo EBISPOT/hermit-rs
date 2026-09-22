@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testChains3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "4a65f6590e86e50e8427082fb7a0215e177531ddecffc0bb944e754856c9da81.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubObjectPropertyOf(ObjectPropertyChain(<file:/c/test.owl#p> <file:/c/test.owl#p>) <file:/c/test.owl#p>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

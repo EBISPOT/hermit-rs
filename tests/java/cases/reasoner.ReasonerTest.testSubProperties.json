@@ -1,0 +1,258 @@
+{
+  "java" : "reasoner.ReasonerTest.testSubProperties",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2c57bc7c7c0b75298bbda76e8cae2c31b99261fad60328e29293064a38974b1c.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>", true ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r1>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r2>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s1>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#r1>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s2>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#r2>)" ], [ "ObjectInverseOf(<file:/c/test.owl#r3>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s3>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#r1>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s4>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#r3>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t1>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#s1>)" ], [ "ObjectInverseOf(<file:/c/test.owl#s2>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t2>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#s3>)" ], [ "ObjectInverseOf(<file:/c/test.owl#s4>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#u>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#t1>)" ], [ "ObjectInverseOf(<file:/c/test.owl#t2>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#topObjectProperty>", true ],
+    "expected" : [ [ "<file:/c/test.owl#u>" ], [ "ObjectInverseOf(<file:/c/test.owl#u>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<http://www.w3.org/2002/07/owl#bottomObjectProperty>)", true ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r1>)", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r2>)", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r3>)", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s1>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s2>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#r2>" ], [ "<file:/c/test.owl#r3>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s3>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s4>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#r3>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#t1>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#s1>" ], [ "<file:/c/test.owl#s2>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#t2>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#s3>" ], [ "<file:/c/test.owl#s4>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#u>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#t1>" ], [ "<file:/c/test.owl#t2>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<http://www.w3.org/2002/07/owl#topObjectProperty>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#u>" ], [ "ObjectInverseOf(<file:/c/test.owl#u>)" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ], [ "<file:/c/test.owl#r2>" ], [ "<file:/c/test.owl#r3>" ], [ "ObjectInverseOf(<file:/c/test.owl#r1>)" ], [ "ObjectInverseOf(<file:/c/test.owl#r2>)" ], [ "ObjectInverseOf(<file:/c/test.owl#r3>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r1>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#s1>)" ], [ "ObjectInverseOf(<file:/c/test.owl#s3>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r2>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#s2>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#s2>)" ], [ "ObjectInverseOf(<file:/c/test.owl#s4>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s1>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#t1>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s2>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#t1>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s3>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#t2>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s4>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#t2>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t1>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#u>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t2>", true ],
+    "expected" : [ [ "ObjectInverseOf(<file:/c/test.owl#u>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#u>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#topObjectProperty>", true ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<http://www.w3.org/2002/07/owl#bottomObjectProperty>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ], [ "<file:/c/test.owl#r2>" ], [ "<file:/c/test.owl#r3>" ], [ "ObjectInverseOf(<file:/c/test.owl#r1>)" ], [ "ObjectInverseOf(<file:/c/test.owl#r2>)" ], [ "ObjectInverseOf(<file:/c/test.owl#r3>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r1>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#s1>" ], [ "<file:/c/test.owl#s3>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r2>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#s2>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r3>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#s2>" ], [ "<file:/c/test.owl#s4>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s1>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#t1>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s2>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#t1>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s3>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#t2>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#s4>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#t2>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#t1>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#u>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#t2>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#u>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#u>)", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<http://www.w3.org/2002/07/owl#topObjectProperty>)", true ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

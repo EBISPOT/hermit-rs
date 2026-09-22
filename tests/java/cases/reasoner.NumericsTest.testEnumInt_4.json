@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.NumericsTest.testEnumInt_4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "582660778b8fa912c9c3d115fb67b4e2fb9164813ac8c9e1f47b3541fa857cf3.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

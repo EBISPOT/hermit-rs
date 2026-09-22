@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testgetInverseObjectPropertyExpressions",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2fd1d3ec9e65aa7b8bbdf103c798359ae479ab8b59e1fe16ffe6797411425b22.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>" ],
+    "expected" : [ "<file:/c/test.owl#s>", "ObjectInverseOf(<file:/c/test.owl#r>)", "ObjectInverseOf(<file:/c/test.owl#t>)" ],
+    "id" : 0,
+    "op" : "getInverseObjectProperties"
+  }, {
+    "args" : [ "ObjectInverseOf(<file:/c/test.owl#r>)" ],
+    "expected" : [ "<file:/c/test.owl#r>", "<file:/c/test.owl#t>", "ObjectInverseOf(<file:/c/test.owl#s>)" ],
+    "id" : 0,
+    "op" : "getInverseObjectProperties"
+  } ]
+}

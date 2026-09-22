@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.DatatypesTest.testAllValuesFromDifferentTypes2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ba0c141c29cb9339df2323d66cb0a404fb25be0899f4c9a035f3cca50b6386f9.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

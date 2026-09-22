@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.FloatDoubleTest.testNumberOfDoubles_1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "cac67ab5489d9822edfe05d5ac435105acd0bcea889d1e8b44d0fd6cdf0e216f.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesExact4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ ":A(X) v Y1 == Y2 v Y1 == Y3 v Y2 == Y3 v atLeast(4 :dp xsd:integer)(X) v not(xsd:integer)(Y1) v not(xsd:integer)(Y2) v not(xsd:integer)(Y3) :- :dp(X,Y1), :dp(X,Y2), :dp(X,Y3)" ],
+    "ontology" : "9436a1dc8520c4910db70be388f560bfdacda86a97032b5cd99aefdb3408097e.ofn",
+    "op" : "clausify"
+  } ]
+}

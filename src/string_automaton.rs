@@ -436,6 +436,17 @@ impl Automaton {
     pub fn cardinality(&self) -> Option<u128> {
         let dfa = self.determinize();
         let n = dfa.trans.len();
+        let live = dfa.live_states();
+        if !live[dfa.start] { return Some(0); }
+        let mut color = vec![0u8; n];
+        if dfa.has_cycle_live(dfa.start, &live, &mut color) { return None; }
+        let mut memo: Vec<Option<u128>> = vec![None; n];
+        Some(dfa.count_words(dfa.start, &live, &mut memo))
+    }
+
+    fn live_states(&self) -> Vec<bool> {
+        let dfa = self;
+        let n = dfa.trans.len();
         // Forward-reachable states (from start). All DFA states are by construction.
         // Determine which states can reach an accepting state ("live").
         let mut live = vec![false; n];
@@ -461,20 +472,7 @@ impl Automaton {
                 }
             }
         }
-        if !live[dfa.start] {
-            return Some(0);
-        }
-        // Detect a cycle among live states reachable from start (⇒ infinite).
-        // 0 = unvisited, 1 = on-stack, 2 = done.
-        let mut color = vec![0u8; n];
-        if dfa.has_cycle_live(dfa.start, &live, &mut color) {
-            return None;
-        }
-        // DAG path counting over live states: number of accepted words = number of
-        // distinct paths from start to any accepting state, weighted by interval
-        // width (each interval of width w contributes w distinct symbols).
-        let mut memo: Vec<Option<u128>> = vec![None; n];
-        Some(dfa.count_words(dfa.start, &live, &mut memo))
+        live
     }
 
     fn has_cycle_live(&self, s: usize, live: &[bool], color: &mut [u8]) -> bool {
@@ -520,6 +518,7 @@ impl Automaton {
             Some(_) => {}
         }
         let dfa = self.determinize();
+        let live = dfa.live_states();
         let mut out: Vec<String> = Vec::new();
         // BFS over (state, prefix).
         let mut queue: VecDeque<(usize, String)> = VecDeque::new();
@@ -532,6 +531,9 @@ impl Automaton {
                 }
             }
             for t in &dfa.trans[s] {
+                // Complement and difference introduce rejecting sink cycles.
+                // They contribute no words and must never enter the BFS.
+                if !live[t.to] { continue; }
                 for code in t.min..=t.max {
                     if let Some(ch) = char::from_u32(code) {
                         let mut next = prefix.clone();

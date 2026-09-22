@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testSatisfiabilityWithRIAs14",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "75c8eb9db79820bd04c57ab5464bdf36b51cebf259c47ea299d2ec4624b713f1.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#CT> <file:/c/test.owl#CP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

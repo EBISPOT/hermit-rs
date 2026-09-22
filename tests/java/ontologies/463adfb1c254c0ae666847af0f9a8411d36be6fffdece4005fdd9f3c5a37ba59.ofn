@@ -1,0 +1,1 @@
+Prefix(:=<file:/c/test.owl#>) Ontology(HasKey(ObjectIntersectionOf(:A :B) (:r) (:dp)))

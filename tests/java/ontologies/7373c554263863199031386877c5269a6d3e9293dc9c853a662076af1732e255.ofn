@@ -1,0 +1,12 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#r> <http://www.w3.org/2002/07/owl#Thing>) <file:/c/test.owl#a>)
+DLSafeRule(Body(ObjectPropertyAtom(<file:/c/test.owl#r> <file:/c/test.owl#a> <file:/c/test.owl#b>))Head(ObjectPropertyAtom(<file:/c/test.owl#q> <file:/c/test.owl#a> <file:/c/test.owl#b>)))
+DLSafeRule(Body(ObjectPropertyAtom(<file:/c/test.owl#r> Variable(<file:/c/test.owl#x>) <file:/c/test.owl#b>))Head(ObjectPropertyAtom(<file:/c/test.owl#sb> Variable(<file:/c/test.owl#x>) <file:/c/test.owl#b>)))
+DLSafeRule(Body(ObjectPropertyAtom(<file:/c/test.owl#r> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y>)))Head(ObjectPropertyAtom(<file:/c/test.owl#s> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y>))))
+DLSafeRule(Body(ObjectPropertyAtom(<file:/c/test.owl#s> <file:/c/test.owl#a> Variable(<file:/c/test.owl#x>)))Head(ObjectPropertyAtom(<file:/c/test.owl#sa> <file:/c/test.owl#a> <file:/c/test.owl#b>)))
+ObjectPropertyAssertion(<file:/c/test.owl#r> <file:/c/test.owl#a> <file:/c/test.owl#b>)
+)

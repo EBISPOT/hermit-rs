@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#Person> <file:/c/test.owl#Peter>)
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#marriedTo> ObjectIntersectionOf(<file:/c/test.owl#Man> DataHasValue(<file:/c/test.owl#hasSSN> "123-45-6789"^^<http://www.w3.org/2001/XMLSchema#string>))) <file:/c/test.owl#Lois>)
+DataPropertyAssertion(<file:/c/test.owl#hasSSN> <file:/c/test.owl#Peter> "123-45-6789")
+HasKey(<file:/c/test.owl#Person> () (<file:/c/test.owl#hasSSN>))
+SubClassOf(<file:/c/test.owl#Man> ObjectComplementOf(<file:/c/test.owl#Person>))
+)

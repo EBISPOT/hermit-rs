@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DataPropertyAssertion(<file:/c/test.owl#birthDate> <file:/c/test.owl#Peter> "1956-06-25T04:00:00-05:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>)
+DataPropertyAssertion(<file:/c/test.owl#birthDate> <file:/c/test.owl#Peter> "1956-06-25T10:00:00+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>)
+Declaration(DataProperty(<file:/c/test.owl#birthDate>))
+Declaration(NamedIndividual(<file:/c/test.owl#Peter>))
+FunctionalDataProperty(<file:/c/test.owl#birthDate>)
+)

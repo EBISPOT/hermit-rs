@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+EquivalentClasses(<file:/c/test.owl#A> ObjectIntersectionOf(ObjectMinCardinality(2 <file:/c/test.owl#daughter> ObjectComplementOf(<file:/c/test.owl#male>)) ObjectMinCardinality(2 <file:/c/test.owl#son> <file:/c/test.owl#male>)))
+EquivalentClasses(<file:/c/test.owl#B> ObjectMinCardinality(4 <file:/c/test.owl#child>))
+SubObjectPropertyOf(<file:/c/test.owl#daughter> <file:/c/test.owl#child>)
+SubObjectPropertyOf(<file:/c/test.owl#son> <file:/c/test.owl#child>)
+)

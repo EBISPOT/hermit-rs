@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.DatatypesTest.testEnumWithIntPlusFloatRestriction",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "082f99c4a810e96b1212485a04fe4f1a20ed72695e1947acc8b148f48f005fac.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#MeterToCentimeter>" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

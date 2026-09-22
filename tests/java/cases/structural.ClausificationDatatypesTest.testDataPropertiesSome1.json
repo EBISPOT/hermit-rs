@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesSome1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ ":A(X) v not(xsd:string)(Y) :- :dp(X,Y)" ],
+    "ontology" : "c56078761ae686b26a7af5e1d8755dc1705d995af310e26e9e359f0fe9a0e1db.ofn",
+    "op" : "clausify"
+  } ]
+}

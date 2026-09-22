@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testDatatypeDefEntailment",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "baf527070c2248f3a195e1ec078205866ff3d9de8782c5224b51167c4fa5f9c0.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "DatatypeDefinition(<file:/c/test.owl#SSN> DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#string> <http://www.w3.org/2001/XMLSchema#pattern> \"[0-9]{3}-[0-9]{2}-[0-9]{4}\"^^<http://www.w3.org/2001/XMLSchema#string>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

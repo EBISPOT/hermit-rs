@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIsTransitiveObject",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "deda85304ecb5b143148f7d20e638ef953bfc55cf3aebeea37408f1383b9229d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "TransitiveObjectProperty(<file:/c/test.owl#OP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "TransitiveObjectProperty(<file:/c/test.owl#SOP1>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "TransitiveObjectProperty(<file:/c/test.owl#SOP2>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "TransitiveObjectProperty(<file:/c/test.owl#ANOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

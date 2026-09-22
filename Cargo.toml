@@ -5,6 +5,11 @@ edition = "2021"
 description = "A Rust port of the HermiT OWL 2 DL reasoner, built on horned-owl. Logic is translated faithfully from the original Java sources."
 license = "LGPL-3.0-or-later"
 
+[[test]]
+name = "java_parity"
+path = "tests/java_parity.rs"
+harness = false
+
 [dependencies]
 # default-features = false drops horned-owl's `remote` feature (its ureq/rustls
 # HTTP import resolver, which this crate never uses and which does not build on
@@ -43,11 +48,13 @@ indexmap = "2"
 rustc-hash = "2"
 
 [dev-dependencies]
+libtest-mimic = "0.8.2"
 # OWL 2 WG conformance harness (tests/owl_wg_conformance.rs): a small streaming
 # XML reader used only to walk the test-vocabulary elements of the committed
 # manifest (tests/owl_wg/all.rdf). The embedded premise/conclusion ontologies are
 # parsed by horned-owl, not by this crate.
 quick-xml = "0.37"
+serde_json = "1.0.151"
 
 # web-time: drop-in std::time Instant/SystemTime that works on wasm (where the
 # std clock traps). Used via the crate::time shim (src/lib.rs) so the
@@ -59,4 +66,3 @@ web-time = "1"
 # InverseObjectProperties(ObjectPropertyExpression, ObjectPropertyExpression).
 [patch.crates-io]
 horned-owl = { path = "deps/horned-owl" }
-

@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataUnionOf1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "defdata:0(Y) :- :dp(X,Y)", "xsd:double(X) v xsd:nonNegativeInteger(X) :- defdata:0(X)" ],
+    "ontology" : "fceb801106ee432a0675b7f325fb1b22f799405ecc39c3f4a80f0c735e4bf5fd.ofn",
+    "op" : "clausify"
+  } ]
+}

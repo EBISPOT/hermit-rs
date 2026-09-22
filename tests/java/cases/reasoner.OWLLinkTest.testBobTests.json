@@ -1,0 +1,549 @@
+{
+  "java" : "reasoner.OWLLinkTest.testBobTests",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "1c720ba0cc550f7cc808bdd01d121f0945b39e4fef0635dd1f204703423cc5d1.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/1a.owl#F> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 1,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "7a9e55c42d08f29df3a602e27dcd18a81a451c9f18afafe981de92dfa3ae3343.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/2a.owl#V> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 1,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 2,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "66de697ae8d224af0398edb6ec85a0ddfebd91a938dfffd50d800cb7966a07ed.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/2c.owl#A> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 2,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 3,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ff30ef55a9e319ae3f7f621e5c11eb574b190dcd22fad74ac186d966d0df4238.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/3a.owl#C> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 3,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 4,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "23a73a3a7ae353a175da1098d8904b208a5b487e4caa2a97d881750fa100d3fa.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/3b.owl#U> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 4,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 5,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bc4b968d96f9da18a64bf8b4263196dd2f1deaec8bdc783f14c8fd16a04d4e4e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/4.owl#L> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 5,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 6,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ab96327baa1187e7676544210cd894778bd793f45d6556f70fecd63aea4c2fd9.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/5.owl#M2> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 6,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 7,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "257341c5a122b27cf0a6e543b4f72803992aaf9a3672af25bdf964be9c5fd269.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/6.owl#E> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 7,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 8,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "284ff8d989511e51f1d0287f26ef10a3b7e68aead06633ae12f277013fc256a2.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SameIndividual(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/7.owl#k> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/7.owl#j>)" ] ],
+    "expected" : true,
+    "id" : 8,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 9,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "68d8e4fc9ae4b6e4c2b2c0049203dcb1bc54c29838722def114e8c41d388837e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ClassAssertion(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/8.owl#F> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/8.owl#I>)" ] ],
+    "expected" : true,
+    "id" : 9,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 10,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c3c17b9639834fefdc1f52241ef1147bcf9f9d2c08d7d8f01ba5e5f4db0f3a3d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/9.owl#Somer3CSomer4D> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/9.owl#Allr5C>)" ] ],
+    "expected" : true,
+    "id" : 10,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 11,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "d4cf38e0fa2b046719eaaf926da73e580bf96cffdd29c2d3c58c19082a695983.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/10a.owl#X2> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 11,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 12,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b48f74769ee44e1cda023f267cf431ee1b6c51032aee1fd3d5898dd7bb3a7149.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/10b.owl#X3> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 12,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 13,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "390c39c606560efa55b6a12b35172ad8e483bc45cf9f97fec946a09ace4d273d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyI> <http://www.w3.org/2002/07/owl#Thing>)", "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyO> <http://www.w3.org/2002/07/owl#Nothing>)", "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyU> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 13,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 14,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "e5468f2e6ed051a0a9ac8dc447db5bd4cbddbe1be05859423410c8ed7d082abc.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.w3.org/2002/07/owl#Nothing> ObjectIntersectionOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/13.owl#SoccerDreamTeam> ObjectComplementOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/13.owl#ThreePlayerTeam>)))", "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/13.owl#SoccerDreamTeam> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/13.owl#TwoPlayerTeam>)" ] ],
+    "expected" : true,
+    "id" : 14,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 15,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c9be606139946a3d1c9bc66c9fb7caa45d4dab2cd1786081f4677df4bedee2b3.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ClassAssertion(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/14.owl#GreenColored> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/14.owl#Apple>)" ] ],
+    "expected" : true,
+    "id" : 15,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 16,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f22b61fdef87bbedb4abc0354d4911d8618099e3383848da6d360bd637ebfd9e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/15.owl#Satisfiable> <http://www.w3.org/2002/07/owl#Nothing>)", "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/15.owl#NotSatisfiable> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 16,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 17,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "759036f84821ab92571dfd1d9d61041c7ffcdee315c972a61475c0176c0d5539.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/16.owl#DullColored> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/16.owl#NoOrLittleColored>)" ] ],
+    "expected" : true,
+    "id" : 17,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 18,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "9fc3bb26b4773878585f615d7fc86155519ab7cba0953c92fd271d9e52d6861d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 18,
+    "op" : "isConsistent"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 19,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "db3997932e132d983ff5e39467afc3fdf46720fe1dcb9f02a746b8c736f8d80b.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/18.owl#AnotA> <http://www.w3.org/2002/07/owl#Thing>)" ] ],
+    "expected" : true,
+    "id" : 19,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 20,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ee78cf7415ddc7be5170a3f22c812b399d59ee23652e5884fd10d570905967f2.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#K> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#L>)" ] ],
+    "expected" : true,
+    "id" : 20,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 21,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f1e89474b9869a0d86717bc01e3d8467d14d1680abaa094f8f8ff433f927ef63.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ClassAssertion(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/21.owl#B> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/21.owl#i1>)" ] ],
+    "expected" : true,
+    "id" : 21,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 22,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "9a26be653473201d8f879cea1ecefecbf0c5f79392275b648edf0fc16382cfc8.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#A> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 22,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 23,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "e97e792b92ff7359a0de234e217b5c3b84a148a21eb8238f65c429ac5c29a21f.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#A> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#EquivA>)" ] ],
+    "expected" : true,
+    "id" : 23,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 24,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "1c494cf18eb94e1b254b435defec78398cbf192ce6e3646a4fd00de457b0b7f6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/24.owl#X> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 24,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 25,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c89ba38368a004c1f97b1a66856a3e685aaa57c7f3f610069c5b04f5f2e78cd5.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ClassAssertion(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/25.owl#F> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/25.owl#a>)" ] ],
+    "expected" : true,
+    "id" : 25,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 26,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "cf0c28c9038c8a0f3923b783712cc16cbb06c030c09d11594339e95a462b1370.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubClassOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/26.owl#F> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/26.owl#G2>)" ] ],
+    "expected" : true,
+    "id" : 26,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 27,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "914dd459e82de4a40ba82ac21ea77cd799d9b2db2fd99b8f787fe756b2debe62.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "SubObjectPropertyOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/27.owl#q> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/27.owl#p>)" ] ],
+    "expected" : true,
+    "id" : 27,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 28,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ec150aa3af0891ea6f4a10ce2f122ef0bd29684332a2bfd5e454362a12878c20.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/28.owl#A> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 28,
+    "op" : "isEntailed"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 29,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ad3c44fb9809649d59e1a4e29a9e796ff4e184115d85fffe1fff3e1c3f39e819.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/29a.owl#F-lite> <http://www.w3.org/2002/07/owl#Nothing>)" ] ],
+    "expected" : true,
+    "id" : 29,
+    "op" : "isEntailed"
+  }, {
+    "error" : "java.lang.IllegalArgumentException: Non-simple property '<file:/private/tmp/hermit-rs-issue7-java/src/test/resources/org/semanticweb/HermiT/reasoner/res/OWLLink/19.owl#p>' or its inverse appears in the cardinality restriction 'ObjectMinCardinality(2 <file:/private/tmp/hermit-rs-issue7-java/src/test/resources/org/semanticweb/HermiT/reasoner/res/OWLLink/19.owl#p> owl:Thing)'.",
+    "ontology" : "8e22db3d4e482220dbefe81ed5c1fd96f8a573f133463721213164de737d9e3f.ofn",
+    "op" : "invalid"
+  } ]
+}

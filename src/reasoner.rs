@@ -6634,10 +6634,21 @@ pub fn print_hierarchies(
     object_properties: bool,
     data_properties: bool,
 ) -> Result<String, String> {
+    print_hierarchies_with_configuration(ontology, classes, object_properties, data_properties, &crate::configuration::Configuration::default())
+}
+
+/// Prints the requested taxonomies using the supplied consistency policy.
+pub fn print_hierarchies_with_configuration(
+    ontology: &SetOntology<crate::structural::A>,
+    classes: bool,
+    object_properties: bool,
+    data_properties: bool,
+    configuration: &crate::configuration::Configuration,
+) -> Result<String, String> {
     use horned_owl::model::ObjectPropertyExpression as OPE;
     let mut sections: Vec<String> = Vec::new();
     if classes {
-        let hierarchy = classify(ontology)?;
+        let hierarchy = classify_with_configuration(ontology, configuration)?;
         sections.push(
             hierarchy.print_functional_syntax(|c: &Class<crate::structural::A>| format!("<{}>", c.0)),
         );
@@ -6648,7 +6659,7 @@ pub fn print_hierarchies(
         // needsDeclaration (line 259-260) suppresses top/bottom AND inverse roles.
         let top_op_iri = "http://www.w3.org/2002/07/owl#topObjectProperty";
         let bottom_op_iri = "http://www.w3.org/2002/07/owl#bottomObjectProperty";
-        let hierarchy = classify_object_property_expressions(ontology)?;
+        let hierarchy = classify_object_property_expressions_with_configuration(ontology, configuration)?;
         let render_op = |p: &OPE<crate::structural::A>| match p {
             OPE::ObjectProperty(op) => format!("<{}>", op.0),
             OPE::InverseObjectProperty(op) => format!("ObjectInverseOf( <{}> )", op.0),
@@ -6668,7 +6679,7 @@ pub fn print_hierarchies(
         // SubDataPropertyOf / EquivalentDataProperties / Declaration( DataProperty( ... ) ).
         let top_dp_iri = "http://www.w3.org/2002/07/owl#topDataProperty";
         let bottom_dp_iri = "http://www.w3.org/2002/07/owl#bottomDataProperty";
-        let hierarchy = classify_data_properties(ontology)?;
+        let hierarchy = classify_data_properties_with_configuration(ontology, configuration)?;
         let top_repr = format!("<{}>", top_dp_iri);
         let bottom_repr = format!("<{}>", bottom_dp_iri);
         sections.push(hierarchy.print_functional_syntax_with(
@@ -8676,7 +8687,7 @@ impl IncrementalReasoner {
         // the decision examines the pending changes against the current loaded
         // vocabulary (`m_dlOntology`).
         let incremental = self
-            .can_process_pending_changes_incrementally()
+            .can_process_pending_changes_incrementally_impl()
             .and_then(|()| self.try_incremental_flush().ok().flatten());
 
         match incremental {
@@ -8763,7 +8774,16 @@ impl IncrementalReasoner {
     /// "all used names already exist" guard is enforced by the reduced clausifier
     /// itself, which errors on fresh vocabulary -- so `try_incremental_flush`
     /// falls back if any delta assertion uses fresh names.)
-    fn can_process_pending_changes_incrementally(&self) -> Option<()> {
+    /// Whether the buffered changes are eligible for incremental ABox processing,
+    /// matching Java's `Reasoner.canProcessPendingChangesIncrementally`.
+    pub fn can_process_pending_changes_incrementally(&mut self) -> bool {
+        if self.original_dl_ontology.is_none() {
+            self.ensure_original_clausified();
+        }
+        self.can_process_pending_changes_incrementally_impl().is_some()
+    }
+
+    fn can_process_pending_changes_incrementally_impl(&self) -> Option<()> {
         // Faithful per-change port of Reasoner.canProcessPendingChanges-
         // Incrementally (Reasoner.java:416-485). The defined-or-internal checks use the
         // pre-change ontology, matching Java's `isDefined` against the loaded m_dlOntology.
@@ -9426,3 +9446,12 @@ mod batched_subsumption_tests {
         assert!(!known.contains(&ope(&t)), "t is unrelated, so it is not a known subsumer");
     }
 }
+
+#[cfg(test)]
+mod java_ni_tests;
+#[cfg(test)]
+mod java_tableau_tests;
+#[cfg(test)]
+mod java_blocking_tests;
+#[cfg(test)]
+mod java_graph_tests;

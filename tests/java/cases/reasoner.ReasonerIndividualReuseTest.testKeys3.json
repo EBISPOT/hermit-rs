@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testKeys3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ae93cb5fce2a0174d23d2eb8baa9d8c8c514092930776bd7dcc28f5462613028.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SameIndividual(<file:/c/test.owl#StPeter> <file:/c/test.owl#Peter>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

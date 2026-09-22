@@ -1,0 +1,792 @@
+{
+  "java" : "reasoner.BinaryDataTest.testEnumerate1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : null,
+    "expected" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : ""
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "00"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "01"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "02"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "03"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "04"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "05"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "06"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "07"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "08"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "09"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "0F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "10"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "11"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "12"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "13"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "14"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "15"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "16"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "17"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "18"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "19"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "1F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "20"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "21"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "22"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "23"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "24"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "25"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "26"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "27"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "28"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "29"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "2F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "30"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "31"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "32"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "33"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "34"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "35"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "36"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "37"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "38"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "39"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "3F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "40"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "41"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "42"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "43"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "44"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "45"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "46"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "47"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "48"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "49"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "4F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "50"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "51"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "52"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "53"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "54"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "55"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "56"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "57"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "58"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "59"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "5F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "60"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "61"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "62"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "63"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "64"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "65"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "66"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "67"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "68"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "69"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "6F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "70"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "71"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "72"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "73"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "74"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "75"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "76"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "77"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "78"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "79"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "7F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "80"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "81"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "82"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "83"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "84"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "85"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "86"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "87"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "88"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "89"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "8F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "90"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "91"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "92"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "93"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "94"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "95"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "96"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "97"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "98"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "99"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9A"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9B"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9C"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9D"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9E"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "9F"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "A9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AD"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "AF"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "B9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BD"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "BF"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "C9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CD"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "CF"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "D9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DD"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "DF"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "E9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "EA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "EB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "EC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "ED"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "EE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "EF"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F0"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F1"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F2"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F3"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F4"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F5"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F6"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F7"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F8"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "F9"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FA"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FB"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FC"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FD"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FE"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "FF"
+    } ],
+    "op" : "datatype",
+    "operation" : "enumerate",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "0"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "1"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

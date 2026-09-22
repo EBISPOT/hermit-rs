@@ -33,9 +33,13 @@
 //! return `Err`. To stay faithful we first test premise consistency ourselves
 //! and, when inconsistent, short-circuit entailment to `true`.
 //!
-//! Gating: this is a single `#[test]`. It prints a full tally and asserts
-//! `wrong_count <= BASELINE_WRONG`. SKIP never fails the test (it only reports a
-//! count and per-test reasons). Lower `BASELINE_WRONG` as conformance is fixed.
+//! Gating: every scoped identity and outcome is checked against `expected.tsv`.
+//! A new skip, a changed skip category, a wrong answer, a missing case, or a stale
+//! expected skip fails. Existing parser gaps are explicit, never counted as passes.
+//! Each case runs in a child process that is killed and reaped on timeout.
+
+#[path = "support/memory_budget.rs"]
+mod memory_budget;
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -50,16 +54,6 @@ use quick_xml::Reader;
 
 use hermit_rs::reasoner::{is_entailed_axioms, is_ontology_consistent};
 use hermit_rs::structural::A;
-
-/// First-run count of WRONG (ran, but produced the wrong answer) cases.
-///
-/// On the first full run over the corpus the Rust reasoner produced the correct
-/// answer for *every* test it could run faithfully, so this is 0 — the harness
-/// gates at `wrong_count <= 0`, i.e. any future reasoning regression on a
-/// currently-passing test fails the suite. Keep ratcheting down (it is already
-/// at the floor); if a new manifest or a parser improvement surfaces a genuine
-/// divergence, investigate rather than bumping this up.
-const BASELINE_WRONG: usize = 0;
 
 const URI_BASE: &str = "http://www.w3.org/2007/OWL/testOntology#";
 const TEST_ID_PREFIX: &str = "http://owl.semanticweb.org/id/";
@@ -399,7 +393,8 @@ fn fmt_name(f: Format) -> &'static str {
 /// property element). We catch unwinding so a parser panic becomes a SKIP
 /// reason rather than aborting the whole suite.
 fn parse_one(fmt: Format, src: &str) -> Result<O, String> {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_one_inner(fmt, src)));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_one_inner(fmt, src)));
     match result {
         Ok(r) => r,
         Err(p) => {
@@ -448,7 +443,10 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
             // triple, RDF list, etc.) was dropped — that is a genuine parser gap
             // where running the reasoner would silently use a truncated ontology.
             if !incomplete.is_complete() && !residue_is_benign(&incomplete) {
-                return Err(format!("rdf parse incomplete: {}", summarize_residue(&incomplete)));
+                return Err(format!(
+                    "rdf parse incomplete: {}",
+                    summarize_residue(&incomplete)
+                ));
             }
             Ok(rdfo.into())
         }
@@ -651,7 +649,11 @@ fn run_case(rt: &RawTest, ttype: TestType) -> Outcome {
             match catch_consistency(&premise) {
                 Ok(got) => {
                     out.got = if got { "consistent" } else { "inconsistent" }.to_string();
-                    out.bucket = if got == want { Bucket::Pass } else { Bucket::Wrong };
+                    out.bucket = if got == want {
+                        Bucket::Pass
+                    } else {
+                        Bucket::Wrong
+                    };
                 }
                 Err(e) => {
                     out.reason = classify_runtime_error(&e);
@@ -680,7 +682,11 @@ fn run_case(rt: &RawTest, ttype: TestType) -> Outcome {
             match entails(&premise, &conclusion) {
                 Ok(got) => {
                     out.got = if got { "entailed" } else { "not-entailed" }.to_string();
-                    out.bucket = if got == positive { Bucket::Pass } else { Bucket::Wrong };
+                    out.bucket = if got == positive {
+                        Bucket::Pass
+                    } else {
+                        Bucket::Wrong
+                    };
                 }
                 Err(e) => {
                     out.reason = classify_runtime_error(&e);
@@ -691,13 +697,9 @@ fn run_case(rt: &RawTest, ttype: TestType) -> Outcome {
     out
 }
 
-/// `is_ontology_consistent`, wrapped so a panic or timeout inside the reasoner
-/// becomes a recoverable SKIP rather than aborting the whole suite. The premise
-/// is cloned into the worker thread (these test ontologies are tiny) so the
-/// closure can be `'static`.
+/// Catch a reasoner panic within the worker process; the parent handles timeouts.
 fn catch_consistency(premise: &O) -> Result<bool, String> {
-    let premise = premise.clone();
-    run_guarded(move || is_ontology_consistent(&premise))
+    run_guarded(|| is_ontology_consistent(premise))
 }
 
 /// Faithful port of the harness's entailment decision (see the module doc):
@@ -710,47 +712,117 @@ fn entails(premise: &O, conclusion: &O) -> Result<bool, String> {
         // an inconsistent ontology entails every axiom.
         return Ok(true);
     }
-    let premise_owned = premise.clone();
     let axioms = components(conclusion);
-    run_guarded(move || is_entailed_axioms(&premise_owned, &axioms))
+    run_guarded(|| is_entailed_axioms(premise, &axioms))
 }
 
-/// Run a reasoner closure under a wall-clock guard and panic-catch. The guard
-/// runs the closure on a worker thread and abandons it after
-/// `PER_TEST_TIMEOUT_SECS`; the abandoned thread (if any) is detached. A panic in
-/// the reasoner is converted to an `Err` so the case is bucketed as SKIP.
+/// Catch a panic inside the isolated worker. The parent enforces the timeout.
 fn run_guarded<F>(f: F) -> Result<bool, String>
 where
-    F: FnOnce() -> Result<bool, String> + Send + 'static,
+    F: FnOnce() -> Result<bool, String>,
 {
-    use std::sync::mpsc;
-    use std::time::Duration;
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|p| {
+        format!(
+            "panic: {}",
+            p.downcast_ref::<String>()
+                .cloned()
+                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_default()
+        )
+    })?
+}
 
-    let (tx, rx) = mpsc::channel();
-    let handle = std::thread::spawn(move || {
-        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
-        // Receiver may be gone if we timed out; ignore send errors.
-        let _ = tx.send(res);
-    });
-    match rx.recv_timeout(Duration::from_secs(PER_TEST_TIMEOUT_SECS)) {
-        Ok(Ok(r)) => {
-            let _ = handle.join();
-            r
+fn run_case_isolated(rt: &RawTest, ttype: TestType) -> Outcome {
+    use std::{
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+    let path = std::env::temp_dir().join(format!(
+        "hermit-wg-{}-{}.json",
+        std::process::id(),
+        ttype.label()
+    ));
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "owl_wg_worker", "--nocapture"])
+        .env("OWLMAKE_CLASSIFY_THREADS", "1")
+        .env("HERMIT_WG_CASE", &rt.id)
+        .env("HERMIT_WG_TYPE", ttype.label())
+        .env("HERMIT_WG_OUTPUT", &path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("start WG worker");
+    let start = Instant::now();
+    let error = loop {
+        if let Some(status) = child.try_wait().expect("poll WG worker") {
+            if status.success() {
+                break None;
+            }
+            break Some(format!("worker exited: {status}"));
         }
-        Ok(Err(panic)) => {
-            let _ = handle.join();
-            let msg = panic
-                .downcast_ref::<&str>()
-                .map(|s| s.to_string())
-                .or_else(|| panic.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "reasoner panicked".to_string());
-            Err(format!("panic: {msg}"))
+        if start.elapsed() >= Duration::from_secs(PER_TEST_TIMEOUT_SECS) {
+            child.kill().expect("kill timed out WG worker");
+            child.wait().expect("reap timed out WG worker");
+            break Some("timeout".to_string());
         }
-        Err(_) => {
-            // Timed out: detach the worker (the process will reap it at exit).
-            Err("timeout".to_string())
-        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    if let Some(reason) = error {
+        let _ = std::fs::remove_file(&path);
+        return Outcome {
+            id: rt.id.clone(),
+            ttype,
+            expected: String::new(),
+            got: String::new(),
+            bucket: Bucket::Skip,
+            reason,
+        };
     }
+    let result: Vec<String> = serde_json::from_slice(&std::fs::read(&path).expect("worker output"))
+        .expect("valid worker output");
+    std::fs::remove_file(path).unwrap();
+    Outcome {
+        id: rt.id.clone(),
+        ttype,
+        expected: result[1].clone(),
+        got: result[2].clone(),
+        reason: result[3].clone(),
+        bucket: match result[0].as_str() {
+            "PASS" => Bucket::Pass,
+            "WRONG" => Bucket::Wrong,
+            "SKIP" => Bucket::Skip,
+            _ => panic!("invalid worker bucket"),
+        },
+    }
+}
+
+#[test]
+fn owl_wg_worker() {
+    let Ok(id) = std::env::var("HERMIT_WG_CASE") else {
+        return;
+    };
+    let kind = std::env::var("HERMIT_WG_TYPE").unwrap();
+    let raw = include_str!("owl_wg/all.rdf");
+    let cases = parse_manifest(&expand_doctype_entities(raw)).unwrap();
+    let rt = cases
+        .iter()
+        .find(|rt| rt.id == id)
+        .expect("worker case exists");
+    let ttype = runnable_types(rt)
+        .into_iter()
+        .find(|t| t.label() == kind)
+        .expect("worker type exists");
+    let o = run_case(rt, ttype);
+    let bucket = match o.bucket {
+        Bucket::Pass => "PASS",
+        Bucket::Wrong => "WRONG",
+        Bucket::Skip => "SKIP",
+    };
+    std::fs::write(
+        std::env::var("HERMIT_WG_OUTPUT").unwrap(),
+        serde_json::to_vec(&[bucket, &o.expected, &o.got, &o.reason]).unwrap(),
+    )
+    .unwrap();
 }
 
 /// Bucket a reasoner-side error string into a concise SKIP reason category.
@@ -807,8 +879,6 @@ fn owl_wg_conformance() {
     // Catch-unwind inside run_guarded would otherwise print every reasoner panic
     // backtrace to stderr and drown the report; silence the default hook for the
     // duration of the run (we surface the panic message ourselves).
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
 
     let manifest_path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/owl_wg/all.rdf");
     let raw = std::fs::read_to_string(manifest_path)
@@ -830,10 +900,8 @@ fn owl_wg_conformance() {
 
     let mut outcomes: Vec<Outcome> = Vec::with_capacity(scoped.len());
     for (rt, ttype) in &scoped {
-        outcomes.push(run_case(rt, *ttype));
+        outcomes.push(run_case_isolated(rt, *ttype));
     }
-
-    std::panic::set_hook(prev_hook);
 
     // --- tallies ---
     let mut pass = 0usize;
@@ -909,23 +977,31 @@ fn owl_wg_conformance() {
             eprintln!("  {:<34} {:>4}", cat, n);
         }
     }
-    eprintln!(
-        "\nfull per-test results written to: {}\nBASELINE_WRONG = {} (ratchet down to 0 as conformance is fixed)",
-        results_path, BASELINE_WRONG
-    );
-    eprintln!("=============================================================================================\n");
-
-    // `<=` (not `==`) is deliberate: BASELINE_WRONG is a ratchet that may be set
-    // above 0 to tolerate known failures, and conformance fixes should never make
-    // the assertion fail. Allow the lint for the case where the baseline is at its
-    // minimum (0).
-    #[allow(clippy::absurd_extreme_comparisons)]
-    let within_baseline = wrong <= BASELINE_WRONG;
-    assert!(
-        within_baseline,
-        "conformance regression: {wrong} WRONG cases exceeds BASELINE_WRONG={BASELINE_WRONG}. \
-         See the WRONG list above and {results_path}."
-    );
+    eprintln!("\nfull per-test results written to: {results_path}");
+    let actual: BTreeMap<String, String> = outcomes
+        .iter()
+        .map(|o| {
+            let outcome = match o.bucket {
+                Bucket::Pass => "PASS".to_string(),
+                Bucket::Wrong => "WRONG".to_string(),
+                Bucket::Skip => format!("SKIP: {}", skip_category(&o.reason)),
+            };
+            (format!("{}\t{}", o.ttype.label(), o.id), outcome)
+        })
+        .collect();
+    assert_eq!(actual.len(), outcomes.len(), "duplicate test identities");
+    let expected: BTreeMap<String, String> = include_str!("owl_wg/expected.tsv")
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(|l| {
+            let (outcome, key) = l
+                .split_once('\t')
+                .expect("expected outcome and test identity");
+            (key.to_string(), outcome.to_string())
+        })
+        .collect();
+    let differences = outcome_differences(&actual, &expected);
+    assert!(differences.is_empty(),"conformance coverage changed:\n{}\nSee {results_path}; fix regressions and remove stale expected skips.",differences.join("\n"));
 }
 
 fn write_results_file(path: &str, scoped: &[(&RawTest, TestType)], outcomes: &[Outcome]) {
@@ -940,10 +1016,7 @@ fn write_results_file(path: &str, scoped: &[(&RawTest, TestType)], outcomes: &[O
         f,
         "# OWL 2 WG conformance — per-test results (DIRECT, non-rejected, non-extracredit)"
     );
-    let _ = writeln!(
-        f,
-        "# columns: BUCKET\\tTYPE\\tID\\texpected\\tgot\\treason"
-    );
+    let _ = writeln!(f, "# columns: BUCKET\\tTYPE\\tID\\texpected\\tgot\\treason");
     let _ = writeln!(f, "# scoped runs: {}", scoped.len());
     for o in outcomes {
         let bucket = match o.bucket {
@@ -957,9 +1030,56 @@ fn write_results_file(path: &str, scoped: &[(&RawTest, TestType)], outcomes: &[O
             bucket,
             o.ttype.label(),
             o.id,
-            if o.expected.is_empty() { "-" } else { &o.expected },
+            if o.expected.is_empty() {
+                "-"
+            } else {
+                &o.expected
+            },
             if o.got.is_empty() { "-" } else { &o.got },
             if o.reason.is_empty() { "-" } else { &o.reason },
         );
     }
+}
+
+fn outcome_differences(
+    actual: &BTreeMap<String, String>,
+    expected: &BTreeMap<String, String>,
+) -> Vec<String> {
+    actual
+        .iter()
+        .filter(|(id, value)| expected.get(*id) != Some(*value))
+        .map(|(id, value)| format!("{id}: expected {:?}, got {value}", expected.get(id)))
+        .chain(
+            expected
+                .keys()
+                .filter(|id| !actual.contains_key(*id))
+                .map(|id| format!("missing case: {id}")),
+        )
+        .collect()
+}
+
+#[test]
+fn coverage_gate_rejects_regressions_and_stale_exceptions() {
+    let expected = BTreeMap::from([("Consistency\tcase".into(), "PASS".into())]);
+    assert!(outcome_differences(&expected, &expected).is_empty());
+    for outcome in ["WRONG", "SKIP: timeout", "SKIP: rdf parse incomplete"] {
+        assert!(!outcome_differences(
+            &BTreeMap::from([("Consistency\tcase".into(), outcome.into())]),
+            &expected
+        )
+        .is_empty());
+    }
+    assert!(!outcome_differences(&BTreeMap::new(), &expected).is_empty());
+    let skipped = BTreeMap::from([("Consistency\tcase".into(), "SKIP: timeout".into())]);
+    assert!(!outcome_differences(&expected, &skipped).is_empty());
+    assert!(!outcome_differences(
+        &BTreeMap::from([("Consistency\tcase".into(), "SKIP: parser panic".into())]),
+        &skipped
+    )
+    .is_empty());
+    assert!(!outcome_differences(
+        &BTreeMap::from([("Consistency\tnew".into(), "PASS".into())]),
+        &expected
+    )
+    .is_empty());
 }

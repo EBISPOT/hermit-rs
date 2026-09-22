@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testHeinsohnTBox7",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b18a37d84dffe08a81c4e841050706e3e067204d77ae3b3c9681edf89352ed33.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <http://www.w3.org/2002/07/owl#Thing>) ObjectAllValuesFrom(<file:/c/test.owl#r> ObjectAllValuesFrom(ObjectInverseOf(<file:/c/test.owl#r>) <file:/c/test.owl#A>))) <file:/c/test.owl#A>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

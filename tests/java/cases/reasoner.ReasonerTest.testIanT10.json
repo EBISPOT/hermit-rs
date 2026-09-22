@@ -1,0 +1,43 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanT10",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ba342585f0ee4e6bb36a1f00c949855a5cbf6018ced89b469717efa35f7492f5.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectComplementOf(<file:/c/test.owl#p>) ObjectSomeValuesFrom(<file:/c/test.owl#f> ObjectIntersectionOf(ObjectAllValuesFrom(<file:/c/test.owl#f-> ObjectSomeValuesFrom(<file:/c/test.owl#s> <file:/c/test.owl#p>)) ObjectAllValuesFrom(<file:/c/test.owl#s-> <file:/c/test.owl#p>))))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#s> ObjectIntersectionOf(<file:/c/test.owl#p> ObjectSomeValuesFrom(<file:/c/test.owl#s-> <file:/c/test.owl#p>))) ObjectAllValuesFrom(<file:/c/test.owl#s> ObjectComplementOf(<file:/c/test.owl#p>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#f> <file:/c/test.owl#p>) ObjectSomeValuesFrom(<file:/c/test.owl#f1> ObjectComplementOf(<file:/c/test.owl#p>)))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#f> <file:/c/test.owl#p>) ObjectSomeValuesFrom(<file:/c/test.owl#f1> ObjectComplementOf(<file:/c/test.owl#p>)) ObjectSomeValuesFrom(<file:/c/test.owl#s> <http://www.w3.org/2002/07/owl#Thing>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#f1> <file:/c/test.owl#p>) ObjectSomeValuesFrom(<file:/c/test.owl#f1> ObjectIntersectionOf(ObjectComplementOf(<file:/c/test.owl#p>) ObjectAllValuesFrom(<file:/c/test.owl#f1-> ObjectSomeValuesFrom(<file:/c/test.owl#s> <http://www.w3.org/2002/07/owl#Thing>)))))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

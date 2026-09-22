@@ -1,0 +1,26 @@
+{
+  "java" : "reasoner.AnyURITest.testInvalidAnyURILiterals",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "http://bla.com/test"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "http://bla.com/test"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "abc 123"
+    },
+    "expected" : null,
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  } ]
+}

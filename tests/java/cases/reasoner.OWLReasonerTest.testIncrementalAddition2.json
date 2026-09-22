@@ -1,0 +1,60 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testIncrementalAddition2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f979c6ce6d68cd071bf578cced06badf2d5475605a2d40b37e64ea6675708748.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "id" : 0,
+    "ontology" : "1944a2f242f5bb78010a33e8fc0b12099797c8de0d1be478067eff6224cb02cf.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "id" : 0,
+    "ontology" : "8b0dfc459ddc919a410edc9d380100f9ee8cad755d7de9bab3bd6512f9bd3066.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "id" : 0,
+    "ontology" : "aca37348659cafd37f769a10154f502be041213e9a6ab30425a7a304986c5ce1.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  } ]
+}

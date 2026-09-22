@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testIndividualRetrievalBug",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "a7499f84e2755bee3a146564d5731a4d65f218c715a21fba9157588916f4b9db.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#r>" ],
+    "expected" : [ [ "<file:/c/test.owl#d>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  } ]
+}

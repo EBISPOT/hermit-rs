@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.DatatypesTest.testLiteralCustomDatatype",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "org.semanticweb.HermiT.datatypes.UnsupportedDatatypeException: Literals can only use the datatypes from the OWL 2 datatype map, see \nhttp://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \nThe datatype 'file:/c/test.owl#MyDatatype' is not part of the OWL 2 datatype map and \nHermiT cannot parse this literal.",
+    "ontology" : "91c6b4b806c400834bb1976b760cb56c97b963d0a8ea4a1fc16427329108f385.ofn",
+    "op" : "invalid"
+  } ]
+}

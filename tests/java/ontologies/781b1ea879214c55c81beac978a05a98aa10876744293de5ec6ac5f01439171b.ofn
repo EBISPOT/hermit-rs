@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+NegativeObjectPropertyAssertion(<file:/c/test.owl#isWifeOf> <file:/c/test.owl#margaret> <file:/c/test.owl#david>)
+ObjectPropertyAssertion(<file:/c/test.owl#hasFemalePartner> <file:/c/test.owl#marriage_of_david_and_margaret> <file:/c/test.owl#margaret>)
+ObjectPropertyAssertion(<file:/c/test.owl#hasHusband> <file:/c/test.owl#marriage_of_david_and_margaret> <file:/c/test.owl#david>)
+SubObjectPropertyOf(ObjectInverseOf(<file:/c/test.owl#hasHusband>) <file:/c/test.owl#isHusbandOf>)
+SubObjectPropertyOf(ObjectInverseOf(<file:/c/test.owl#hasWife>) <file:/c/test.owl#isWifeOf>)
+SubObjectPropertyOf(ObjectInverseOf(<file:/c/test.owl#isWifeOf>) <file:/c/test.owl#hasWife>)
+SubObjectPropertyOf(ObjectPropertyChain(<file:/c/test.owl#isHusbandOf> <file:/c/test.owl#hasFemalePartner>) <file:/c/test.owl#hasWife>)
+)

@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationTest.testAsymmetry",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ " :- :as(X,Y), :as(Y,X)", ":as(X,Y) :- :r(X,Y)", ":as(:b,:a)", ":r(:a,:b)" ],
+    "ontology" : "fd1f1d1d5699d8d6980ff1328a15a29d9a23630e870f1175a077abdd203443e4.ofn",
+    "op" : "clausify"
+  } ]
+}

@@ -1,0 +1,9 @@
+{
+  "java" : "structural.NormalizationTest.testDataPropertiesDataOneOf2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#A> DataSomeValuesFrom(<file:/c/test.owl#dp> DataComplementOf(DataOneOf(\"18\"^^xsd:integer \"19\"^^xsd:integer )))))" ],
+    "ontology" : "bf36f2a10d927d18bd27b1ec5ff1576341140afaa2866c33cf85636ae5520bfc.ofn",
+    "op" : "normalize"
+  } ]
+}

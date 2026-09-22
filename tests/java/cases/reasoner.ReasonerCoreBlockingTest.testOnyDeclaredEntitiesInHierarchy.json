@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testOnyDeclaredEntitiesInHierarchy",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : false,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : true,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b18a37d84dffe08a81c4e841050706e3e067204d77ae3b3c9681edf89352ed33.ofn",
+    "op" : "create",
+    "throw_inconsistent" : true
+  }, {
+    "id" : 0,
+    "ontology" : "3c50544b8c7f47d05b0f18fafa57883c958c9cbfa4c8bc7f09a87cb328569f9e.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#Thing>", true ],
+    "expected" : [ [ "<http://www.laits.gmu.edu/geo/ontology/domain/iso/v2/iso19112.owl#RS_Identifier>" ], [ "<http://www.laits.gmu.edu/geo/ontology/domain/iso/v2/iso19115.owl#MD_Identifier>" ] ],
+    "id" : 0,
+    "ontology" : "3c50544b8c7f47d05b0f18fafa57883c958c9cbfa4c8bc7f09a87cb328569f9e.ofn",
+    "op" : "getSubClasses"
+  } ]
+}

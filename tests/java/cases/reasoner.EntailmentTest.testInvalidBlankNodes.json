@@ -1,0 +1,24 @@
+{
+  "java" : "reasoner.EntailmentTest.testInvalidBlankNodes",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "a0812cf637c630fe4228c94d3a820505b558d5e496d8b5d6b6836067ee6fb2f6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ObjectPropertyAssertion(<file:/c/test.owl#p> <file:/c/test.owl#a> _:genid1533)", "ObjectPropertyAssertion(<file:/c/test.owl#r> _:genid1534 _:genid1533)", "ObjectPropertyAssertion(<file:/c/test.owl#s> _:genid1533 _:genid1534)" ] ],
+    "exception" : "java.lang.IllegalStateException",
+    "expected" : null,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

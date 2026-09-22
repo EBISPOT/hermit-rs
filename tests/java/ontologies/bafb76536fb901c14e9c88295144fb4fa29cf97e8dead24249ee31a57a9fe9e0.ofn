@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#t> ObjectSomeValuesFrom(<file:/c/test.owl#t> ObjectOneOf(<file:/c/test.owl#b>))) <file:/c/test.owl#a>)
+DLSafeRule(Body(ObjectPropertyAtom(<file:/c/test.owl#t> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y>)))Head(ObjectPropertyAtom(<file:/c/test.owl#s> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y>))))
+Declaration(NamedIndividual(<file:/c/test.owl#a>))
+Declaration(NamedIndividual(<file:/c/test.owl#b>))
+Declaration(ObjectProperty(<file:/c/test.owl#s>))
+Declaration(ObjectProperty(<file:/c/test.owl#t>))
+TransitiveObjectProperty(<file:/c/test.owl#t>)
+)

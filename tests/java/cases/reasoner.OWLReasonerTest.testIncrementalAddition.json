@@ -1,0 +1,106 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testIncrementalAddition",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f01bca2ac4abe67b06f858821d28dd56749493fe8fedf3f0c5e1afd8fca9cb5a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", true ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "id" : 0,
+    "ontology" : "fa8d86d0f0347f7db982b5c64c7e9111c15e97c6a6dd1bf4289a2c7955a8558e.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ], [ "<file:/c/test.owl#C>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", true ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", true ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "id" : 0,
+    "ontology" : "f01bca2ac4abe67b06f858821d28dd56749493fe8fedf3f0c5e1afd8fca9cb5a.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", true ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", true ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  } ]
+}

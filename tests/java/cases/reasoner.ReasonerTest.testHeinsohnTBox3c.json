@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testHeinsohnTBox3c",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "93c15366b87de4c9b3c5d7743878c001896f3c69aa0b67a0980677c60a1fe6e5.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#complex1>" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

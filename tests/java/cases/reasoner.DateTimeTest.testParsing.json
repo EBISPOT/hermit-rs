@@ -1,0 +1,350 @@
+{
+  "java" : "reasoner.DateTimeTest.testParsing",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-26T16:24:10.200Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-11-26T16:24:10.200Z",
+      "millis" : -1360049749800,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-26T24:00:00Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-11-26T24:00:00Z",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-26T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-11-26T16:24:10.200+02:00",
+      "millis" : -1360056949800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-01-01T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-01-01T16:24:10.200+02:00",
+      "millis" : -1388482549800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-12-21T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-12-21T16:24:10.200+02:00",
+      "millis" : -1357896949800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-12-31T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-12-31T16:24:10.200+02:00",
+      "millis" : -1357032949800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-12-31T00:00:00+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-12-31T00:00:00+02:00",
+      "millis" : -1357092000000,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "0000-01-01T00:00:00Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "0000-01-01T00:00:00Z",
+      "millis" : -62167132800000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "0000-01-01T00:00:00+14:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "0000-01-01T00:00:00+14:00",
+      "millis" : -62167183200000,
+      "tz_offset" : 840
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "0000-01-01T00:00:00-02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "0000-01-01T00:00:00-02:00",
+      "millis" : -62167125600000,
+      "tz_offset" : -120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "0000-01-01T00:00:00+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "0000-01-01T00:00:00+02:00",
+      "millis" : -62167140000000,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "0000-01-01T24:00:00+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "0000-01-01T24:00:00+02:00",
+      "millis" : -62167053600000,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-0001-12-31T24:00:00Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-0001-12-31T24:00:00Z",
+      "millis" : -62167132800000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-0001-12-31T23:59:59Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-0001-12-31T23:59:59Z",
+      "millis" : -62167132801000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-0001-12-31T23:59:59+14:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-0001-12-31T23:59:59+14:00",
+      "millis" : -62167183201000,
+      "tz_offset" : 840
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-0001-12-31T24:00:00+14:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-0001-12-31T24:00:00+14:00",
+      "millis" : -62167183200000,
+      "tz_offset" : 840
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-11-26T16:24:10.200Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-11-26T16:24:10.200Z",
+      "millis" : -122917246549800,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-11-26T24:00:00Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-11-26T24:00:00Z",
+      "millis" : -122917219200000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-11-26T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-11-26T16:24:10.200+02:00",
+      "millis" : -122917253749800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-01-01T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-01-01T16:24:10.200+02:00",
+      "millis" : -122945679349800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-12-21T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-12-21T16:24:10.200+02:00",
+      "millis" : -122915093749800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-12-31T16:24:10.200+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-12-31T16:24:10.200+02:00",
+      "millis" : -122914229749800,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "-1926-12-31T00:00:00+02:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "-1926-12-31T00:00:00+02:00",
+      "millis" : -122914288800000,
+      "tz_offset" : 120
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  } ]
+}

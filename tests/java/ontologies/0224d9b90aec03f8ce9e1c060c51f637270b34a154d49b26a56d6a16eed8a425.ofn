@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(DataSomeValuesFrom(<file:/c/test.owl#s> DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#integer> <http://www.w3.org/2001/XMLSchema#minInclusive> "2"^^<http://www.w3.org/2001/XMLSchema#integer> <http://www.w3.org/2001/XMLSchema#maxInclusive> "2"^^<http://www.w3.org/2001/XMLSchema#integer>)) <file:/c/test.owl#a>)
+ClassAssertion(ObjectComplementOf(<file:/c/test.owl#u>) <file:/c/test.owl#a>)
+DLSafeRule(Body(SameIndividualAtom(Variable(<file:/c/test.owl#y1>) Variable(<file:/c/test.owl#y2>)) DataPropertyAtom(<file:/c/test.owl#r> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y1>)) DataPropertyAtom(<file:/c/test.owl#s> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y2>)))Head(ClassAtom(<file:/c/test.owl#u> Variable(<file:/c/test.owl#x>))))
+DataPropertyAssertion(<file:/c/test.owl#r> <file:/c/test.owl#a> "2"^^<http://www.w3.org/2001/XMLSchema#integer>)
+Declaration(Class(<file:/c/test.owl#u>))
+Declaration(DataProperty(<file:/c/test.owl#r>))
+Declaration(DataProperty(<file:/c/test.owl#s>))
+)

@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.RulesTest.testRuleNonSimple",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bafb76536fb901c14e9c88295144fb4fa29cf97e8dead24249ee31a57a9fe9e0.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#t>", "<file:/c/test.owl#b>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  } ]
+}

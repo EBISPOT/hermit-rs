@@ -1,0 +1,5 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testDependencyDisjunctionMergingBug",
+  "java_errors" : [ ],
+  "operations" : [ ]
+}

@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testClassificationWithValidatedBlockingError",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "641312179ae2632815c423165158c6d1b47d14665d76ff8f1d604b06a648c07d.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "classifyClasses"
+  }, {
+    "args" : [ "SubClassOf(<http://www.co-ode.org/ontologies/galen#BloodVessel> <http://www.co-ode.org/ontologies/galen#HollowStructure>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

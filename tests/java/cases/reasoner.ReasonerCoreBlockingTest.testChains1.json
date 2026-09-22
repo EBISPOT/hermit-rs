@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testChains1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f9e6c2f6ac6ebcf0ad7a50bf581074b0b9eccc36c0259a6051819b2d2f1d8eea.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubObjectPropertyOf(ObjectPropertyChain(<file:/c/test.owl#p1> <file:/c/test.owl#p> <file:/c/test.owl#p> <file:/c/test.owl#p2>) <file:/c/test.owl#S>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

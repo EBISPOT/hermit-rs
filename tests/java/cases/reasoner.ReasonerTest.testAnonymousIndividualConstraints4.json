@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.ReasonerTest.testAnonymousIndividualConstraints4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: The axiom NegativeDataPropertyAssertion(<file:/c/test.owl#r> _:genid4 \"test\") contains anonymous individuals, which is not allowed in OWL 2 DL. ",
+    "ontology" : "231f34d721df46b3709b1210fcf88d1eb704331be8a5b2def7a1eb160cdc1a1f.ofn",
+    "op" : "invalid"
+  } ]
+}

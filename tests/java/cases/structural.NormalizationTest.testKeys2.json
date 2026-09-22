@@ -1,0 +1,22 @@
+{
+  "java": "structural.NormalizationTest.testKeys2",
+  "java_errors": [
+    "junit.framework.AssertionFailedError\n\tat junit.framework.Assert.fail(Assert.java:55)\n\tat junit.framework.Assert.fail(Assert.java:64)\n\tat junit.framework.TestCase.fail(TestCase.java:235)\n\tat org.semanticweb.HermiT.structural.NormalizationTest.testKeys2(NormalizationTest.java:184)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:568)\n\tat junit.framework.TestCase.runTest(TestCase.java:176)\n\tat junit.framework.TestCase.runBare(TestCase.java:141)\n\tat junit.framework.TestResult$1.protect(TestResult.java:122)\n\tat junit.framework.TestResult.runProtected(TestResult.java:142)\n\tat junit.framework.TestResult.run(TestResult.java:125)\n\tat junit.framework.TestCase.run(TestCase.java:129)\n\tat org.semanticweb.HermiT.reasoner.ExportTests.main(ExportTests.java:18)\n"
+  ],
+  "operations": [
+    {
+      "op": "normalize",
+      "ontology": "463adfb1c254c0ae666847af0f9a8411d36be6fffdece4005fdd9f3c5a37ba59.ofn",
+      "expected": [
+        "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#A> ObjectComplementOf(<internal:def#0>)))",
+        "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#B> ObjectComplementOf(<internal:def#0>)))",
+        "HasKey(<internal:def#0> (<file:/c/test.owl#r> ) ())"
+      ],
+      "upstream_alternative": [
+        "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#A> ObjectComplementOf(<internal:def#0>)))",
+        "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#B> ObjectComplementOf(<internal:def#0>))))",
+        "HasKey(<internal:def#0> (<file:/c/test.owl#r> ) ())"
+      ]
+    }
+  ]
+}

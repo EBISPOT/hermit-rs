@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.DatatypesTest.testParsingError",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "org.semanticweb.HermiT.datatypes.MalformedLiteralException: Literal \"4a\"^^<http://www.w3.org/2001/XMLSchema#int> is malformed",
+    "ontology" : "a599a02f389950d33dee32355ef905b0de89002d09a47c171ed58187d7e17376.ofn",
+    "op" : "invalid"
+  } ]
+}

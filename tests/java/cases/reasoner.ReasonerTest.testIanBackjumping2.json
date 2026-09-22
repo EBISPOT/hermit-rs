@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanBackjumping2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "921e27730dc29d13e60a3ce7716ba362709cf92df868253d8fc8aa4f9592a7e6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#test>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

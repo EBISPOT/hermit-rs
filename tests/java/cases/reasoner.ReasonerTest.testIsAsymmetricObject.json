@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerTest.testIsAsymmetricObject",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "af5a848fa0b21754336389ae8e466c3471905e54692530b3157789c11b4ca1a7.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "AsymmetricObjectProperty(<file:/c/test.owl#OP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "AsymmetricObjectProperty(<file:/c/test.owl#SOP1>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "AsymmetricObjectProperty(<file:/c/test.owl#SOP2>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "AsymmetricObjectProperty(<file:/c/test.owl#ANOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

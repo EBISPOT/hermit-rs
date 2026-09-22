@@ -1,0 +1,73 @@
+{
+  "java" : "reasoner.RulesTest.testSeveralVars",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "79b16d0c388c05671d4ed4f63e406c8f13d70e4fd13c4cf5db43437a6fc61bd0.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#Ap>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#Bp>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#Cp>", false ],
+    "expected" : [ [ "<file:/c/test.owl#c>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#Dp>", false ],
+    "expected" : [ [ "<file:/c/test.owl#d>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#Ep>", false ],
+    "expected" : [ [ "<file:/c/test.owl#e>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>", false ],
+    "expected" : [ [ "<file:/c/test.owl#e>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#rcd>" ],
+    "expected" : [ [ "<file:/c/test.owl#d>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#rae>" ],
+    "expected" : [ [ "<file:/c/test.owl#e>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  } ]
+}

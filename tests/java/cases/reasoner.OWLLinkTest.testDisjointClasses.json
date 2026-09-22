@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.OWLLinkTest.testDisjointClasses",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3e55f96c607c2189e25abe6ad60ab6f502fea0e9fd8ecdcb57a6db6267652ae6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://example.com/owl/families/Father>" ],
+    "expected" : [ [ "<http://example.com/owl/families/ChildlessPerson>" ], [ "<http://example.com/owl/families/Mother>" ], [ "<http://example.com/owl/families/Woman>" ], [ "<http://example.com/owl/families/YoungChild>" ], [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  } ]
+}

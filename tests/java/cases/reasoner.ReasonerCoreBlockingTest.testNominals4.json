@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testNominals4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "235422bd540797a77efc3fdd420269d421336dc881600e895c3c62dbbdbcbf31.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#n>", "ObjectSomeValuesFrom(ObjectInverseOf(<file:/c/test.owl#S>) ObjectIntersectionOf(<file:/c/test.owl#A> ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#A>)))", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#n>", "ObjectSomeValuesFrom(ObjectInverseOf(<file:/c/test.owl#S>) ObjectIntersectionOf(<file:/c/test.owl#B> ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#B>)))", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

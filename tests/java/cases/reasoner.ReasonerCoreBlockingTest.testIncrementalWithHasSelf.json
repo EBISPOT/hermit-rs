@@ -1,0 +1,133 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIncrementalWithHasSelf",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f5a13340b57bb4f6d158b3fc6ce7843fd0b2d4ac23d40331e4eb06b7c41a4d35.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "class assertions", "class hierarchy" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#A>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "ontology" : "f408beddf5b3cfc4ddbb2af6edc5cc9cd4756a0f1b5c527b3eee3b3634b40e90.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "f408beddf5b3cfc4ddbb2af6edc5cc9cd4756a0f1b5c527b3eee3b3634b40e90.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#r>", "<file:/c/test.owl#a>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "686f6da8024710fcd17d2e6ba4fa0773c18dff128affd54addd7231ca828920e.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "686f6da8024710fcd17d2e6ba4fa0773c18dff128affd54addd7231ca828920e.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#s>", "<file:/c/test.owl#a>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "d67ec2307a0202048bb1ccb1ae94e68a08673e3cd76c90f0c171c8c9a2352368.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "d67ec2307a0202048bb1ccb1ae94e68a08673e3cd76c90f0c171c8c9a2352368.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#b>", "<file:/c/test.owl#r>", "<file:/c/test.owl#b>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "ontology" : "d67ec2307a0202048bb1ccb1ae94e68a08673e3cd76c90f0c171c8c9a2352368.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "d67ec2307a0202048bb1ccb1ae94e68a08673e3cd76c90f0c171c8c9a2352368.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "128ccf5cc1f17314aac9988822ffb771cf56f6d5145a0af0e7a35df3f84246a3.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "128ccf5cc1f17314aac9988822ffb771cf56f6d5145a0af0e7a35df3f84246a3.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#b>", "<file:/c/test.owl#B>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "959b46f24e4ab1559a928e4c77e767027c334fbb1d60a4e8a5941c4362490420.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "959b46f24e4ab1559a928e4c77e767027c334fbb1d60a4e8a5941c4362490420.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#C>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#b>", "<file:/c/test.owl#C>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

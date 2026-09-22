@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanQNRTest",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bfca3137e22731dacf21e8df2879733f5db07ed5b567c3ec13ec7341f832fb0a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#A> <file:/c/test.owl#B>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

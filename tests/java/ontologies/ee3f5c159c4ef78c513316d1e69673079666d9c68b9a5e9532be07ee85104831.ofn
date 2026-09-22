@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+AsymmetricObjectProperty(<file:/c/test.owl#as>)
+ObjectPropertyAssertion(<file:/c/test.owl#as> <file:/c/test.owl#b> <file:/c/test.owl#a>)
+ObjectPropertyAssertion(<file:/c/test.owl#r> <file:/c/test.owl#a> <file:/c/test.owl#b>)
+SubObjectPropertyOf(<file:/c/test.owl#r> <file:/c/test.owl#as>)
+)

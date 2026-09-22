@@ -1,0 +1,12 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyI>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyO>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyU>))
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyI> ObjectIntersectionOf())
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyO> ObjectOneOf())
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/11.owl#EmptyU> ObjectUnionOf())
+)

@@ -1,0 +1,48 @@
+{
+  "java" : "reasoner.RulesTest.testRuleWithDatatypes2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2c1126730f58ed1e90e8ce1b75f0784fa4c86ce938de3ac2e30732cdbb5c1f6e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#c>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#c>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#c>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ], [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ], [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ], [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  } ]
+}

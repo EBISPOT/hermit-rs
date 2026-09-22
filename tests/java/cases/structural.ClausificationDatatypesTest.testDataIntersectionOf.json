@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataIntersectionOf",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "def:0(:a)", "xsd:nonNegativeInteger(X) :- defdata:0(X)", "atLeast(2 :dp rdfs:Literal)(X) :- def:0(X)", "defdata:0(Y) :- :dp(X,Y)", "xsd:nonPositiveInteger(X) :- defdata:0(X)" ],
+    "ontology" : "ca5cb3eee48136113004fccf654738fad35b21537594f611fa7e9a15b5761dc0.ofn",
+    "op" : "clausify"
+  } ]
+}

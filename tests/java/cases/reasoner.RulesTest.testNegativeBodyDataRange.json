@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.RulesTest.testNegativeBodyDataRange",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "5218fb0937e0ec35aa4b1fd09b0d04e992c30149cd903637f399a8662100e20c.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  } ]
+}

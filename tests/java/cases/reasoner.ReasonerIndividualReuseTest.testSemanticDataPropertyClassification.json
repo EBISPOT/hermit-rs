@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "aad34f2f8158d0298a530e8b4e9e10e66f9f7bdddf3fa0663a4fca951e626630.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>" ],
+    "expected" : [ "<file:/c/test.owl#r>", "<file:/c/test.owl#s>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  } ]
+}

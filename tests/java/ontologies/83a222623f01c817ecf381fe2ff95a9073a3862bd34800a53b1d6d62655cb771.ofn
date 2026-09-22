@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#Person> <file:/c/test.owl#peter>)
+ClassAssertion(ObjectComplementOf(<file:/c/test.owl#Grandchild>) <file:/c/test.owl#peter>)
+SubClassOf(<file:/c/test.owl#Person> ObjectSomeValuesFrom(<file:/c/test.owl#hasParent> <file:/c/test.owl#Person>))
+SubClassOf(ObjectSomeValuesFrom(<file:/c/test.owl#hasParent> ObjectSomeValuesFrom(<file:/c/test.owl#hasParent> <file:/c/test.owl#Person>)) <file:/c/test.owl#Grandchild>)
+)

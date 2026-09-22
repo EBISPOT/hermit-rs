@@ -1,0 +1,74 @@
+{
+  "java" : "reasoner.AnyURITest.testComplement2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : 3,
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "cardinality",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c*)"
+      } ] ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : 4,
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "cardinality",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c*)"
+      } ] ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : null,
+    "expected" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "ab"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "abc"
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "abcc"
+    } ],
+    "op" : "datatype",
+    "operation" : "enumerate",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c*)"
+      } ] ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  } ]
+}

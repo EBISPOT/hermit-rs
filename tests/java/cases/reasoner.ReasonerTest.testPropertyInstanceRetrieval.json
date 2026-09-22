@@ -1,0 +1,66 @@
+{
+  "java" : "reasoner.ReasonerTest.testPropertyInstanceRetrieval",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "6565a4090dac551cf4b7812e569d8fe8522980ded2c56e68e54d42b80f0f98eb.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>" ],
+    "expected" : {
+      "<file:/c/test.owl#a>" : [ "<file:/c/test.owl#a>" ],
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#c>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#rp>" ],
+    "expected" : {
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#c>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#s1>" ],
+    "expected" : { },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#s2>" ],
+    "expected" : { },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>" ],
+    "expected" : {
+      "<file:/c/test.owl#a>" : [ "<file:/c/test.owl#a>" ],
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#c>" ],
+      "<file:/c/test.owl#c>" : [ "<file:/c/test.owl#d>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>" ],
+    "expected" : {
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#d>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#tp>" ],
+    "expected" : {
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#d>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  } ]
+}

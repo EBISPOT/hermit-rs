@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DisjointClasses(<file:/c/test.owl#Person> <file:/c/test.owl#Sex>)
+ObjectPropertyRange(<file:/c/test.owl#isSiblingOf> <file:/c/test.owl#Person>)
+SubClassOf(<file:/c/test.owl#Person> ObjectSomeValuesFrom(<file:/c/test.owl#hasGender> <file:/c/test.owl#Sex>))
+SymmetricObjectProperty(<file:/c/test.owl#isSiblingOf>)
+TransitiveObjectProperty(<file:/c/test.owl#isSiblingOf>)
+)

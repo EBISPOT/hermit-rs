@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.RulesTest.testDiffrentFrom2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c4068316fecf9411172686b845fc532429c9c60f282c54fe6c48a564fdba7338.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  } ]
+}

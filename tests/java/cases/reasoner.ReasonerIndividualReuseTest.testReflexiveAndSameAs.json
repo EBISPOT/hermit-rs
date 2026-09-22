@@ -1,0 +1,26 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testReflexiveAndSameAs",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "95847160166b402014714fba2e363de534a524cdf5e367f0186086009d3dc9ae.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>" ],
+    "expected" : {
+      "<file:/c/test.owl#a>" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#b>" ],
+      "<file:/c/test.owl#b>" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#b>" ]
+    },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  } ]
+}

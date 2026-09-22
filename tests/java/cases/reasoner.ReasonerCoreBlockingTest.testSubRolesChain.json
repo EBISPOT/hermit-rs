@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testSubRolesChain",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "609659492f42f12e73a2c63e05d6081b0c325ff666f1c41d1b6e034ea701fc23.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  } ]
+}

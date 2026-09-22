@@ -1,0 +1,53 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testPrecomputeDisjointClasses",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "0c622f6bc46618b55c856e4ad2ea76ea85579768c5ecf8654f673aad0bf1d5c3.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "disjoint classes" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ "<file:/c/test.owl#A>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ], [ "<file:/c/test.owl#B>" ], [ "<file:/c/test.owl#C>" ], [ "<file:/c/test.owl#D>" ], [ "<file:/c/test.owl#E>" ], [ "<file:/c/test.owl#F>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ], [ "<file:/c/test.owl#C>" ], [ "<file:/c/test.owl#F>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ], [ "<file:/c/test.owl#B>" ], [ "<file:/c/test.owl#F>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ], [ "<file:/c/test.owl#F>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#F>" ],
+    "expected" : [ [ "<file:/c/test.owl#A>", "<http://www.w3.org/2002/07/owl#Nothing>" ], [ "<file:/c/test.owl#B>" ], [ "<file:/c/test.owl#C>" ], [ "<file:/c/test.owl#E>" ] ],
+    "id" : 0,
+    "op" : "getDisjointClasses"
+  } ]
+}

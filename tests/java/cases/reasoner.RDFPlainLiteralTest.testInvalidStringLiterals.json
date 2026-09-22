@@ -1,0 +1,77 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testInvalidStringLiterals",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "blah@"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "blah"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "blah@en"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "blah@en"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#token",
+      "lexical" : "blah blah"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "blah blah"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abc@123"
+    },
+    "expected" : null,
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "\u0002blah@en"
+    },
+    "expected" : null,
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#token",
+      "lexical" : " blah@en"
+    },
+    "expected" : null,
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#token",
+      "lexical" : "blah  blah@en"
+    },
+    "expected" : null,
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  } ]
+}

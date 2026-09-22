@@ -1,0 +1,18 @@
+{
+  "java" : "reasoner.DatalogEngineTest.testQueryWithIndividuals",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bb1156d93b6a004a3ebaac7cd7f8562871a77a97091f6b039cab85967a110ecf.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  } ]
+}

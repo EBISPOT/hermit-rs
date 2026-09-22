@@ -1,0 +1,51 @@
+{
+  "java" : "reasoner.AnyURITest.testComplement4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "aaaaa"
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "a+"
+      } ] ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "lexical" : "aaaa"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "a+"
+      } ] ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#anyURI",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  } ]
+}

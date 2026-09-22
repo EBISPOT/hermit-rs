@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.RIATest.testRIARegularity9",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: The given property hierarchy is not regular.",
+    "ontology" : "531a461d86a1e1b9a25ae5d3c102b55626cfbeab7c85d56c8234753a58c4845e.ofn",
+    "op" : "invalid"
+  } ]
+}

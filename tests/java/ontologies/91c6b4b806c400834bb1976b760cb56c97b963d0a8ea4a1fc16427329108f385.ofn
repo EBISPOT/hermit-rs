@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DataPropertyAssertion(<file:/c/test.owl#dp> <file:/c/test.owl#a> "1"^^<file:/c/test.owl#MyDatatype>)
+DatatypeDefinition(<file:/c/test.owl#MyDatatype> DataOneOf("1"^^<http://www.w3.org/2001/XMLSchema#integer> "1"^^<http://www.w3.org/2001/XMLSchema#string>))
+Declaration(DataProperty(<file:/c/test.owl#dp>))
+Declaration(Datatype(<file:/c/test.owl#MyDatatype>))
+Declaration(NamedIndividual(<file:/c/test.owl#a>))
+)

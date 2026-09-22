@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testHeinsohnTBox2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3882ff0b3d2b731e545dfa04e9a1aef44c912fe00254fd3e58d67051bc2645ae.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#complex1>" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "<file:/c/test.owl#complex2>" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

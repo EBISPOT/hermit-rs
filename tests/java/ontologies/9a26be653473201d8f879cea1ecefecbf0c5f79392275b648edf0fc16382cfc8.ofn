@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DataPropertyRange(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#age> <http://www.w3.org/2001/XMLSchema#integer>)
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#A>))
+Declaration(DataProperty(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#age>))
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#A> ObjectIntersectionOf(DataSomeValuesFrom(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#age> <http://www.w3.org/2001/XMLSchema#negativeInteger>) DataAllValuesFrom(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/22.owl#age> <http://www.w3.org/2001/XMLSchema#nonNegativeInteger>)))
+)

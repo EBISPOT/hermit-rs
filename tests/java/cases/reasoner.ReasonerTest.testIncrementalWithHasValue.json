@@ -1,0 +1,78 @@
+{
+  "java" : "reasoner.ReasonerTest.testIncrementalWithHasValue",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "daf81aabe00dd14c59b010a96fccdbabb651abe8cbaa1142de8a6e8199468e94.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "class assertions", "class hierarchy" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#A>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#B>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "ontology" : "265ab30b15684ec304ee5639e5e6d0f3d7b2bd801d07f241d222a5b11a63b463.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "265ab30b15684ec304ee5639e5e6d0f3d7b2bd801d07f241d222a5b11a63b463.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#r>", "<file:/c/test.owl#b>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "4a1ff59c174401be20588f39298dacc330a43d1340988ce0a0c90dc001c15466.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "4a1ff59c174401be20588f39298dacc330a43d1340988ce0a0c90dc001c15466.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#s>", "<file:/c/test.owl#b>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  }, {
+    "args" : [ ],
+    "expected" : false,
+    "id" : 0,
+    "ontology" : "bff9ebeacb04f6421b7287de010d7338b03dec5b5d461343ab085583ff2de600.ofn",
+    "op" : "canProcessPendingChangesIncrementally"
+  }, {
+    "id" : 0,
+    "ontology" : "bff9ebeacb04f6421b7287de010d7338b03dec5b5d461343ab085583ff2de600.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#r>", "<file:/c/test.owl#c>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasObjectPropertyRelationship"
+  } ]
+}

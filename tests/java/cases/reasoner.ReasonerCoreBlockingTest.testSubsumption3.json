@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testSubsumption3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "abbdda083f8d6a64c995c5b0bff7cf58e9a2ec6896f9b1544feba1ffadf42371.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#A> <file:/c/test.owl#B>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#B> <file:/c/test.owl#A>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

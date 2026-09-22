@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testTopOPEquivalence",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "a134ea241e7bf45f0b1f5b93f4a29192e22c118cb5354fe13fddde05793cf17e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#op>" ],
+    "expected" : [ "<file:/c/test.owl#op>", "<http://www.w3.org/2002/07/owl#topObjectProperty>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  } ]
+}

@@ -1,0 +1,254 @@
+{
+  "reasoner.AnyURITest.testIntersection": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.AnyURITest.testIntersection\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.AnyURITest.testIntersection\" operation 1: \"isConsistent\""
+  },
+  "reasoner.AnyURITest.testPatternAndLength1_2": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.AnyURITest.testPatternAndLength1_2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.AnyURITest.testPatternAndLength1_2\" operation 1: \"isConsistent\""
+  },
+  "reasoner.AnyURITest.testPatternComplement1_3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.AnyURITest.testPatternComplement1_3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.AnyURITest.testPatternComplement1_3\" operation 1: \"isConsistent\""
+  },
+  "reasoner.BinaryDataTest.testIntersection_2": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.BinaryDataTest.testIntersection_2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.BinaryDataTest.testIntersection_2\" operation 1: \"isConsistent\""
+  },
+  "reasoner.ClassificationIndividualReuseTest.testDolce": {
+    "origin": "resource limit",
+    "signature": "allocation budget"
+  },
+  "reasoner.DateTimeTest.testFinite2_2": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.DateTimeTest.testFinite2_2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.DateTimeTest.testFinite2_2\" operation 1: \"isConsistent\""
+  },
+  "reasoner.NumericsTest.testDecimalMinusIntNEQ_3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.NumericsTest.testDecimalMinusIntNEQ_3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.NumericsTest.testDecimalMinusIntNEQ_3\" operation 1: \"isConsistent\""
+  },
+  "reasoner.NumericsTest.testDecimalMinusInt_4": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.NumericsTest.testDecimalMinusInt_4\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.NumericsTest.testDecimalMinusInt_4\" operation 1: \"isConsistent\""
+  },
+  "reasoner.RDFPlainLiteralTest.testSize_3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.RDFPlainLiteralTest.testSize_3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.RDFPlainLiteralTest.testSize_3\" operation 1: \"isConsistent\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testDirect": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting1": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerCoreBlockingTest.testRoleChains": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testRoleSubsumption": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testSubProperties": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testWidmann1": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann1\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann1\" operation 1: \"isConsistent\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testWidmann2": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann2\" operation 1: \"isConsistent\""
+  },
+  "reasoner.ReasonerCoreBlockingTest.testWidmann3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testDirect": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting1": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerIndividualReuseTest.testRoleChains": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testRoleSubsumption": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testSubProperties": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
+  },
+  "reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
+  },
+  "reasoner.ReasonerTest.testDataPropertyEntailment": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
+  },
+  "reasoner.ReasonerTest.testDirect": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\""
+  },
+  "reasoner.ReasonerTest.testHierarchyPrinting1": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerTest.testHierarchyPrinting3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\"reasoner.ReasonerTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
+  },
+  "reasoner.ReasonerTest.testRoleChains": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerTest.testRoleSubsumption": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
+  },
+  "reasoner.ReasonerTest.testSemanticDataPropertyClassification": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
+  },
+  "reasoner.ReasonerTest.testSubProperties": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
+  },
+  "reasoner.ReasonerTest.testTopOPEquivalence": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
+  },
+  "reasoner.XMLLiteralTest.testRange_3": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "assertion `left == right` failed: \"reasoner.XMLLiteralTest.testRange_3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.XMLLiteralTest.testRange_3\" operation 1: \"isConsistent\""
+  },
+  "reasoner::java_blocking_tests::testInvalidBlockWithAnnotatedEqualities": {
+    "origin": "upstream assertion also fails",
+    "signature": "\nassertion failed: t.nodes[a2].is_directly_blocked() && t.nodes[a2].get_blocker() == Some(a1)"
+  },
+  "reasoner::java_blocking_tests::testOneInvalidBlock": {
+    "origin": "upstream assertion also fails",
+    "signature": "\nassertion failed: t.nodes[a111].is_directly_blocked() && t.nodes[a111].get_blocker() == Some(a1)"
+  },
+  "reasoner::java_graph_tests::testGraph2": {
+    "origin": "Rust/Java discrepancy",
+    "signature": "\nassertion failed: !r.is_consistent_with_pos_neg_test_atoms(&mut manager, &[a], &[b])"
+  },
+  "structural.ClausificationDatatypesTest.testDataComplementOf3": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataComplementOf3\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataComplementOf4": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataComplementOf4\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesHasValue1": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesHasValue1\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationDatatypesTest.testDataPropertiesHasValue2": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesHasValue2\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testBasic": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testBasic\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testExistsSelf1": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testExistsSelf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testNominals1": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testNominals1\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testNominals2": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testNominals2\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testNominals3": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testNominals3\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.ClausificationTest.testNominals4": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.ClausificationTest.testNominals4\" operation 0: \"clausify\"\nassertion `left == right` failed"
+  },
+  "structural.NormalizationTest.testKeys2": {
+    "origin": "upstream assertion also fails",
+    "signature": "\"structural.NormalizationTest.testKeys2\" operation 0: \"normalize\"\nassertion `left == right` failed"
+  }
+}

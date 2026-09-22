@@ -23,7 +23,7 @@ use crate::{
 };
 
 use std::collections::BTreeSet;
-use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use std::fmt::Debug;
 use std::io::Cursor;
 use std::{io::BufRead, marker::PhantomData};
@@ -550,6 +550,7 @@ pub struct OntologyParser<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>>
 
     // Parsed OWL Objects keyed on their bnode
     class_expression: HashMap<BNode<A>, ClassExpression<A>>,
+    used_class_expressions: HashSet<BNode<A>>,
     object_property_expression: HashMap<BNode<A>, ObjectPropertyExpression<A>>,
     data_range: HashMap<BNode<A>, DataRange<A>>,
     // Annotations mapped to Triples (one entry per reifying owl:Axiom block).
@@ -580,6 +581,7 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             bnode: d!(),
             bnode_seq: d!(),
             class_expression: d!(),
+            used_class_expressions: d!(),
             object_property_expression: d!(),
             data_range: d!(),
             ann_map: d!(),
@@ -1164,7 +1166,13 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             // use silently dropped every later reference (and its axiom). Cloning
             // leaves it available; any genuinely unconsumed CE is still reported via
             // IncompleteParse and never enters the ontology.
-            Term::BNode(id) => self.class_expression.get(id).cloned(),
+            Term::BNode(id) => {
+                let expression = self.class_expression.get(id).cloned();
+                if expression.is_some() {
+                    self.used_class_expressions.insert(id.clone());
+                }
+                expression
+            }
             _ => self.convert_to_iri(tce).map(Into::into),
         }
     }
@@ -2684,7 +2692,10 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
 
         let bnode: Vec<_> = self.bnode.into_values().collect();
         let bnode_seq: Vec<_> = self.bnode_seq.into_values().collect();
-        let class_expression: Vec<_> = self.class_expression.into_values().collect();
+        let class_expression: Vec<_> = self.class_expression.into_iter()
+            .filter(|(id, _)| !self.used_class_expressions.contains(id))
+            .map(|(_, expression)| expression)
+            .collect();
         let object_property_expression: Vec<_> =
             self.object_property_expression.into_values().collect();
         let data_range = self.data_range.into_values().collect();

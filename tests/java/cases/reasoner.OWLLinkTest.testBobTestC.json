@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.OWLLinkTest.testBobTestC",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3d655bc37becfe485eb1341d744c741f8ffbe431069f416c5c380babb7ed725f.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://www.iyouit.eu/agent-inst.owl#1079>", "<http://www.iyouit.eu/agent-inst.owl#colleague>" ],
+    "expected" : [ [ "<http://www.iyouit.eu/agent-inst.owl#1079>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1084>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1086>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1096>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1098>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1126>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1127>" ], [ "<http://www.iyouit.eu/agent-inst.owl#1183>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  } ]
+}

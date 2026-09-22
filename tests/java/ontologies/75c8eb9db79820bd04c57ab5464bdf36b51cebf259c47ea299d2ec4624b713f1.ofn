@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#Cf> <file:/c/test.owl#a>)
+Declaration(Class(<file:/c/test.owl#CT>))
+EquivalentClasses(<file:/c/test.owl#CP> ObjectSomeValuesFrom(<file:/c/test.owl#P> <file:/c/test.owl#Cf>))
+EquivalentObjectProperties(<file:/c/test.owl#P> <http://www.w3.org/2002/07/owl#topObjectProperty>)
+)

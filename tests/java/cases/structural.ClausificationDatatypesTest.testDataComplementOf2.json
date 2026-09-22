@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataComplementOf2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "defdata:0(Y) :- :dp(X,Y)", "not(xsd:double)(X) v not(xsd:nonNegativeInteger)(X) :- defdata:0(X)" ],
+    "ontology" : "0111fffd4c9d34132eabc37488c582aec384c176bf95a119a910e56054dbd1d1.ofn",
+    "op" : "clausify"
+  } ]
+}

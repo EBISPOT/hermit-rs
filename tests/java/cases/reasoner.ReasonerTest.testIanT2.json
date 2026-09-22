@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanT2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "27bc681ce767c4549db21a898c9860d9db85b23bd6976f6977dbf4d81f18d0cf.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#f1> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#f2> <file:/c/test.owl#p2>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#f1> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#f2> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <http://www.w3.org/2002/07/owl#Thing>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

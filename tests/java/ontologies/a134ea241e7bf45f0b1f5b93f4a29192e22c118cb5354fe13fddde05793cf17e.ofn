@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(NamedIndividual(<file:/c/test.owl#a>))
+Declaration(ObjectProperty(<file:/c/test.owl#op>))
+SubClassOf(<http://www.w3.org/2002/07/owl#Thing> ObjectOneOf(<file:/c/test.owl#a>))
+SubClassOf(ObjectOneOf(<file:/c/test.owl#a>) ObjectSomeValuesFrom(<file:/c/test.owl#op> <http://www.w3.org/2002/07/owl#Thing>))
+)

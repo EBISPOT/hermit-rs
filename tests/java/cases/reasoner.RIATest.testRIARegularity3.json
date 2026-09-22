@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.RIATest.testRIARegularity3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: The given property hierarchy is not regular.\nThere is a cyclic dependency involving property InverseOf(<file:/c/test.owl#Q>)",
+    "ontology" : "8440b1bcf763999eddfef4efb26b787b5c8384baf3628bcc543cee401fce1cea.ofn",
+    "op" : "invalid"
+  } ]
+}

@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(ObjectMaxCardinality(1 ObjectInverseOf(<file:/c/test.owl#S>)) <file:/c/test.owl#n>)
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#A>) <file:/c/test.owl#a>)
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#B>) <file:/c/test.owl#b>)
+SubClassOf(<file:/c/test.owl#A> ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#A>))
+SubClassOf(<file:/c/test.owl#A> ObjectSomeValuesFrom(<file:/c/test.owl#S> ObjectOneOf(<file:/c/test.owl#n>)))
+SubClassOf(<file:/c/test.owl#B> ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#B>))
+SubClassOf(<file:/c/test.owl#B> ObjectSomeValuesFrom(<file:/c/test.owl#S> ObjectOneOf(<file:/c/test.owl#n>)))
+)

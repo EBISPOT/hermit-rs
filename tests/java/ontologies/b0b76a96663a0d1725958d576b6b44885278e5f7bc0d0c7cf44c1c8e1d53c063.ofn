@@ -1,0 +1,12 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#B>) <file:/c/test.owl#a>)
+InverseFunctionalObjectProperty(<file:/c/test.owl#S>)
+ObjectPropertyAssertion(<file:/c/test.owl#S> <file:/c/test.owl#a> <file:/c/test.owl#a>)
+SubClassOf(<file:/c/test.owl#B> ObjectSomeValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#C>))
+SubClassOf(<file:/c/test.owl#C> ObjectSomeValuesFrom(<file:/c/test.owl#S> <file:/c/test.owl#D>))
+SubClassOf(<file:/c/test.owl#D> ObjectOneOf(<file:/c/test.owl#a>))
+)

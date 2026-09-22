@@ -1,0 +1,43 @@
+{
+  "java" : "reasoner.RulesTest.testRuleWithConstants2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "7373c554263863199031386877c5269a6d3e9293dc9c853a662076af1732e255.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#r>" ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#s>" ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#sa>" ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#sb>" ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#q>" ],
+    "expected" : [ [ "<file:/c/test.owl#b>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyValues"
+  } ]
+}

@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testHasKeyEntailment",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3b73c8694f5cb3e8f09a8a357d8fe3103f47171e2bce8040c697cb5daf2c24b1.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "HasKey(<file:/c/test.owl#Man> (<file:/c/test.owl#hasSSN>) ())" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

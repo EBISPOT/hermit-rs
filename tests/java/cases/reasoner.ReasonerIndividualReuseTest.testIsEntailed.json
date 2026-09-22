@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testIsEntailed",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "1a0d7877b41537561fbd1988afcb670fd4ba07b5959dc5a324a9aa3be235ce18.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#Infection> ObjectAllValuesFrom(<http://www.w3.org/2002/07/owl#topObjectProperty> ObjectComplementOf(<file:/c/test.owl#DomainCategory>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#Infection> ObjectAllValuesFrom(<file:/c/test.owl#attribute> ObjectComplementOf(<file:/c/test.owl#DomainCategory>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

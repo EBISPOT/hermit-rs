@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testInstanteManagerError",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bf5c5193b9ba51c5d7204e45c0639bcd52b04b70df71915b3d8944d527168e50.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "class assertions", "object property assertions" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ "<http://owl.cs.manchester.ac.uk/2011/07/sssw/pets#Max>", "<http://owl.cs.manchester.ac.uk/2011/07/sssw/pets#PetOwner1>", false ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

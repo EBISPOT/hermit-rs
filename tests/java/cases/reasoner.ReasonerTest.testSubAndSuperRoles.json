@@ -1,0 +1,123 @@
+{
+  "java" : "reasoner.ReasonerTest.testSubAndSuperRoles",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "27ac49b97c16df3f92b394712a72c4a84333e548cb19ecdc2914f39c59a993e6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>", false ],
+    "expected" : [ [ "<file:/c/test.owl#s>" ], [ "<file:/c/test.owl#t>" ], [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r>", false ],
+    "expected" : [ [ "<file:/c/test.owl#s>" ], [ "<file:/c/test.owl#t>" ], [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", false ],
+    "expected" : [ [ "<file:/c/test.owl#t>" ], [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", false ],
+    "expected" : [ [ "<file:/c/test.owl#t>" ], [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#topObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", false ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#s>", false ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>", false ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ], [ "<file:/c/test.owl#s>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>", false ],
+    "expected" : [ [ "<file:/c/test.owl#r>" ], [ "<file:/c/test.owl#s>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getSubObjectProperties"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#r> <file:/c/test.owl#r>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#s> <file:/c/test.owl#s>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#t> <file:/c/test.owl#t>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#r> <file:/c/test.owl#s>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#r> <file:/c/test.owl#t>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#s> <file:/c/test.owl#t>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#s> <file:/c/test.owl#r>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#t> <file:/c/test.owl#r>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubObjectPropertyOf(<file:/c/test.owl#t> <file:/c/test.owl#s>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

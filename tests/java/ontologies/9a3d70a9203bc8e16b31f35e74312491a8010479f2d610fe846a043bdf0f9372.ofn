@@ -1,0 +1,9 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ObjectPropertyAssertion(<file:/c/test.owl#city> _:genid157 <file:/c/test.owl#Quahog>)
+ObjectPropertyAssertion(<file:/c/test.owl#livesAt> <file:/c/test.owl#Peter> _:genid157)
+ObjectPropertyAssertion(<file:/c/test.owl#state> _:genid157 <file:/c/test.owl#RI>)
+)

@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#A> <file:/c/test.owl#a>)
+DataPropertyRange(<file:/c/test.owl#r> <http://www.w3.org/2001/XMLSchema#nonNegativeInteger>)
+DataPropertyRange(<file:/c/test.owl#r> <http://www.w3.org/2001/XMLSchema#nonPositiveInteger>)
+DataPropertyRange(<file:/c/test.owl#s> <http://www.w3.org/2001/XMLSchema#nonNegativeInteger>)
+DataPropertyRange(<file:/c/test.owl#s> <http://www.w3.org/2001/XMLSchema#nonPositiveInteger>)
+SubClassOf(<file:/c/test.owl#A> DataSomeValuesFrom(<file:/c/test.owl#r> DataOneOf("true"^^<http://www.w3.org/2001/XMLSchema#boolean>)))
+SubClassOf(<file:/c/test.owl#A> DataSomeValuesFrom(<file:/c/test.owl#s> DataOneOf("false"^^<http://www.w3.org/2001/XMLSchema#boolean>)))
+)

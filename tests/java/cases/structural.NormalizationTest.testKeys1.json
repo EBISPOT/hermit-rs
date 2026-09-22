@@ -1,0 +1,9 @@
+{
+  "java" : "structural.NormalizationTest.testKeys1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "HasKey(<file:/c/test.owl#C> (<file:/c/test.owl#r> ) (<file:/c/test.owl#dp> ))" ],
+    "ontology" : "69e9a81aab5ed5dcb864ff38fde476fe46f54e73f35679c161118372b153fe4f.ofn",
+    "op" : "normalize"
+  } ]
+}

@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerTest.testEquivalentClassInstances",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "808e26fca0a88a705d86e90036a03a2e307f70fa44ee0739cfb4aa5e5d07a62e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#car>", "<file:/c/test.owl#Automobile>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  }, {
+    "args" : [ "<file:/c/test.owl#auto>", "<file:/c/test.owl#Car>", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

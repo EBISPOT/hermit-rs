@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationTest.testNominals4",
+  "java_errors" : [ "junit.framework.AssertionFailedError\n\tat junit.framework.Assert.fail(Assert.java:55)\n\tat junit.framework.Assert.assertTrue(Assert.java:22)\n\tat junit.framework.Assert.assertTrue(Assert.java:31)\n\tat junit.framework.TestCase.assertTrue(TestCase.java:201)\n\tat org.semanticweb.HermiT.structural.AbstractStructuralTest.assertContainsAll(AbstractStructuralTest.java:42)\n\tat org.semanticweb.HermiT.structural.ClausificationTest.assertDLClauses(ClausificationTest.java:119)\n\tat org.semanticweb.HermiT.structural.ClausificationTest.assertClausification(ClausificationTest.java:114)\n\tat org.semanticweb.HermiT.structural.ClausificationTest.testNominals4(ClausificationTest.java:41)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:568)\n\tat junit.framework.TestCase.runTest(TestCase.java:176)\n\tat junit.framework.TestCase.runBare(TestCase.java:141)\n\tat junit.framework.TestResult$1.protect(TestResult.java:122)\n\tat junit.framework.TestResult.runProtected(TestResult.java:142)\n\tat junit.framework.TestResult.run(TestResult.java:125)\n\tat junit.framework.TestCase.run(TestCase.java:129)\n\tat org.semanticweb.HermiT.reasoner.ExportTests.main(ExportTests.java:18)\n" ],
+  "operations" : [ {
+    "expected" : [ ":hasSugar(X,Y) :- :Chianti(X), nom:Dry(Y)", "nom:Dry(:Dry)" ],
+    "ontology" : "eafdef15d866d01b022c5cb8d4d233b9c0291a1bd2caef93c1d99ad3e727b811.ofn",
+    "op" : "clausify"
+  } ]
+}

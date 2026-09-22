@@ -1,0 +1,33 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIsFunctionalData",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "58e970cb64c474e96facbc6f037ef6502e4139af3df2bea96f09ca02c02e5268.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "FunctionalDataProperty(<file:/c/test.owl#DP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "FunctionalDataProperty(<file:/c/test.owl#SDP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "FunctionalDataProperty(<file:/c/test.owl#ANDP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

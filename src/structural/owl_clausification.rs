@@ -1806,3 +1806,67 @@ mod tests {
         assert_eq!(converter.convert_literal(&lang).unwrap().lexical_form(), "abc@");
     }
 }
+
+#[cfg(test)]
+mod java_key_test {
+    use super::*;
+    #[test]
+    fn test_has_keys() {
+        use horned_owl::model::{Build, ObjectPropertyExpression as OPE, PropertyExpression as PE};
+        let b = Build::new_arc();
+        let key = HasKeyAxiom {
+            class_expression: CE::Class(b.class("int:C_test")),
+            property_expressions: vec![
+                PE::ObjectPropertyExpression(OPE::ObjectProperty(b.object_property("int:r_test"))),
+                PE::DataProperty(b.data_property("int:dp_test")),
+            ],
+        };
+        let clause = clausify_key(&key);
+        let prefixes = crate::prefixes::Prefixes::new();
+        // Variable spelling is immaterial to a clause. Java's historical test
+        // uses X/Y0 while both current clausifiers start at X1/Y1.
+        let render = |a: &Atom| {
+            let s = a.to_string_prefixes(&prefixes);
+            regex::Regex::new(r"\b(X1|Y1|Y2|Y3)\b")
+                .unwrap()
+                .replace_all(&s, |c: &regex::Captures| match &c[0] {
+                    "X1" => "X",
+                    "Y1" => "Y0",
+                    "Y2" => "Y1",
+                    "Y3" => "Y2",
+                    _ => unreachable!(),
+                })
+                .into_owned()
+        };
+        let body: std::collections::HashSet<_> =
+            clause.get_body_atoms().iter().map(render).collect();
+        let head: std::collections::HashSet<_> =
+            clause.get_head_atoms().iter().map(render).collect();
+        assert_eq!(clause.get_body_length(), 9);
+        assert_eq!(clause.get_head_length(), 2);
+        assert_eq!(
+            body,
+            [
+                "<internal:nam#Named>(X)",
+                "<internal:nam#Named>(X2)",
+                "<int:C_test>(X)",
+                "<int:C_test>(X2)",
+                "<int:r_test>(X,Y0)",
+                "<int:r_test>(X2,Y0)",
+                "<internal:nam#Named>(Y0)",
+                "<int:dp_test>(X,Y1)",
+                "<int:dp_test>(X2,Y2)"
+            ]
+            .map(str::to_owned)
+            .into_iter()
+            .collect()
+        );
+        assert_eq!(
+            head,
+            ["X == X2", "Y1 != Y2"]
+                .map(str::to_owned)
+                .into_iter()
+                .collect()
+        );
+    }
+}

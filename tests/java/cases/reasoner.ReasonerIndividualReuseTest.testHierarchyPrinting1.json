@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "426664e3a70df9b0c9689ec3d3f9a438d4a66827858134a3bb9bc7d2d1b19867.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\nPrefix(a1:=<http://my.com/test1#>)\nPrefix(a2:=<http://my.com/test2#>)\nPrefix(a3:=<http://zzz.com/test3#>)\n\nOntology(<file:/c/test.owl#>\n\nEquivalentClasses( owl:Thing :I ) Declaration( Class( :I ) )\n  SubClassOf( :B owl:Thing ) Declaration( Class( :B ) )\n    SubClassOf( :A :B ) EquivalentClasses( :A :Class <file:/c/test.owl#s:local> ) Declaration( Class( :A ) ) Declaration( Class( :Class ) ) Declaration( Class( <file:/c/test.owl#s:local> ) )\n      SubClassOf( :D :A ) Declaration( Class( :D ) )\n        SubClassOf( :F :D ) Declaration( Class( :F ) )\n        SubClassOf( a2:J :D ) Declaration( Class( a2:J ) )\n    SubClassOf( :C :B ) EquivalentClasses( :C a1:otherC ) Declaration( Class( :C ) ) Declaration( Class( a1:otherC ) )\n      SubClassOf( :D :C )\n  SubClassOf( :E owl:Thing ) Declaration( Class( :E ) )\n    SubClassOf( :F :E )\n    SubClassOf( :H :E ) EquivalentClasses( :H a3:K ) Declaration( Class( :H ) ) Declaration( Class( a3:K ) )\nEquivalentClasses( owl:Nothing :G ) Declaration( Class( :G ) )\n\nEquivalentObjectProperties( owl:topObjectProperty :op6 ObjectInverseOf( :op6 ) ) Declaration( ObjectProperty( :op6 ) )\n  SubObjectPropertyOf( :op2 owl:topObjectProperty ) Declaration( ObjectProperty( :op2 ) )\n    SubObjectPropertyOf( :op1 :op2 ) Declaration( ObjectProperty( :op1 ) )\n      SubObjectPropertyOf( :op8 :op1 ) EquivalentObjectProperties( :op8 :op8i ObjectInverseOf( :op8 ) ObjectInverseOf( :op8i ) ) Declaration( ObjectProperty( :op8 ) ) Declaration( ObjectProperty( :op8i ) )\n    SubObjectPropertyOf( :op4 :op2 ) Declaration( ObjectProperty( :op4 ) )\n      SubObjectPropertyOf( :op8 :op4 )\n    SubObjectPropertyOf( :op7 :op2 ) EquivalentObjectProperties( :op7 ObjectInverseOf( :op7i ) ) Declaration( ObjectProperty( :op7 ) )\n    SubObjectPropertyOf( :op7i :op2 ) EquivalentObjectProperties( :op7i ObjectInverseOf( :op7 ) ) Declaration( ObjectProperty( :op7i ) )\n  SubObjectPropertyOf( :op3 owl:topObjectProperty ) EquivalentObjectProperties( :op3 ObjectInverseOf( :op3i ) ) Declaration( ObjectProperty( :op3 ) )\n    SubObjectPropertyOf( ObjectInverseOf( :op1 ) :op3 )\n      SubObjectPropertyOf( :op8 ObjectInverseOf( :op1 ) )\n  SubObjectPropertyOf( :op3i owl:topObjectProperty ) EquivalentObjectProperties( :op3i ObjectInverseOf( :op3 ) ) Declaration( ObjectProperty( :op3i ) )\n    SubObjectPropertyOf( :op1 :op3i )\n  SubObjectPropertyOf( ObjectInverseOf( :op2 ) owl:topObjectProperty )\n    SubObjectPropertyOf( :op7 ObjectInverseOf( :op2 ) )\n    SubObjectPropertyOf( :op7i ObjectInverseOf( :op2 ) )\n    SubObjectPropertyOf( ObjectInverseOf( :op1 ) ObjectInverseOf( :op2 ) )\n    SubObjectPropertyOf( ObjectInverseOf( :op4 ) ObjectInverseOf( :op2 ) )\n      SubObjectPropertyOf( :op8 ObjectInverseOf( :op4 ) )\nEquivalentObjectProperties( owl:bottomObjectProperty :op5 ObjectInverseOf( :op5 ) ) Declaration( ObjectProperty( :op5 ) )\n\n  SubDataPropertyOf( :dp1 owl:topDataProperty ) Declaration( DataProperty( :dp1 ) )\n    SubDataPropertyOf( :dp2 :dp1 ) Declaration( DataProperty( :dp2 ) )\n      SubDataPropertyOf( :dp4 :dp2 ) Declaration( DataProperty( :dp4 ) )\n      SubDataPropertyOf( :dp6 :dp2 ) Declaration( DataProperty( :dp6 ) )\n    SubDataPropertyOf( :dp3 :dp1 ) EquivalentDataProperties( :dp3 :dp5 ) Declaration( DataProperty( :dp3 ) ) Declaration( DataProperty( :dp5 ) )\n      SubDataPropertyOf( :dp4 :dp3 )\nEquivalentDataProperties( owl:bottomDataProperty :dp7 ) Declaration( DataProperty( :dp7 ) )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  } ]
+}

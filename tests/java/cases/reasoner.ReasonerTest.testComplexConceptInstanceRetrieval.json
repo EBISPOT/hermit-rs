@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerTest.testComplexConceptInstanceRetrieval",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ecc58454963851ff50a3702c0f4e805e896af1da9c0bd3d0e3fcde39579ef5dc.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", false ],
+    "expected" : [ [ "<file:/c/test.owl#i1>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#b>)", false ],
+    "expected" : [ [ "<file:/c/test.owl#i1>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#e>)", false ],
+    "expected" : [ [ "<file:/c/test.owl#i1>" ], [ "<file:/c/test.owl#i2>" ], [ "<file:/c/test.owl#i3>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#e>)", true ],
+    "expected" : [ [ "<file:/c/test.owl#i3>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  } ]
+}

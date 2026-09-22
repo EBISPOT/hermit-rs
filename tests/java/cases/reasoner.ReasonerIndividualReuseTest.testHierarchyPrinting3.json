@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "ab2ac19edda0a369ac8d8eb0c8063801ea2ec997135313615bb3a57065168937.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\n\nOntology(<file:/c/test.owl#>\n\nEquivalentClasses( owl:Nothing owl:Thing :A :B ) Declaration( Class( :A ) ) Declaration( Class( :B ) )\n\nEquivalentObjectProperties( owl:bottomObjectProperty owl:topObjectProperty )\n\nEquivalentDataProperties( owl:bottomDataProperty owl:topDataProperty )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  } ]
+}

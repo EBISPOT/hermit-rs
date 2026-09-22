@@ -1,0 +1,58 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanT13",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3dc4c04e2b2e9fdb144e1a9e8f8c9fd580750229115d7e1b2cc50092ccc58a93.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3a>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3b>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3c>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3e>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a> <file:/c/test.owl#a1> <file:/c/test.owl#a2>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3a>) ObjectComplementOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3b>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3b>) ObjectComplementOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3a>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3c>) ObjectComplementOf(ObjectIntersectionOf(<file:/c/test.owl#a1> <file:/c/test.owl#a2> <file:/c/test.owl#a3c>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

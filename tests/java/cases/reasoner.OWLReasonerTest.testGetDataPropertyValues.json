@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testGetDataPropertyValues",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "0d439e1b0d2b5655723ca632725f4515a54d7a509f741bd1915c211a4d7d1dc9.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", "<file:/c/test.owl#dp>" ],
+    "expected" : [ "\"RDFPlainLiteralWithLangTag\"@en-gb", "\"RDFPlainLiteralwithEmptyLangTag\"" ],
+    "id" : 0,
+    "op" : "getDataPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#b>", "<file:/c/test.owl#dp>" ],
+    "expected" : [ "\"abc\"" ],
+    "id" : 0,
+    "op" : "getDataPropertyValues"
+  }, {
+    "args" : [ "<file:/c/test.owl#c>", "<file:/c/test.owl#dp>" ],
+    "expected" : [ "\"01\"^^<http://www.w3.org/2001/XMLSchema#integer>", "\"1\"^^<http://www.w3.org/2001/XMLSchema#integer>", "\"1\"^^<http://www.w3.org/2001/XMLSchema#short>" ],
+    "id" : 0,
+    "op" : "getDataPropertyValues"
+  } ]
+}

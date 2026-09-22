@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesHasValue2",
+  "java_errors" : [ "junit.framework.AssertionFailedError\n\tat junit.framework.Assert.fail(Assert.java:55)\n\tat junit.framework.Assert.assertTrue(Assert.java:22)\n\tat junit.framework.Assert.assertTrue(Assert.java:31)\n\tat junit.framework.TestCase.assertTrue(TestCase.java:201)\n\tat org.semanticweb.HermiT.structural.AbstractStructuralTest.assertContainsAll(AbstractStructuralTest.java:42)\n\tat org.semanticweb.HermiT.structural.ClausificationDatatypesTest.testDataPropertiesHasValue2(ClausificationDatatypesTest.java:24)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\n\tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)\n\tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:568)\n\tat junit.framework.TestCase.runTest(TestCase.java:176)\n\tat junit.framework.TestCase.runBare(TestCase.java:141)\n\tat junit.framework.TestResult$1.protect(TestResult.java:122)\n\tat junit.framework.TestResult.runProtected(TestResult.java:142)\n\tat junit.framework.TestResult.run(TestResult.java:125)\n\tat junit.framework.TestCase.run(TestCase.java:129)\n\tat org.semanticweb.HermiT.reasoner.ExportTests.main(ExportTests.java:18)\n" ],
+  "operations" : [ {
+    "expected" : [ ":Eighteen(X) v not({ \"18\"^^xsd:int })(Y) :- :hasAge(X,Y)" ],
+    "ontology" : "27c5872e2b5715ca0e734b338eea9b4a66aaa27a128ee2d30455853707f4e1a9.ofn",
+    "op" : "clausify"
+  } ]
+}

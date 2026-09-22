@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testNonEquivalenceClasses",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "c5e19a8b3b1375d2e57b1cc53f2827e556ea81467686587dec22eb0365925890.ofn",
+    "op" : "create",
+    "throw_inconsistent" : true
+  }, {
+    "args" : [ "<file:/c/test.owl#A>", false ],
+    "expected" : [ [ "<file:/c/test.owl#a1>" ], [ "<file:/c/test.owl#a2_1>" ], [ "<file:/c/test.owl#a2_2>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b1_1>" ], [ "<file:/c/test.owl#b1_2>" ], [ "<file:/c/test.owl#b2>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#B>", true ],
+    "expected" : [ [ "<file:/c/test.owl#b2>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#b1_1>" ], [ "<file:/c/test.owl#b1_2>" ] ],
+    "id" : 0,
+    "op" : "getInstances"
+  } ]
+}

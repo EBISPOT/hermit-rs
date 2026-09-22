@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#Automobile> <file:/c/test.owl#auto>)
+ClassAssertion(<file:/c/test.owl#Car> <file:/c/test.owl#car>)
+Declaration(Class(<file:/c/test.owl#Automobile>))
+Declaration(Class(<file:/c/test.owl#Car>))
+Declaration(NamedIndividual(<file:/c/test.owl#auto>))
+Declaration(NamedIndividual(<file:/c/test.owl#car>))
+EquivalentClasses(<file:/c/test.owl#Automobile> <file:/c/test.owl#Car>)
+)

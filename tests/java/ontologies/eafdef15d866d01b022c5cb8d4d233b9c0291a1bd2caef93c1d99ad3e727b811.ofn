@@ -1,0 +1,9 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#Chianti>))
+Declaration(ObjectProperty(<http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#hasSugar>))
+SubClassOf(<http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#Chianti> ObjectHasValue(<http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#hasSugar> <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#Dry>))
+)

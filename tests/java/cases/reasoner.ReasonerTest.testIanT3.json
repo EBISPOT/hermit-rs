@@ -1,0 +1,48 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanT3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "81722102cf78312066b0973b31d688eb5ddd2445cce21a78797d170ceb04ffc2.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p1>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p3>)) ObjectMaxCardinality(3 <file:/c/test.owl#r>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p4>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p1>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p3>)) ObjectMaxCardinality(3 <file:/c/test.owl#r>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p4>) ObjectMaxCardinality(3 <file:/c/test.owl#r>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p4>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p1>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p3>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p4>)) ObjectMaxCardinality(4 <file:/c/test.owl#r>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p4>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p5>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p1>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p3>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p4>)) ObjectMaxCardinality(4 <file:/c/test.owl#r>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p2>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p3>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p4>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p5>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p1>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p2>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p3>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p4>)) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p> <file:/c/test.owl#p5>)) ObjectMaxCardinality(5 <file:/c/test.owl#r>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

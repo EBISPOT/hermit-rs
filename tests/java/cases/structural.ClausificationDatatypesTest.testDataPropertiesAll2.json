@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesAll2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ ":A(X) v atLeast(1 :dp not(xsd:integer))(X) :- owl:Thing(X)" ],
+    "ontology" : "d765e9e104ea2481dbc1067d81489bdcfa71ec7285b7ab0b320bc2d829d7c8c1.ofn",
+    "op" : "clausify"
+  } ]
+}

@@ -1,0 +1,128 @@
+{
+  "java" : "reasoner.ReasonerTest.testSubAndSuperConcepts",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "cd15923c9c95fe9d2496c933b53d517ff0212346d0a8134761d9ce402758eca9.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#C> <file:/c/test.owl#C>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#D>" ], [ "<file:/c/test.owl#E>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<file:/c/test.owl#D>" ], [ "<file:/c/test.owl#E>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#E>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#E>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getSuperClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ], [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#D>", false ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ], [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>", false ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ], [ "<file:/c/test.owl#D>" ], [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "<file:/c/test.owl#E>", false ],
+    "expected" : [ [ "<file:/c/test.owl#C>" ], [ "<file:/c/test.owl#D>" ], [ "<http://www.w3.org/2002/07/owl#Nothing>" ] ],
+    "id" : 0,
+    "op" : "getSubClasses"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#C> <file:/c/test.owl#C>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#D> <file:/c/test.owl#D>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#E> <file:/c/test.owl#E>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#C> <file:/c/test.owl#D>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#C> <file:/c/test.owl#E>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#D> <file:/c/test.owl#E>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#D> <file:/c/test.owl#C>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#E> <file:/c/test.owl#C>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#E> <file:/c/test.owl#D>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

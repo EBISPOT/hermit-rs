@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.EntailmentTest.testValidBlankNodesWithNominals",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "77e223b90d0b970d6aa3cffefcfc4779939588fc633ed9cf0cbf1ffa84fc1775.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ObjectPropertyAssertion(<file:/c/test.owl#p> <file:/c/test.owl#a> _:genid1541)", "ObjectPropertyAssertion(<file:/c/test.owl#r> _:genid1541 <file:/c/test.owl#b>)" ] ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

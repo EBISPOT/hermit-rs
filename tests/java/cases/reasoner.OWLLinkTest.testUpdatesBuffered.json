@@ -1,0 +1,32 @@
+{
+  "java" : "reasoner.OWLLinkTest.testUpdatesBuffered",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "fa8d86d0f0347f7db982b5c64c7e9111c15e97c6a6dd1bf4289a2c7955a8558e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\n\nOntology(<file:/c/test.owl#>\n\n  SubClassOf( :C owl:Thing ) Declaration( Class( :C ) )\n    SubClassOf( :B :C ) Declaration( Class( :B ) )\n      SubClassOf( :A :B ) Declaration( Class( :A ) )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  }, {
+    "id" : 0,
+    "ontology" : "bf5039b3e330da016ee8d510bf58aaa8db30981032a4fb343bab909825b1f650.ofn",
+    "op" : "flush"
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\n\nOntology(<file:/c/test.owl#>\n\n  SubClassOf( :C owl:Thing ) Declaration( Class( :C ) )\n    SubClassOf( :B :C ) Declaration( Class( :B ) )\n  SubClassOf( :F owl:Thing ) Declaration( Class( :F ) )\n    SubClassOf( :E :F ) Declaration( Class( :E ) )\n      SubClassOf( :D :E ) Declaration( Class( :D ) )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  } ]
+}

@@ -1,0 +1,9 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DisjointClasses(<file:/c/test.owl#c> <file:/c/test.owl#d>)
+EquivalentClasses(<file:/c/test.owl#a> ObjectUnionOf(<file:/c/test.owl#c> <file:/c/test.owl#d>))
+EquivalentClasses(<file:/c/test.owl#complex1> ObjectIntersectionOf(ObjectAllValuesFrom(<file:/c/test.owl#tt> <file:/c/test.owl#a>) ObjectMinCardinality(3 <file:/c/test.owl#tt>) ObjectMaxCardinality(1 <file:/c/test.owl#tt> <file:/c/test.owl#c>) ObjectMaxCardinality(1 <file:/c/test.owl#tt> <file:/c/test.owl#d>)))
+)

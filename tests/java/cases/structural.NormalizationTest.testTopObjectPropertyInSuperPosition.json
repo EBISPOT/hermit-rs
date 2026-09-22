@@ -1,0 +1,9 @@
+{
+  "java" : "structural.NormalizationTest.testTopObjectPropertyInSuperPosition",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ ],
+    "ontology" : "16b0d9b9340b15511b5976ee0a18ada646011c1ae8fdda4469e2afc20a55e380.ofn",
+    "op" : "normalize"
+  } ]
+}

@@ -1,0 +1,9 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<file:/c/test.owl#A>))
+Declaration(DataProperty(<file:/c/test.owl#dp>))
+SubClassOf(<file:/c/test.owl#A> DataMaxCardinality(1 <file:/c/test.owl#dp> <http://www.w3.org/2001/XMLSchema#string>))
+)

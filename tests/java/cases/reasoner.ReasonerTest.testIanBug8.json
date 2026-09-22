@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanBug8",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "1119aa5fe4c642f4d84c35e8f54522011c4e1de35b79443053802e93c7ccf846.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#A>" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

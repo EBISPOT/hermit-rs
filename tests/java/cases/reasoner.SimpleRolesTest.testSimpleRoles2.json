@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.SimpleRolesTest.testSimpleRoles2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: Non-simple property '<file:/c/test.owl#P>' or its inverse appears in the cardinality restriction 'ObjectMaxCardinality(2 <file:/c/test.owl#P> owl:Thing)'.",
+    "ontology" : "bf9e633e6a700ea9b9f387f4fb439fe3edd3a79ee0286a71d82eb0fcecb85ce4.ofn",
+    "op" : "invalid"
+  } ]
+}

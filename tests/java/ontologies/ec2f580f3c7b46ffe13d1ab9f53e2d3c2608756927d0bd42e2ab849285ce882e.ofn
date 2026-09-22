@@ -1,0 +1,10 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DataPropertyAssertion(<file:/c/test.owl#dp> <file:/c/test.owl#a> "13"^^<http://www.w3.org/2001/XMLSchema#integer>)
+DataPropertyRange(<file:/c/test.owl#dp> DataComplementOf(<file:/c/test.owl#newDT>))
+DatatypeDefinition(<file:/c/test.owl#newDT> DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#integer> <http://www.w3.org/2001/XMLSchema#minInclusive> "15"^^<http://www.w3.org/2001/XMLSchema#integer>))
+Declaration(Datatype(<file:/c/test.owl#newDT>))
+)

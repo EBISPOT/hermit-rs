@@ -1,0 +1,9 @@
+{
+  "java" : "reasoner.RulesTest.testDataRangeSafety",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "error" : "java.lang.IllegalArgumentException: A SWRL rule contains data range variables in the head, but not in the body, and this is not supported.",
+    "ontology" : "6dc0bc927df934178d9f5e5eafc0a882bee1105e5700505e260de8d6934542b0.ofn",
+    "op" : "invalid"
+  } ]
+}

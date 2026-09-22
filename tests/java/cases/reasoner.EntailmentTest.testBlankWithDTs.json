@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.EntailmentTest.testBlankWithDTs",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "f7e2b3ac8265985d9ed6d1dd47b3eeae1368f69e2036b55cba3b0abb20613f59.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DataPropertyAssertion(<file:/c/test.owl#dp> _:genid1530 \"test\")" ] ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

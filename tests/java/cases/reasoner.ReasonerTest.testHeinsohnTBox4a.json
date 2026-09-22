@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testHeinsohnTBox4a",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b18a37d84dffe08a81c4e841050706e3e067204d77ae3b3c9681edf89352ed33.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(ObjectIntersectionOf(ObjectAllValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#D>) ObjectAllValuesFrom(<file:/c/test.owl#r> ObjectUnionOf(<file:/c/test.owl#E> ObjectComplementOf(<file:/c/test.owl#D>)))) ObjectAllValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#E>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

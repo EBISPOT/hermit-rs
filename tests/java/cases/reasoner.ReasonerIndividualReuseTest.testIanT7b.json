@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testIanT7b",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "d2553a005c4ad52dcc2d8e68cea06c925f9067bea010b658e77bc87f0005931e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#p1> ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#p1> ObjectAllValuesFrom(<file:/c/test.owl#r-> ObjectUnionOf(ObjectComplementOf(<file:/c/test.owl#p1>) ObjectAllValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#p1>)))))))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

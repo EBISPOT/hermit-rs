@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.OWLLinkTest.testSuccessiveCalls",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3e55f96c607c2189e25abe6ad60ab6f502fea0e9fd8ecdcb57a6db6267652ae6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://example.com/owl/families/hasParent>" ],
+    "expected" : [ [ "<http://example.com/owl/families/hasChild>", "<http://example.org/otherOntologies/families/child>", "ObjectInverseOf(<http://example.com/owl/families/hasParent>)" ], [ "<http://example.com/owl/families/hasSpouse>", "ObjectInverseOf(<http://example.com/owl/families/hasSpouse>)" ], [ "<http://example.com/owl/families/hasWife>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ], [ "ObjectInverseOf(<http://example.com/owl/families/hasFather>)" ], [ "ObjectInverseOf(<http://example.com/owl/families/hasWife>)" ] ],
+    "id" : 0,
+    "op" : "getDisjointObjectProperties"
+  }, {
+    "args" : [ "<http://example.com/owl/families/hasParent>" ],
+    "expected" : [ [ "<http://example.com/owl/families/hasChild>", "<http://example.org/otherOntologies/families/child>", "ObjectInverseOf(<http://example.com/owl/families/hasParent>)" ], [ "<http://example.com/owl/families/hasSpouse>", "ObjectInverseOf(<http://example.com/owl/families/hasSpouse>)" ], [ "<http://example.com/owl/families/hasWife>" ], [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ], [ "ObjectInverseOf(<http://example.com/owl/families/hasFather>)" ], [ "ObjectInverseOf(<http://example.com/owl/families/hasWife>)" ] ],
+    "id" : 0,
+    "op" : "getDisjointObjectProperties"
+  } ]
+}

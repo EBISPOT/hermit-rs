@@ -1,0 +1,37 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testExplicitSize",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : 11112034,
+    "expected" : 10000000,
+    "op" : "datatype",
+    "operation" : "subtract",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "0"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "1"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : 11112033,
+    "expected" : 10000000,
+    "op" : "datatype",
+    "operation" : "subtract",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "1"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "1"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

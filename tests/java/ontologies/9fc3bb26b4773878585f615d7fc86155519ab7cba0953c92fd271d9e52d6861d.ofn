@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyBottom>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyTop>))
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyBottom> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyTop>)
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyBottom> <http://www.w3.org/2002/07/owl#Nothing>)
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/17.owl#MyTop> <http://www.w3.org/2002/07/owl#Thing>)
+)

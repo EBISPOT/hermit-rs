@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testRoleChains",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "88a55b6806a24bc2e420fad2936bd35d3a8b9e5b1df5b5795882e2058a2dd01a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#s1>", true ],
+    "expected" : [ [ "<file:/c/test.owl#s2>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

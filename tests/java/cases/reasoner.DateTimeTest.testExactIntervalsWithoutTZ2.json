@@ -1,0 +1,160 @@
+{
+  "java" : "reasoner.DateTimeTest.testExactIntervalsWithoutTZ2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-26T24:00:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-26T24:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-27T00:00:00"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-27T00:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "lexical" : "1926-11-26T24:00:00Z"
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-11-26T24:00:00Z",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : 100002,
+    "expected" : 100000,
+    "op" : "datatype",
+    "operation" : "subtract",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-26T24:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-27T00:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : true,
+      "lexical" : "1926-11-26T24:00:00Z",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : null,
+    "expected" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-27T00:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "has_tz" : false,
+      "lexical" : "1926-11-26T24:00:00",
+      "millis" : -1360022400000,
+      "tz_offset" : 0
+    } ],
+    "op" : "datatype",
+    "operation" : "enumerate",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxInclusive", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#dateTime",
+        "lexical" : "1926-11-27T00:00:00"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

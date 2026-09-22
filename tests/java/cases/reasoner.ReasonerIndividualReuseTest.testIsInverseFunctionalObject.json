@@ -1,0 +1,48 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testIsInverseFunctionalObject",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "0a6c6fb9e8c071497b4429dffa12c7e58fe7ba718cc48b577067640709838dc5.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "FunctionalObjectProperty(<file:/c/test.owl#OP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "InverseFunctionalObjectProperty(<file:/c/test.owl#OP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "FunctionalObjectProperty(<file:/c/test.owl#SOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "InverseFunctionalObjectProperty(<file:/c/test.owl#SOP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "FunctionalObjectProperty(<file:/c/test.owl#ANOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "InverseFunctionalObjectProperty(<file:/c/test.owl#ANOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

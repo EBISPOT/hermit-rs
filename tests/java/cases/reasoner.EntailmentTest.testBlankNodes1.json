@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.EntailmentTest.testBlankNodes1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "33e38a1dc252d062bec094b7d578b160ddf79bcbb1fb26e81875338b94d22e77.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "ClassAssertion(ObjectSomeValuesFrom(<file:/c/test.owl#p> <http://www.w3.org/2002/07/owl#Thing>) <file:/c/test.owl#a>)" ] ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

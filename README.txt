@@ -1,3 +1,15 @@
+Rust port
+---------
+This branch contains hermit-rs. Full Java test parity is not yet achieved.
+All Java test methods are inventoried in tests/java/inventory.json; see
+tests/java/README.md for commands and tests/java/RESULTS.md for measured results
+and known failures. CI executes the cases and rejects regressions against the
+explicit expected outcomes. HERMIT_JAVA_STRICT=1 reports every Java mismatch
+as a failing test.
+
+The original Java project README follows.
+-----------------------------------------
+
 HermiT is a conformant OWL 2 DL reasoner that uses the direct semantics. It
 supports all OWL2 DL constructs and the datatypes required by the OWL
 2 specification.  

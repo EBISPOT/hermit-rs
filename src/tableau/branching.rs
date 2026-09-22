@@ -153,7 +153,7 @@ impl Tableau {
             .any(|&n| self.nodes[n].node_state == Some(NodeState::Pruned))
     }
 
-    fn ground_disjunction_satisfied(&self, gd_index: usize) -> bool {
+    pub(crate) fn ground_disjunction_satisfied(&self, gd_index: usize) -> bool {
         let gd = self.ground_disjunctions[gd_index].as_ref().unwrap();
         let header = self.ground_disjunction_header_manager.header(gd.header_index);
         let num_disjuncts = header.dl_predicates().len();
@@ -725,6 +725,9 @@ impl Tableau {
         // `Tableau.pushBranchingPoint`:527 — pushBranchingPointFinished.
         self.monitor_event(|m| m.push_branching_point_finished());
     }
+
+    #[cfg(test)]
+    pub(crate) fn java_backtrack_to(&mut self, level: i32) { self.backtrack_to(level); }
 
     fn backtrack_to(&mut self, new_current_branching_point: i32) {
         self.monitor_event(|m| m.backtrack_to_started()); // backtrackToStarted

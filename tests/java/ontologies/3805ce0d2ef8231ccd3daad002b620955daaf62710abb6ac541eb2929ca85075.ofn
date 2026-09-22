@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#c> <file:/c/test.owl#a>)
+ClassAssertion(ObjectComplementOf(<file:/c/test.owl#d>) <file:/c/test.owl#b>)
+DLSafeRule(Body(ClassAtom(<file:/c/test.owl#c> <file:/c/test.owl#a>))Head(ClassAtom(<file:/c/test.owl#d> <file:/c/test.owl#b>)))
+Declaration(Class(<file:/c/test.owl#c>))
+Declaration(Class(<file:/c/test.owl#d>))
+Declaration(NamedIndividual(<file:/c/test.owl#a>))
+Declaration(NamedIndividual(<file:/c/test.owl#b>))
+)

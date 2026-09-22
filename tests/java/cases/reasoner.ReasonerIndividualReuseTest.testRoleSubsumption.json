@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testRoleSubsumption",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2d66e9435fa4d6070fc00203d0eff9f297ae08e8bf19ad5da84d4a05e592fa87.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r>", true ],
+    "expected" : [ [ "<file:/c/test.owl#t>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

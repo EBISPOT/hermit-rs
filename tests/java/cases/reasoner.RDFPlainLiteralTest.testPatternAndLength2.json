@@ -1,0 +1,75 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testPatternAndLength2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : 5000,
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "cardinality",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c+)"
+      } ], [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : null,
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "infinite",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c+)"
+      } ], [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "ab"
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c+)"
+      } ], [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : false
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "abccccccccccc"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#pattern", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+        "lexical" : "ab(c+)"
+      } ], [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

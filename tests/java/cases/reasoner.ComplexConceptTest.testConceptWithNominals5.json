@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ComplexConceptTest.testConceptWithNominals5",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "055d6a3b3ba1941b277807ce647627811621fc12c250c7ab4c0ac67c222e6496.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(ObjectOneOf(<file:/c/test.owl#b>) <file:/c/test.owl#B>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

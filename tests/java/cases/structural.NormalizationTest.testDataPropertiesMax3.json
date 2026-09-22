@@ -1,0 +1,9 @@
+{
+  "java" : "structural.NormalizationTest.testDataPropertiesMax3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "SubClassOf(owl:Thing ObjectUnionOf(ObjectComplementOf(<file:/c/test.owl#A>) DataMaxCardinality(5 <file:/c/test.owl#dp> xsd:integer)))" ],
+    "ontology" : "7c20f90ff04395df0aa00560371f8ec79554fe36549c8f8e6351ed2816dd548e.ofn",
+    "op" : "normalize"
+  } ]
+}

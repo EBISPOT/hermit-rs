@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ComplexConceptTest.testJustifications",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "7e703cc4d6a2dec002b8ae3e27e6465c6d15e93c9d94c0a5f739cb8c9c15ba5e.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectComplementOf(<file:/c/test.owl#Sibling>) ObjectOneOf(<file:/c/test.owl#Matt>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

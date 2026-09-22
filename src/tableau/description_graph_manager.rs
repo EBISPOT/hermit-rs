@@ -446,6 +446,23 @@ impl DescriptionGraphManager {
 }
 
 impl Tableau {
+    #[cfg(test)]
+    pub(crate) fn java_add_graph_tuple(&mut self, graph: DescriptionGraph, nodes: &[NodeId]) {
+        let index = self.description_graph_manager.graph_indices[&graph];
+        let mut tuple = vec![TableauObject::DescriptionGraph(graph)];
+        tuple.extend(nodes.iter().copied().map(TableauObject::Node));
+        let empty = self.dependency_set_factory.empty_set();
+        self.description_graph_manager.add_tuple(index, tuple, empty, false, &mut self.dependency_set_factory);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn java_contains_graph_tuple(&self, graph: DescriptionGraph, nodes: &[NodeId]) -> bool {
+        let index = self.description_graph_manager.graph_indices[&graph];
+        let mut tuple = vec![TableauObject::DescriptionGraph(graph)];
+        tuple.extend(nodes.iter().copied().map(TableauObject::Node));
+        self.description_graph_manager.tables[index].get_tuple_index(&tuple) >= 0
+    }
+
     /// Port of `DescriptionGraphManager.expand`: lay out a description graph for
     /// `for_node`, which plays the existential's anchor vertex. Fresh graph
     /// nodes are created for the other vertices; the graph tuple is recorded (so

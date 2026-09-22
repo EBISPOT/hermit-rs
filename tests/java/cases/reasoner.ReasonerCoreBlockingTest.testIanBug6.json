@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanBug6",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "3287c47cb4cfe81933b93cdabbb9777613542c48a09a8babcd1080428defabf6.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#P> ObjectSomeValuesFrom(<file:/c/test.owl#S1> ObjectComplementOf(<file:/c/test.owl#C>))) ObjectAllValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#C>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#P> ObjectSomeValuesFrom(<file:/c/test.owl#S2> ObjectComplementOf(<file:/c/test.owl#C>))) ObjectAllValuesFrom(<file:/c/test.owl#R> <file:/c/test.owl#C>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

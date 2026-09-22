@@ -1,0 +1,54 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "  There are no leading spaces in the value of this property"^^<http://www.w3.org/2001/XMLSchema#normalizedString>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "-11"^^<http://www.w3.org/2001/XMLSchema#negativeInteger>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "0"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "0"^^<http://www.w3.org/2001/XMLSchema#nonPositiveInteger>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1")
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1"^^<http://www.w3.org/2001/XMLSchema#decimal>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1"^^<http://www.w3.org/2001/XMLSchema#integer>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1.16"^^<http://www.w3.org/2001/XMLSchema#double>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1.16"^^<http://www.w3.org/2001/XMLSchema#float>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "1/2"^^<http://www.w3.org/2002/07/owl#rational>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "12"^^<http://www.w3.org/2001/XMLSchema#positiveInteger>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "12"^^<http://www.w3.org/2001/XMLSchema#unsignedInt>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "12.25"^^<http://www.w3.org/2001/XMLSchema#decimal>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "13"^^<http://www.w3.org/2001/XMLSchema#int>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "14"^^<http://www.w3.org/2001/XMLSchema#short>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "15"^^<http://www.w3.org/2001/XMLSchema#byte>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "17"^^<http://www.w3.org/2001/XMLSchema#unsignedShort>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "2007-09-01T12:00:01"^^<http://www.w3.org/2001/XMLSchema#dateTime>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "2007-09-01T12:00:01-05:00"^^<http://www.w3.org/2001/XMLSchema#dateTimeStamp>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "28"^^<http://www.w3.org/2001/XMLSchema#unsignedByte>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "6666666666"^^<http://www.w3.org/2001/XMLSchema#long>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "6666666666"^^<http://www.w3.org/2001/XMLSchema#unsignedLong>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "<rdf:RDF
+    xmlns:ex=\"http://example.org/\"
+    xmlns:owl=\"http://www.w3.org/2002/07/owl#\"
+    xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"
+    xmlns:xsd=\"http://www.w3.org/2001/XMLSchema#\"
+    >
+  <owl:Ontology></owl:Ontology>
+  <rdf:Description rdf:about=\"http://example.org/a\">
+    <owl:differentFrom rdf:resource=\"http://example.org/b\"/>
+  </rdf:Description>
+ </rdf:RDF>
+ "^^<http://www.w3.org/1999/02/22-rdf-syntax-ns#XMLLiteral>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "C010"^^<http://www.w3.org/2001/XMLSchema#hexBinary>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "No use of rdf:test in old rdf serializations"@en)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "_12345"^^<http://www.w3.org/2001/XMLSchema#Name>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "b3ds"^^<http://www.w3.org/2001/XMLSchema#base64Binary>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "en"^^<http://www.w3.org/2001/XMLSchema#language>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "http://www.w3.org/2007/OWL/wiki/Syntax"^^<http://www.w3.org/2001/XMLSchema#anyURI>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "non-hyphenated"^^<http://www.w3.org/2001/XMLSchema#NCName>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "string"^^<http://www.w3.org/2001/XMLSchema#string>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "there is only one space between each word"^^<http://www.w3.org/2001/XMLSchema#token>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "token"^^<http://www.w3.org/2001/XMLSchema#NMTOKEN>)
+DataPropertyAssertion(<http://example.org/dp> <http://example.org/holder> "true"^^<http://www.w3.org/2001/XMLSchema#boolean>)
+Declaration(Annotation(<http://www.w3.org/2000/01/rdf-schema#comment> "No range so any literal is fine") DataProperty(<http://example.org/dp>))
+Declaration(DataProperty(<http://example.org/dp>))
+Declaration(NamedIndividual(<http://example.org/holder>))
+)

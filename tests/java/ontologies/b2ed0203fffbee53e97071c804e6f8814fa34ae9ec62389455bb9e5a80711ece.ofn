@@ -1,0 +1,9 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#A> <file:/c/test.owl#a>)
+DLSafeRule(Body(DataPropertyAtom(<file:/c/test.owl#dp> Variable(<file:/c/test.owl#x>) Variable(<file:/c/test.owl#y>)))Head(DataRangeAtom(DataComplementOf(DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#short> <http://www.w3.org/2001/XMLSchema#minInclusive> "1"^^<http://www.w3.org/2001/XMLSchema#int>)) Variable(<file:/c/test.owl#y>))))
+SubClassOf(<file:/c/test.owl#A> DataSomeValuesFrom(<file:/c/test.owl#dp> DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#integer> <http://www.w3.org/2001/XMLSchema#minInclusive> "6"^^<http://www.w3.org/2001/XMLSchema#integer> <http://www.w3.org/2001/XMLSchema#maxInclusive> "9"^^<http://www.w3.org/2001/XMLSchema#integer>)))
+)

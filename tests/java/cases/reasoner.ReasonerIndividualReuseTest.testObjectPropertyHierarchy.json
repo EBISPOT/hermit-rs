@@ -1,0 +1,68 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testObjectPropertyHierarchy",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2790f41384d511709cc4af3191378bb67a7e70beb85e9680da2c4ba1bc3e6398.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r1>" ],
+    "expected" : [ "<file:/c/test.owl#r1>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r2>" ],
+    "expected" : [ "<file:/c/test.owl#r2>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>" ],
+    "expected" : [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r4>" ],
+    "expected" : [ "<file:/c/test.owl#r4>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r5>" ],
+    "expected" : [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r6>" ],
+    "expected" : [ "<file:/c/test.owl#r6>" ],
+    "id" : 0,
+    "op" : "getEquivalentObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r4>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r2>" ], [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r5>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r6>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r2>" ], [ "ObjectInverseOf(<file:/c/test.owl#r2>)" ] ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

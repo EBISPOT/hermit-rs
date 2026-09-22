@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.EntailmentTest.testHasKey",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "39b21a652a159dd2ee4b660f1342e86db9dee3989a919699e3a889b5326e9564.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "HasKey(<http://www.w3.org/2002/07/owl#Thing> () (<file:/c/test.owl#dp>))" ] ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

@@ -1,0 +1,11 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+ClassAssertion(<file:/c/test.owl#A> <file:/c/test.owl#a>)
+Declaration(DataProperty(<file:/c/test.owl#dp>))
+Declaration(NamedIndividual(<file:/c/test.owl#a>))
+SubClassOf(<file:/c/test.owl#A> DataAllValuesFrom(<file:/c/test.owl#dp> DatatypeRestriction(<http://www.w3.org/2001/XMLSchema#dateTime> <http://www.w3.org/2001/XMLSchema#minInclusive> "2008-07-08T20:44:11.656+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime> <http://www.w3.org/2001/XMLSchema#maxInclusive> "2008-10-08T20:44:11.656+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>)))
+SubClassOf(<file:/c/test.owl#A> DataHasValue(<file:/c/test.owl#dp> "2007-10-08T20:44:11.656+01:00"^^<http://www.w3.org/2001/XMLSchema#dateTime>))
+)

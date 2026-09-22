@@ -248,7 +248,9 @@ fn value_in_datatype(value: &DataValue, datatype_uri: &str) -> bool {
         DataValue::Text(s) => {
             is_string_datatype(datatype_uri) && string_lexical_valid(datatype_uri, s)
         }
-        DataValue::LangString { .. } => datatype_uri == format!("{RDF}PlainLiteral"),
+        DataValue::LangString { string, lang } => datatype_uri == format!("{RDF}PlainLiteral")
+            && string_lexical_valid(&format!("{XSD}string"), string)
+            && is_valid_language_bcp47(lang),
         // xsd:dateTime accepts values with or without a timezone; xsd:dateTimeStamp
         // mandates a timezone, so a timezone-less value is not a member of its value
         // space (DateTimeInterval.containsDateTime returns false for a WITH_TIMEZONE
@@ -1326,11 +1328,9 @@ impl Tableau {
 /// explicit list. Mirrors Java's `enumerateValueSpaceSubset()` (DatatypeChecker.java:505),
 /// which turns a value-space subset into explicit data values for the assignment
 /// search. Returns `Some(values)` (possibly empty ⇒ empty value space ⇒ clash) for
-/// the families whose distinct values the Rust `DataValue` model can represent —
-/// length-bounded `xsd:string` (distinct `Text` values). Returns `None` for
-/// families whose distinct values this model collapses (datetime instants, where
-/// the timezone-shifted points are not separately representable) or otherwise
-/// cannot be enumerated, so the caller stays sound.
+/// length-bounded strings and singleton dateTime intervals, including distinct
+/// timezone offsets and end-of-day values. Returns `None` for other families or
+/// intervals that cannot be enumerated, so the caller stays sound.
 fn materialize_finite_value_space<D>(
     ranges: &[(LiteralDataRange, D)],
     cap: usize,
@@ -1348,6 +1348,30 @@ fn materialize_finite_value_space<D>(
     let excluded = |candidate: &DataValue| {
         ranges.iter().any(|(r, _)| value_in_range(candidate, r) == Some(false))
     };
+
+    // A singleton dateTime interval has one value for every legal timezone,
+    // and a distinct end-of-day spelling wherever the local time is midnight.
+    if restrictions.iter().all(|r| is_datetime_datatype(r.datatype_uri())) {
+        let (with_tz, without_tz) = datetime_value_space(&restrictions);
+        let mut out = Vec::new();
+        for (interval, has_tz) in [(with_tz, true), (without_tz, false)] {
+            let Some(interval) = interval else { continue };
+            if interval.lower != interval.upper { return None; }
+            let millis = interval.lower;
+            let offsets = if has_tz { -840..=840 } else { 0..=0 };
+            for tz_offset in offsets {
+                for last_day in [false, true] {
+                    if last_day && (millis + i64::from(tz_offset) * 60_000).rem_euclid(86_400_000) != 0 { continue; }
+                    let value = DataValue::DateTime { millis, has_tz, last_day, tz_offset };
+                    if !excluded(&value) {
+                        out.push(value);
+                        if out.len() >= cap { return Some(out); }
+                    }
+                }
+            }
+        }
+        return Some(out);
+    }
 
     // Length-bounded xsd:string: distinct strings of the allowed lengths over a
     // fixed ASCII alphabet. The actual value space is over the whole Unicode
@@ -5166,6 +5190,33 @@ fn node_value_space<D>(
     // (far exceeding any tableau component), the pigeonhole decision is sound (no
     // false clash) and detects the degenerate small cases (notably maxLength 0).
     if restrictions.iter().all(|r| is_anyuri_datatype(r.datatype_uri())) {
+        // Intersect patterns with length restrictions before asking whether the
+        // language is finite: an unbounded pattern can become finite after a
+        // maxLength facet or the negation of a minLength restriction.
+        let string_ranges: Option<Vec<_>> = ranges.iter().map(|(range, _)| {
+            let (dr, negated) = match range {
+                LiteralDataRange::DatatypeRestriction(dr) => (dr, false),
+                LiteralDataRange::AtomicNegationDataRange(n) => match n.get_negated_data_range() {
+                    crate::model::AtomicDataRange::DatatypeRestriction(dr) => (dr, true),
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            if !is_anyuri_datatype(dr.datatype_uri()) { return None; }
+            let string = DatatypeRestriction::create(format!("{XSD}string"),
+                (0..dr.number_of_facet_restrictions()).map(|i|dr.facet_uri(i).to_string()).collect(),
+                (0..dr.number_of_facet_restrictions()).map(|i|dr.facet_value(i).clone()).collect());
+            Some((if negated {string.get_negation()} else {LiteralDataRange::DatatypeRestriction(string)}, ()))
+        }).collect();
+        if let Some(mapped) = string_ranges {
+            if let Some(NodeValueSpace::Finite { values: Some(values), .. }) = string_automaton_value_space(&mapped) {
+                let values: Vec<_> = values.into_iter().filter_map(|v| match v {
+                    DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.encode_utf16().count(),canonical:s}),
+                    _ => None,
+                }).collect();
+                return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
+            }
+        }
         let mut min_len: u64 = 0;
         let mut max_len: Option<u64> = None;
         let mut patterns: Vec<String> = Vec::new();
@@ -8267,3 +8318,5 @@ fn label_as_literal_data_range(label: &TableauObject) -> Option<LiteralDataRange
     }
 }
 
+#[cfg(test)]
+mod java_tests;

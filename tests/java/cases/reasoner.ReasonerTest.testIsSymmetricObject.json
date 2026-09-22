@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerTest.testIsSymmetricObject",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "000bbbdb8ff863538d7dd1a0eaecf97f3358326c4e1ea66a3c8cb7cbb6c3300a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SymmetricObjectProperty(<file:/c/test.owl#OP>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SymmetricObjectProperty(<file:/c/test.owl#SOP1>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SymmetricObjectProperty(<file:/c/test.owl#SOP2>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SymmetricObjectProperty(<file:/c/test.owl#ANOP>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.OWLReasonerTest.testTopObjectPropertySupers",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "01c812563fdc48c95cf7c4d54f2ea0179ee4c51f653db06b5b048577403b0495.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#topObjectProperty>", false ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  }, {
+    "args" : [ "<http://www.w3.org/2002/07/owl#topObjectProperty>", true ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getSuperObjectProperties"
+  } ]
+}

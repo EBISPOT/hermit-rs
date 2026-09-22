@@ -1,0 +1,85 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testComplement3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "abcde"
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : "abcd"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abcdefgh@en"
+    },
+    "expected" : true,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "lexical" : "abcdefgh@123"
+    },
+    "expected" : false,
+    "op" : "datatype",
+    "operation" : "contains",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral",
+      "facets" : [ ],
+      "negated" : false
+    }, {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "5"
+      } ] ],
+      "negated" : true
+    } ]
+  } ]
+}

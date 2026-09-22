@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerIndividualReuseTest.testNominals3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "INDIVIDUAL_REUSE",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "bade0040368b79496c0f4d2568344d0a76856d110f41e0573807a3beb752e897.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#n>", "ObjectSomeValuesFrom(ObjectInverseOf(<file:/c/test.owl#S>) ObjectIntersectionOf(<file:/c/test.owl#A> <file:/c/test.owl#B> ObjectSomeValuesFrom(<file:/c/test.owl#R> ObjectIntersectionOf(<file:/c/test.owl#A> <file:/c/test.owl#B>))))", false ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "hasType"
+  } ]
+}

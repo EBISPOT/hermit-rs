@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerTest.testIanT4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "2ecf75c4dbe8d61b10b7f9d895b022e0230015b9640058d5029a53a3c07e0533.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(<file:/c/test.owl#a> ObjectSomeValuesFrom(<file:/c/test.owl#s> ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#p> <http://www.w3.org/2002/07/owl#Thing>) ObjectSomeValuesFrom(<file:/c/test.owl#r> <http://www.w3.org/2002/07/owl#Thing>) ObjectAllValuesFrom(<file:/c/test.owl#p> ObjectSomeValuesFrom(<file:/c/test.owl#p> <http://www.w3.org/2002/07/owl#Thing>)) ObjectAllValuesFrom(<file:/c/test.owl#p> ObjectSomeValuesFrom(<file:/c/test.owl#r> <http://www.w3.org/2002/07/owl#Thing>)) ObjectAllValuesFrom(<file:/c/test.owl#p> ObjectAllValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#c>)) ObjectAllValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#c>))))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

@@ -1,0 +1,13 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#K>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#L>))
+Declaration(ObjectProperty(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#r>))
+Declaration(ObjectProperty(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#s>))
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#K> ObjectIntersectionOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#L> ObjectAllValuesFrom(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#r> <http://www.w3.org/2002/07/owl#Nothing>)))
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#L> ObjectIntersectionOf(ObjectAllValuesFrom(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#s> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#L>) ObjectMinCardinality(1 <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#s>) ObjectMaxCardinality(1 <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#r>)))
+InverseObjectProperties(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#r> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/20.owl#s>)
+)

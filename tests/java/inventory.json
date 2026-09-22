@@ -1,0 +1,2995 @@
+{
+  "commit": "37ec30aced32ac81ebecc5e33fad255ddefcb4c3",
+  "declared_methods": [
+    {
+      "java": "graph.GraphTest.testContradictionOnGraph",
+      "source": "java/org/semanticweb/HermiT/graph/GraphTest.java",
+      "port": "reasoner::java_graph_tests::testContradictionOnGraph"
+    },
+    {
+      "java": "graph.GraphTest.testGraph1",
+      "source": "java/org/semanticweb/HermiT/graph/GraphTest.java",
+      "port": "reasoner::java_graph_tests::graph_testGraph1"
+    },
+    {
+      "java": "graph.GraphTest.testGraph2",
+      "source": "java/org/semanticweb/HermiT/graph/GraphTest.java",
+      "port": "reasoner::java_graph_tests::testGraph2"
+    },
+    {
+      "java": "owl_wg_tests.ConsistencyTest.test",
+      "source": "java/org/semanticweb/HermiT/owl_wg_tests/ConsistencyTest.java",
+      "port": "owl_wg_conformance::owl_wg_conformance"
+    },
+    {
+      "java": "owl_wg_tests.EntailmentTest.test",
+      "source": "java/org/semanticweb/HermiT/owl_wg_tests/EntailmentTest.java",
+      "port": "owl_wg_conformance::owl_wg_conformance"
+    },
+    {
+      "java": "reasoner.AnyURITest.testComplement2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testComplement2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testComplement3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testComplement3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testComplement4",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testComplement4"
+    },
+    {
+      "java": "reasoner.AnyURITest.testIntersection",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testIntersection"
+    },
+    {
+      "java": "reasoner.AnyURITest.testInvalidAnyURILiterals",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testInvalidAnyURILiterals"
+    },
+    {
+      "java": "reasoner.AnyURITest.testLength_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testLength_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testLength_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testLength_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testLength_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testLength_3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testLength_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testLength_4"
+    },
+    {
+      "java": "reasoner.AnyURITest.testLength_5",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testLength_5"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPattern1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPattern1_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPattern1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPattern1_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPattern2_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPattern2_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPattern2_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPattern2_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPattern3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPattern3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternAndLength1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternAndLength1_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternAndLength1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternAndLength1_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternAndLength1_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternAndLength1_3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternAndLength2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testPatternAndLength2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternAndLength3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_AnyURITest_testPatternAndLength3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternComplement1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternComplement1_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternComplement1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternComplement1_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testPatternComplement1_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testPatternComplement1_3"
+    },
+    {
+      "java": "reasoner.AnyURITest.testSize_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testSize_1"
+    },
+    {
+      "java": "reasoner.AnyURITest.testSize_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testSize_2"
+    },
+    {
+      "java": "reasoner.AnyURITest.testSize_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/AnyURITest.java",
+      "port": "java_parity::reasoner.AnyURITest.testSize_3"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testBase64Parsing",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_BinaryDataTest_testBase64Parsing"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testEnumerate1",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_BinaryDataTest_testEnumerate1"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testEnumerate2",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_BinaryDataTest_testEnumerate2"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testExplicitSize",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_BinaryDataTest_testExplicitSize"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testIntersection_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testIntersection_1"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testIntersection_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testIntersection_2"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testLength_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testLength_1"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testLength_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testLength_2"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testLength_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testLength_3"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testLength_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testLength_4"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testLength_5",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testLength_5"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testParsing_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testParsing_1"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testParsing_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testParsing_2"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testSize_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testSize_1"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testSize_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testSize_2"
+    },
+    {
+      "java": "reasoner.BinaryDataTest.testSize_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/BinaryDataTest.java",
+      "port": "java_parity::reasoner.BinaryDataTest.testSize_3"
+    },
+    {
+      "java": "reasoner.ClassificationIndividualReuseTest.testDolce",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationIndividualReuseTest.java",
+      "port": "java_parity::reasoner.ClassificationIndividualReuseTest.testDolce"
+    },
+    {
+      "java": "reasoner.ClassificationIndividualReuseTest.testGalenIansFullUndoctored",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationIndividualReuseTest.java",
+      "port": "upstream_disabled"
+    },
+    {
+      "java": "reasoner.ClassificationTest.testGalenIansFullUndoctored",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationTest.java",
+      "port": "java_parity::reasoner.ClassificationTest.testGalenIansFullUndoctored"
+    },
+    {
+      "java": "reasoner.ClassificationTest.testPizza",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationTest.java",
+      "port": "java_parity::reasoner.ClassificationTest.testPizza"
+    },
+    {
+      "java": "reasoner.ClassificationTest.testPropreo",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationTest.java",
+      "port": "java_parity::reasoner.ClassificationTest.testPropreo"
+    },
+    {
+      "java": "reasoner.ClassificationTest.testWine",
+      "source": "java/org/semanticweb/HermiT/reasoner/ClassificationTest.java",
+      "port": "java_parity::reasoner.ClassificationTest.testWine"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithDatatypes",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithDatatypes"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithDatatypes2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithDatatypes2"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithNominals",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithNominals"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithNominals2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithNominals2"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithNominals3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithNominals3"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithNominals4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithNominals4"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testConceptWithNominals5",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testConceptWithNominals5"
+    },
+    {
+      "java": "reasoner.ComplexConceptTest.testJustifications",
+      "source": "java/org/semanticweb/HermiT/reasoner/ComplexConceptTest.java",
+      "port": "java_parity::reasoner.ComplexConceptTest.testJustifications"
+    },
+    {
+      "java": "reasoner.DatalogEngineTest.testBasic",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatalogEngineTest.java",
+      "port": "java_parity::reasoner.DatalogEngineTest.testBasic"
+    },
+    {
+      "java": "reasoner.DatalogEngineTest.testEquality",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatalogEngineTest.java",
+      "port": "java_parity::reasoner.DatalogEngineTest.testEquality"
+    },
+    {
+      "java": "reasoner.DatalogEngineTest.testQueryWithIndividuals",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatalogEngineTest.java",
+      "port": "java_parity::reasoner.DatalogEngineTest.testQueryWithIndividuals"
+    },
+    {
+      "java": "reasoner.DatalogEngineTest.testQueryWithIndividualsAndEquality",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatalogEngineTest.java",
+      "port": "java_parity::reasoner.DatalogEngineTest.testQueryWithIndividualsAndEquality"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromDifferentTypes1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromDifferentTypes1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromDifferentTypes2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromDifferentTypes2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromDifferentTypes3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromDifferentTypes3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromInteger1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromInteger1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromInteger2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromInteger2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromMixed1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromMixed1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testAllValuesFromMixed2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testAllValuesFromMixed2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef4",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef4"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef5",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef5"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeDef6",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeDef6"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnion1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnion1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnion2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnion2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnion3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnion3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnion4",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnion4"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnionIntersection1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnionIntersection1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnionIntersection2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnionIntersection2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnionIntersection3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnionIntersection3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypeUnionIntersection4",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypeUnionIntersection4"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypesSat",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypesSat"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypesUnsat1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypesUnsat1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypesUnsat2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypesUnsat2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypesUnsat3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypesUnsat3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDatatypesUnsat4",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDatatypesUnsat4"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDateTime1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDateTime1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDateTime2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDateTime2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDecimalPlusInteger",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDecimalPlusInteger"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDecimalPlusOWLreal",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDecimalPlusOWLreal"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDecimals",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDecimals"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDifferentLexicalForms",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDifferentLexicalForms"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDifferentOneOfs",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDifferentOneOfs"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDisjointDPsSatInteger",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDisjointDPsSatInteger"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDisjointDPsUnsat",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDisjointDPsUnsat"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testDisjointDPsUnsatStrings",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testDisjointDPsUnsatStrings"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testEnumWithIntPlusFloatRestriction",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testEnumWithIntPlusFloatRestriction"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testFloatEnumInconsistent",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testFloatEnumInconsistent"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testFloatZeros",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testFloatZeros"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testFreshEntitiesQuery",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testFreshEntitiesQuery"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testINF",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testINF"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testIntPlusDecimal",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testIntPlusDecimal"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testIntPlusDecimal2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testIntPlusDecimal2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testLangAbbreviation",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testLangAbbreviation"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testLiteralCustomDatatype",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testLiteralCustomDatatype"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testMinInclusiveMaxInclusive",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testMinInclusiveMaxInclusive"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testNegZero1Integer",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testNegZero1Integer"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testNegZero2Integer",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testNegZero2Integer"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testNegativeDPAssertions",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testNegativeDPAssertions"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testNominalsAndDatatypesFromAlan",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testNominalsAndDatatypesFromAlan"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testNotXsdString",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testNotXsdString"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testParsingError",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testParsingError"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testRationalConversion",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testRationalConversion"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testRationals1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testRationals1"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testRationals2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testRationals2"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testRationals3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testRationals3"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testSelfInequality",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testSelfInequality"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testStringAbbreviation",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testStringAbbreviation"
+    },
+    {
+      "java": "reasoner.DatatypesTest.testdateTimeTimezones",
+      "source": "java/org/semanticweb/HermiT/reasoner/DatatypesTest.java",
+      "port": "java_parity::reasoner.DatatypesTest.testdateTimeTimezones"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testExactIntervalsWithTZ1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testExactIntervalsWithTZ1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testExactIntervalsWithTZ2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testExactIntervalsWithTZ2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testExactIntervalsWithTZ3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testExactIntervalsWithTZ3"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testExactIntervalsWithoutTZ1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testExactIntervalsWithoutTZ1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testExactIntervalsWithoutTZ2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testExactIntervalsWithoutTZ2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testFinite1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testFinite1_1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testFinite1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testFinite1_2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testFinite2_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testFinite2_1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testFinite2_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testFinite2_2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testInfinite_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testInfinite_1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testInfinite_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testInfinite_2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testMember",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testMember"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testMizedTZs_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testMizedTZs_1"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testMizedTZs_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testMizedTZs_2"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testMizedTZs_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "java_parity::reasoner.DateTimeTest.testMizedTZs_3"
+    },
+    {
+      "java": "reasoner.DateTimeTest.testParsing",
+      "source": "java/org/semanticweb/HermiT/reasoner/DateTimeTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_DateTimeTest_testParsing"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testBlankNodes1",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testBlankNodes1"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testBlankWithDTs",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testBlankWithDTs"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testBlankWithDTs2",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testBlankWithDTs2"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testBlankWithDTs3",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testBlankWithDTs3"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testHasKey",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testHasKey"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testIntegerEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testIntegerEntailment"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testInvalidBlankNodes",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testInvalidBlankNodes"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testValidBlankNodes",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testValidBlankNodes"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testValidBlankNodesInPremise",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testValidBlankNodesInPremise"
+    },
+    {
+      "java": "reasoner.EntailmentTest.testValidBlankNodesWithNominals",
+      "source": "java/org/semanticweb/HermiT/reasoner/EntailmentTest.java",
+      "port": "java_parity::reasoner.EntailmentTest.testValidBlankNodesWithNominals"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleNaN_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleNaN_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleNaN_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleNaN_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleNaN_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleNaN_3"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleRange",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleRange"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleRangeEnum",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleRangeEnum"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleZeroRange_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleZeroRange_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleZeroRange_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleZeroRange_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testDoubleZeroRange_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testDoubleZeroRange_3"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatAndDouble",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatAndDouble"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatNaN_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatNaN_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatNaN_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatNaN_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatNaN_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatNaN_3"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatRange",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatRange"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatRangeEnum",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatRangeEnum"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatZeroRange_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatZeroRange_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatZeroRange_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatZeroRange_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testFloatZeroRange_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testFloatZeroRange_3"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testINF",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testINF"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfDoubles_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfDoubles_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfDoubles_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfDoubles_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfDoubles_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfDoubles_3"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfFloats_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfFloats_1"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfFloats_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfFloats_2"
+    },
+    {
+      "java": "reasoner.FloatDoubleTest.testNumberOfFloats_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/FloatDoubleTest.java",
+      "port": "java_parity::reasoner.FloatDoubleTest.testNumberOfFloats_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testClique",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testClique"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusIntNEQ_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusIntNEQ_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusIntNEQ_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusIntNEQ_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusIntNEQ_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusIntNEQ_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusInt_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusInt_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusInt_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusInt_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusInt_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusInt_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalMinusInt_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalMinusInt_4"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalNotInteger_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalNotInteger_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalNotInteger_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalNotInteger_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testDecimalNotInteger_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testDecimalNotInteger_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumIntNEQ_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumIntNEQ_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumIntNEQ_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumIntNEQ_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumIntNEQ_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumIntNEQ_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumIntNEQ_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumIntNEQ_4"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumIntNEQ_5",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumIntNEQ_5"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumInt_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumInt_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumInt_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumInt_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumInt_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumInt_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumInt_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumInt_4"
+    },
+    {
+      "java": "reasoner.NumericsTest.testEnumInt_5",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testEnumInt_5"
+    },
+    {
+      "java": "reasoner.NumericsTest.testIntegerRange1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testIntegerRange1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testIntegerRange2_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testIntegerRange2_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testIntegerRange2_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testIntegerRange2_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testIntegerRange2_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testIntegerRange2_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testIntegerRange2_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testIntegerRange2_4"
+    },
+    {
+      "java": "reasoner.NumericsTest.testInvalidMinMax",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testInvalidMinMax"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange1_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange1_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange1_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange1_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange2_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange2_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange2_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange2_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testLargeRange2_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testLargeRange2_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMaxExclusiveDec",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMaxExclusiveDec"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMaxInclusiveInt",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMaxInclusiveInt"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMaxInclusiveInt_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMaxInclusiveInt_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinExclusiveDec",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinExclusiveDec"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinInclusiveInt",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinInclusiveInt"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinInclusiveInt_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinInclusiveInt_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinMaxEqual_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinMaxEqual_1"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinMaxEqual_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinMaxEqual_2"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinMaxEqual_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinMaxEqual_3"
+    },
+    {
+      "java": "reasoner.NumericsTest.testMinMaxEqual_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testMinMaxEqual_4"
+    },
+    {
+      "java": "reasoner.NumericsTest.testRealNotDecimal",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testRealNotDecimal"
+    },
+    {
+      "java": "reasoner.NumericsTest.testRealNotDecimal_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/NumericsTest.java",
+      "port": "java_parity::reasoner.NumericsTest.testRealNotDecimal_2"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testBobTestAandB",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testBobTestAandB"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testBobTestC",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testBobTestC"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testBobTests",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testBobTests"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testDisjointClasses",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testDisjointClasses"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testDisjointProperties",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testDisjointProperties"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testInverses",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testInverses"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testObjectProperties",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testObjectProperties"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testSuccessiveCalls",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testSuccessiveCalls"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testUpdatesBuffered",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testUpdatesBuffered"
+    },
+    {
+      "java": "reasoner.OWLLinkTest.testUpdatesNonBuffered",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLLinkTest.java",
+      "port": "java_parity::reasoner.OWLLinkTest.testUpdatesNonBuffered"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testBottomObjectPropertySubs",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testBottomObjectPropertySubs"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testEquivalenceClasses",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testEquivalenceClasses"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testGetDataPropertyValues",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testGetDataPropertyValues"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testIncrementalAddition",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testIncrementalAddition"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testIncrementalAddition2",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testIncrementalAddition2"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testNonEquivalenceClasses",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testNonEquivalenceClasses"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testTopObjectPropertySupers",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testTopObjectPropertySupers"
+    },
+    {
+      "java": "reasoner.OWLReasonerTest.testgetInverseObjectPropertyExpressions",
+      "source": "java/org/semanticweb/HermiT/reasoner/OWLReasonerTest.java",
+      "port": "java_parity::reasoner.OWLReasonerTest.testgetInverseObjectPropertyExpressions"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testComplement2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testComplement2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testComplement3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testComplement3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testComplement4",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testComplement4"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testEnumerate",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testEnumerate"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testExplicitSize",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testExplicitSize"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testIntersection_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testIntersection_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testIntersection_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testIntersection_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testInvalidStringLiterals",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testInvalidStringLiterals"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLangRange1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testLangRange1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLangRange2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testLangRange2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLength_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testLength_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLength_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testLength_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLength_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testLength_3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLength_4",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testLength_4"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testLength_5",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testLength_5"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPattern1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPattern1_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPattern1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPattern1_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPattern2_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPattern2_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPattern2_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPattern2_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPattern3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPattern3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternAndLength1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternAndLength1_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternAndLength1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternAndLength1_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternAndLength1_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternAndLength1_3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternAndLength2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testPatternAndLength2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternAndLength3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "tableau::datatype_manager::java_tests::reasoner_RDFPlainLiteralTest_testPatternAndLength3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternComplement1_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternComplement1_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternComplement1_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternComplement1_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testPatternComplement1_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testPatternComplement1_3"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testSize_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testSize_1"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testSize_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testSize_2"
+    },
+    {
+      "java": "reasoner.RDFPlainLiteralTest.testSize_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RDFPlainLiteralTest.java",
+      "port": "java_parity::reasoner.RDFPlainLiteralTest.testSize_3"
+    },
+    {
+      "java": "reasoner.RIATest.testInverseAndChain",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testInverseAndChain"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity0",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity0"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity1"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity2"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity3",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity3"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity4",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity4"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity5",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity5"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity6",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity6"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity7",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity7"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity8",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity8"
+    },
+    {
+      "java": "reasoner.RIATest.testRIARegularity9",
+      "source": "java/org/semanticweb/HermiT/reasoner/RIATest.java",
+      "port": "java_parity::reasoner.RIATest.testRIARegularity9"
+    },
+    {
+      "java": "reasoner.ReasonerCoreBlockingTest.testDependencyDisjunctionMergingBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerCoreBlockingTest.java",
+      "port": "upstream_disabled"
+    },
+    {
+      "java": "reasoner.ReasonerCoreBlockingTest.testExpansion",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerCoreBlockingTest.java",
+      "port": "java_parity::reasoner.ReasonerCoreBlockingTest.testExpansion"
+    },
+    {
+      "java": "reasoner.ReasonerCoreBlockingTest.testIanT6",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerCoreBlockingTest.java",
+      "port": "java_parity::reasoner.ReasonerCoreBlockingTest.testIanT6"
+    },
+    {
+      "java": "reasoner.ReasonerCoreBlockingTest.testIanT9",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerCoreBlockingTest.java",
+      "port": "java_parity::reasoner.ReasonerCoreBlockingTest.testIanT9"
+    },
+    {
+      "java": "reasoner.ReasonerCoreBlockingTest.testWidmann2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerCoreBlockingTest.java",
+      "port": "java_parity::reasoner.ReasonerCoreBlockingTest.testWidmann2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndividualConstraints",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndividualConstraints"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndividualConstraints2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndividualConstraints2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndividualConstraints3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndividualConstraints3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndividualConstraints4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndividualConstraints4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndiviuals1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndiviuals1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndiviuals2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndiviuals2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAnonymousIndiviuals3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAnonymousIndiviuals3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testAsymmetry",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testAsymmetry"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testBottomDataProperty",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testBottomDataProperty"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testBottomObjectPropertyAssertion",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testBottomObjectPropertyAssertion"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChains",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChains"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChains1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChains1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChains2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChains2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChains3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChains3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChains4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChains4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testChanges",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testChanges"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testClassificationSubClassBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testClassificationSubClassBug"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testClassificationWithValidatedBlockingError",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testClassificationWithValidatedBlockingError"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testComplexConceptInstanceRetrieval",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testComplexConceptInstanceRetrieval"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDataPropertyEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDataPropertyEntailment"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDataPropertyHierarchy",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDataPropertyHierarchy"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDataPropertySemantics",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDataPropertySemantics"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDataRanges",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDataRanges"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDataTypeRestriction",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDataTypeRestriction"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDatatypeDefEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDatatypeDefEntailment"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDatatypeLiterals",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDatatypeLiterals"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDateTime",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDateTime"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDateTime2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDateTime2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDependencyDisjunctionMergingBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDependencyDisjunctionMergingBug"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDirect",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDirect"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testDomainRange",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testDomainRange"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testEmptyChain",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testEmptyChain"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testEquivalentClassInstances",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testEquivalentClassInstances"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testExistsSelf1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testExistsSelf1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testExistsSelf2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testExistsSelf2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testFreshEntityEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testFreshEntityEntailment"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHasKeyEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHasKeyEntailment"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHasKeyNonEntailment",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHasKeyNonEntailment"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHasKeysOnlyNamed",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHasKeysOnlyNamed"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox3Modified",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox3Modified"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox3c",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox3c"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox3cIrh",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox3cIrh"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox4a",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox4a"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox4b",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox4b"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHeinsohnTBox7",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHeinsohnTBox7"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHierarchyPrinting1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHierarchyPrinting1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHierarchyPrinting2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHierarchyPrinting2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testHierarchyPrinting3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testHierarchyPrinting3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBackjumping1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBackjumping1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBackjumping2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBackjumping2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBackjumping3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBackjumping3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug1b",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug1b"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug5",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug5"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug6",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug6"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug7",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug7"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanBug8",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanBug8"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanFact1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanFact1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanFact2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanFact2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanFact3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanFact3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanFact4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanFact4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanMergeTest1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanMergeTest1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanMergeTest2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanMergeTest2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanQNRTest",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanQNRTest"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanRecursiveDefinitionTest1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanRecursiveDefinitionTest1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanRecursiveDefinitionTest2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanRecursiveDefinitionTest2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanRecursiveDefinitionTest3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanRecursiveDefinitionTest3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT10",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT10"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT11",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT11"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT12",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT12"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT13",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT13"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT1a",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT1a"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT1b",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT1b"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT1c",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT1c"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT5",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT5"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT6",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT6"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT7a",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT7a"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT7b",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT7b"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT7c",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT7c"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT8",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT8"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT8a",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT8a"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIanT9",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIanT9"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithClass",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithClass"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithFreshNames",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithFreshNames"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithHasSelf",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithHasSelf"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithHasValue",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithHasValue"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithNegatedClass",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithNegatedClass"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithNegatedHasSelf",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithNegatedHasSelf"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithNegatedHasValue",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithNegatedHasValue"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIncrementalWithSameAs",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIncrementalWithSameAs"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIndividualRetrieval",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIndividualRetrieval"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIndividualRetrievalBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIndividualRetrievalBug"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testInstanteManagerError",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testInstanteManagerError"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testInverses",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testInverses"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testInverses2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testInverses2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIrreflexivity",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIrreflexivity"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsAsymmetricObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsAsymmetricObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsEntailed",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsEntailed"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsFunctionalData",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsFunctionalData"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsFunctionalObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsFunctionalObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsInverseFunctionalObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsInverseFunctionalObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsIrreflexiveObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsIrreflexiveObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsReflexiveObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsReflexiveObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsSymmetricObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsSymmetricObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testIsTransitiveObject",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testIsTransitiveObject"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testKeys",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testKeys"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testKeys1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testKeys1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testKeys2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testKeys2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testKeys3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testKeys3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testKeysNegatedClass",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testKeysNegatedClass"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testLearningBacktracking",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testLearningBacktracking"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testMissingCBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testMissingCBug"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNIRuleBlockingWithUnraveling",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNIRuleBlockingWithUnraveling"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNegProperties",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNegProperties"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNegativeDataPropertyAssertion",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNegativeDataPropertyAssertion"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNegativeObjectPropertyAssertionWithNonSimple",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNegativeObjectPropertyAssertionWithNonSimple"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominalMerging",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominalMerging"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals5",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals5"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNominals6",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNominals6"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNonUnaryKeys",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNonUnaryKeys"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNonUnaryKeys2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNonUnaryKeys2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testNovelNominals",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testNovelNominals"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testObjectPropertyDomainsTimothyBug",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testObjectPropertyDomainsTimothyBug"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testObjectPropertyHierarchy",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testObjectPropertyHierarchy"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testObjectPropertySubsumptionsNoNominals",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testObjectPropertySubsumptionsNoNominals"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testObjectPropertySubsumptionsNominals",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testObjectPropertySubsumptionsNominals"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testOnyDeclaredEntitiesInHierarchy",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testOnyDeclaredEntitiesInHierarchy"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPrecomputeDisjointClasses",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPrecomputeDisjointClasses"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPropertyEnailmentFromAlan",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPropertyEnailmentFromAlan"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPropertyInstanceRetrieval",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPropertyInstanceRetrieval"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPunning",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPunning"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPunning2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPunning2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testPunning3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testPunning3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testReflexiveAndSameAs",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testReflexiveAndSameAs"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testReflexivity",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testReflexivity"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleChains",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleChains"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleChainsWithTransitiveSymmetric",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleChainsWithTransitiveSymmetric"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleDisjointness2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleDisjointness2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleDisjointness_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleDisjointness_1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleDisjointness_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleDisjointness_2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleSubsumption",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleSubsumption"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSameAs",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSameAs"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiability1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiability1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiability2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiability2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiability3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiability3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiability4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiability4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs10",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs10"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs11",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs11"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs11b",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs11b"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs12",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs12"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs13",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs13"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs14",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs14"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs4",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs4"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs5",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs5"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs6",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs6"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs7",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs7"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs8",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs8"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSatisfiabilityWithRIAs9",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSatisfiabilityWithRIAs9"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSemanticDataPropertyClassification",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSemanticDataPropertyClassification"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSemanticObjectPropertyClassification",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSemanticObjectPropertyClassification"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubAndSuperConcepts",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubAndSuperConcepts"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubAndSuperRoles",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubAndSuperRoles"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubProperties",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubProperties"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubRolesChain",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubRolesChain"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubsumption1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubsumption1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubsumption2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubsumption2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testSubsumption3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testSubsumption3"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testTopOPEquivalence",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testTopOPEquivalence"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testTransitivity",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testTransitivity"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testUniversalRolePartitionedABox",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testUniversalRolePartitionedABox"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testUniversalRoleSubsumption",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testUniversalRoleSubsumption"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testUnknownClassHierarcyPosition",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testUnknownClassHierarcyPosition"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testUnknownDatatypes",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testUnknownDatatypes"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testWidmann1",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testWidmann1"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testWidmann2",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testWidmann2"
+    },
+    {
+      "java": "reasoner.ReasonerTest.testWidmann3",
+      "source": "java/org/semanticweb/HermiT/reasoner/ReasonerTest.java",
+      "port": "java_parity::reasoner.ReasonerTest.testWidmann3"
+    },
+    {
+      "java": "reasoner.RulesTest.testAddingFactsByRules",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testAddingFactsByRules"
+    },
+    {
+      "java": "reasoner.RulesTest.testDataPropertiesInBody",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testDataPropertiesInBody"
+    },
+    {
+      "java": "reasoner.RulesTest.testDataRangeSafety",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testDataRangeSafety"
+    },
+    {
+      "java": "reasoner.RulesTest.testDifferentFrom",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testDifferentFrom"
+    },
+    {
+      "java": "reasoner.RulesTest.testDiffrentFrom2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testDiffrentFrom2"
+    },
+    {
+      "java": "reasoner.RulesTest.testIndividualsInRules",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testIndividualsInRules"
+    },
+    {
+      "java": "reasoner.RulesTest.testLloydTopor",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testLloydTopor"
+    },
+    {
+      "java": "reasoner.RulesTest.testNegDRInHead",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testNegDRInHead"
+    },
+    {
+      "java": "reasoner.RulesTest.testNegativeBodyDataRange",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testNegativeBodyDataRange"
+    },
+    {
+      "java": "reasoner.RulesTest.testPositiveBodyDataRange",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testPositiveBodyDataRange"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleNonSimple",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleNonSimple"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleNotAxiom",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleNotAxiom"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleWithConstants",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleWithConstants"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleWithConstants2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleWithConstants2"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleWithDatatypes",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleWithDatatypes"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleWithDatatypes2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleWithDatatypes2"
+    },
+    {
+      "java": "reasoner.RulesTest.testRuleWithFreshIndividuals",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testRuleWithFreshIndividuals"
+    },
+    {
+      "java": "reasoner.RulesTest.testSameAs",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSameAs"
+    },
+    {
+      "java": "reasoner.RulesTest.testSameAsInBody1",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSameAsInBody1"
+    },
+    {
+      "java": "reasoner.RulesTest.testSameAsInBody2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSameAsInBody2"
+    },
+    {
+      "java": "reasoner.RulesTest.testSameAsInBodyWithDataProperties",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSameAsInBodyWithDataProperties"
+    },
+    {
+      "java": "reasoner.RulesTest.testSeveralVars",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSeveralVars"
+    },
+    {
+      "java": "reasoner.RulesTest.testSimpleRule",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSimpleRule"
+    },
+    {
+      "java": "reasoner.RulesTest.testSimpleRule2",
+      "source": "java/org/semanticweb/HermiT/reasoner/RulesTest.java",
+      "port": "java_parity::reasoner.RulesTest.testSimpleRule2"
+    },
+    {
+      "java": "reasoner.SimpleRolesTest.testSimpleRoles1",
+      "source": "java/org/semanticweb/HermiT/reasoner/SimpleRolesTest.java",
+      "port": "java_parity::reasoner.SimpleRolesTest.testSimpleRoles1"
+    },
+    {
+      "java": "reasoner.SimpleRolesTest.testSimpleRoles2",
+      "source": "java/org/semanticweb/HermiT/reasoner/SimpleRolesTest.java",
+      "port": "java_parity::reasoner.SimpleRolesTest.testSimpleRoles2"
+    },
+    {
+      "java": "reasoner.SimpleRolesTest.testSimpleRoles3",
+      "source": "java/org/semanticweb/HermiT/reasoner/SimpleRolesTest.java",
+      "port": "java_parity::reasoner.SimpleRolesTest.testSimpleRoles3"
+    },
+    {
+      "java": "reasoner.SimpleRolesTest.testSimpleRoles4",
+      "source": "java/org/semanticweb/HermiT/reasoner/SimpleRolesTest.java",
+      "port": "java_parity::reasoner.SimpleRolesTest.testSimpleRoles4"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testCanonicalization_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testCanonicalization_1"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testCanonicalization_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testCanonicalization_2"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testMembership_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testMembership_1"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testMembership_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testMembership_2"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testRange_1",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testRange_1"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testRange_2",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testRange_2"
+    },
+    {
+      "java": "reasoner.XMLLiteralTest.testRange_3",
+      "source": "java/org/semanticweb/HermiT/reasoner/XMLLiteralTest.java",
+      "port": "java_parity::reasoner.XMLLiteralTest.testRange_3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataComplementOf1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataComplementOf1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataComplementOf2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataComplementOf2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataComplementOf3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataComplementOf3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataComplementOf4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataComplementOf4"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataIntersectionOf",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataIntersectionOf"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataIntersectionOf2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataIntersectionOf2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataIntersectionOf3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataIntersectionOf3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesAll1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesAll1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesAll2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesAll2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesExact1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesExact1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesExact2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesExact2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesExact3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesExact3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesExact4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesExact4"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesHasValue1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesHasValue1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesHasValue2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesHasValue2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMax1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMax1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMax2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMax2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMax3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMax3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMax4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMax4"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMin1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMin1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMin2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMin2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMin3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMin3"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesMin4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesMin4"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesSome1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesSome1"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataPropertiesSome2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataPropertiesSome2"
+    },
+    {
+      "java": "structural.ClausificationDatatypesTest.testDataUnionOf1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationDatatypesTest.java",
+      "port": "java_parity::structural.ClausificationDatatypesTest.testDataUnionOf1"
+    },
+    {
+      "java": "structural.ClausificationTest.testAsymmetry",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testAsymmetry"
+    },
+    {
+      "java": "structural.ClausificationTest.testBasic",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testBasic"
+    },
+    {
+      "java": "structural.ClausificationTest.testExistsSelf1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testExistsSelf1"
+    },
+    {
+      "java": "structural.ClausificationTest.testExistsSelf2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testExistsSelf2"
+    },
+    {
+      "java": "structural.ClausificationTest.testHasKeys",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "structural::owl_clausification::java_key_test::test_has_keys"
+    },
+    {
+      "java": "structural.ClausificationTest.testNominals1",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testNominals1"
+    },
+    {
+      "java": "structural.ClausificationTest.testNominals2",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testNominals2"
+    },
+    {
+      "java": "structural.ClausificationTest.testNominals3",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testNominals3"
+    },
+    {
+      "java": "structural.ClausificationTest.testNominals4",
+      "source": "java/org/semanticweb/HermiT/structural/ClausificationTest.java",
+      "port": "java_parity::structural.ClausificationTest.testNominals4"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesAll1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesAll1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesAll2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesAll2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesDataComplementOf1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesDataComplementOf1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesDataOneOf1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesDataOneOf1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesDataOneOf2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesDataOneOf2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesExact1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesExact1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesExact2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesExact2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesExact3",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesExact3"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesExact4",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesExact4"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesHasValue1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesHasValue1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesHasValue2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesHasValue2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMax1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMax1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMax2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMax2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMax3",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMax3"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMax4",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMax4"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMin1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMin1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMin2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMin2"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMin3",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMin3"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesMin4",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesMin4"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesSome1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesSome1"
+    },
+    {
+      "java": "structural.NormalizationTest.testDataPropertiesSome2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testDataPropertiesSome2"
+    },
+    {
+      "java": "structural.NormalizationTest.testKeys1",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testKeys1"
+    },
+    {
+      "java": "structural.NormalizationTest.testKeys2",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testKeys2"
+    },
+    {
+      "java": "structural.NormalizationTest.testTopObjectPropertyInSuperPosition",
+      "source": "java/org/semanticweb/HermiT/structural/NormalizationTest.java",
+      "port": "java_parity::structural.NormalizationTest.testTopObjectPropertyInSuperPosition"
+    },
+    {
+      "java": "tableau.BlockingValidatorTest.testInvalidBlockWithAnnotatedEqualities",
+      "source": "java/org/semanticweb/HermiT/tableau/BlockingValidatorTest.java",
+      "port": "reasoner::java_blocking_tests::testInvalidBlockWithAnnotatedEqualities"
+    },
+    {
+      "java": "tableau.BlockingValidatorTest.testOneInvalidBlock",
+      "source": "java/org/semanticweb/HermiT/tableau/BlockingValidatorTest.java",
+      "port": "reasoner::java_blocking_tests::testOneInvalidBlock"
+    },
+    {
+      "java": "tableau.DLClauseEvaluationTest.testEvaluator",
+      "source": "java/org/semanticweb/HermiT/tableau/DLClauseEvaluationTest.java",
+      "port": "reasoner::java_tableau_tests::testEvaluator"
+    },
+    {
+      "java": "tableau.DependencySetTest.testDependencySet1",
+      "source": "java/org/semanticweb/HermiT/tableau/DependencySetTest.java",
+      "port": "java_collections::dependency_set_1"
+    },
+    {
+      "java": "tableau.DependencySetTest.testDependencySet2",
+      "source": "java/org/semanticweb/HermiT/tableau/DependencySetTest.java",
+      "port": "java_collections::dependency_set_2"
+    },
+    {
+      "java": "tableau.DependencySetTest.testDependencySet3",
+      "source": "java/org/semanticweb/HermiT/tableau/DependencySetTest.java",
+      "port": "java_collections::dependency_set_3"
+    },
+    {
+      "java": "tableau.GraphTest.testGraph1",
+      "source": "java/org/semanticweb/HermiT/tableau/GraphTest.java",
+      "port": "reasoner::java_graph_tests::tableau_testGraph1"
+    },
+    {
+      "java": "tableau.GraphTest.testGraphMerging",
+      "source": "java/org/semanticweb/HermiT/tableau/GraphTest.java",
+      "port": "reasoner::java_graph_tests::testGraphMerging"
+    },
+    {
+      "java": "tableau.MergeTest.testMergeAndBacktrack",
+      "source": "java/org/semanticweb/HermiT/tableau/MergeTest.java",
+      "port": "reasoner::java_tableau_tests::testMergeAndBacktrack"
+    },
+    {
+      "java": "tableau.NIRuleTest.testContentingNIs",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testContentingNIs"
+    },
+    {
+      "java": "tableau.NIRuleTest.testDeterministicRuleApplication",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testDeterministicRuleApplication"
+    },
+    {
+      "java": "tableau.NIRuleTest.testDisjunctionDerivation",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testDisjunctionDerivation"
+    },
+    {
+      "java": "tableau.NIRuleTest.testDisjunctionsInTreePart",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testDisjunctionsInTreePart"
+    },
+    {
+      "java": "tableau.NIRuleTest.testNIAndPruning",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testNIAndPruning"
+    },
+    {
+      "java": "tableau.NIRuleTest.testNIDoesNotPrune",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testNIDoesNotPrune"
+    },
+    {
+      "java": "tableau.NIRuleTest.testNIPrunesOneNode",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testNIPrunesOneNode"
+    },
+    {
+      "java": "tableau.NIRuleTest.testNIRuleDeterministic",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testNIRuleDeterministic"
+    },
+    {
+      "java": "tableau.NIRuleTest.testNondeterministicEquality",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testNondeterministicEquality"
+    },
+    {
+      "java": "tableau.NIRuleTest.testRepeatedNIApplications",
+      "source": "java/org/semanticweb/HermiT/tableau/NIRuleTest.java",
+      "port": "reasoner::java_ni_tests::testRepeatedNIApplications"
+    },
+    {
+      "java": "tableau.TupleIndexTest.testIndex1",
+      "source": "java/org/semanticweb/HermiT/tableau/TupleIndexTest.java",
+      "port": "java_collections::tuple_index_1"
+    },
+    {
+      "java": "tableau.TupleIndexTest.testIndex2",
+      "source": "java/org/semanticweb/HermiT/tableau/TupleIndexTest.java",
+      "port": "java_collections::tuple_index_2"
+    },
+    {
+      "java": "tableau.TupleTableFullIndexTest.testIndex",
+      "source": "java/org/semanticweb/HermiT/tableau/TupleTableFullIndexTest.java",
+      "port": "java_collections::tuple_table_full_index"
+    },
+    {
+      "java": "tableau.TupleTableFullIndexTest.testLotsOfData",
+      "source": "java/org/semanticweb/HermiT/tableau/TupleTableFullIndexTest.java",
+      "port": "java_collections::tuple_table_full_index_lots_of_data"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerTest.testSubsumption1",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b0f4c597082e8bbba2d9f4c6ce7a3ea0763ace81440f6a1c9deaea4afbba8aee.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#Student> <file:/c/test.owl#Animal>)" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#Animal> <file:/c/test.owl#Student>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#Student> <file:/c/test.owl#Dog>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(<file:/c/test.owl#Dog> <file:/c/test.owl#Student>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

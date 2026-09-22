@@ -1,0 +1,73 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testDataPropertyHierarchy",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "9dd42d9c8e290b0278dbcd2c1c1b70be98d070c3d4a016b672fb62a23c485b20.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#r1>" ],
+    "expected" : [ "<file:/c/test.owl#r1>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r2>" ],
+    "expected" : [ "<file:/c/test.owl#r2>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>" ],
+    "expected" : [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r4>" ],
+    "expected" : [ "<file:/c/test.owl#r4>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r5>" ],
+    "expected" : [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r6>" ],
+    "expected" : [ "<file:/c/test.owl#r6>" ],
+    "id" : 0,
+    "op" : "getEquivalentDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r2>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSuperDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r3>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSuperDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r4>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r2>" ], [ "<file:/c/test.owl#r3>", "<file:/c/test.owl#r5>" ] ],
+    "id" : 0,
+    "op" : "getSuperDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r5>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r1>" ] ],
+    "id" : 0,
+    "op" : "getSuperDataProperties"
+  }, {
+    "args" : [ "<file:/c/test.owl#r6>", true ],
+    "expected" : [ [ "<file:/c/test.owl#r2>" ] ],
+    "id" : 0,
+    "op" : "getSuperDataProperties"
+  } ]
+}

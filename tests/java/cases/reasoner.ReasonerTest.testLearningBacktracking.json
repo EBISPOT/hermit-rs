@@ -1,0 +1,41 @@
+{
+  "java" : "reasoner.ReasonerTest.testLearningBacktracking",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "79ff045cceef1c6cb0ef256607bab58002a2bf9cf5020ba3973bfddf1c7b619a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : true
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isConsistent"
+  }, {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 1,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "79ff045cceef1c6cb0ef256607bab58002a2bf9cf5020ba3973bfddf1c7b619a.ofn",
+    "op" : "create",
+    "throw_inconsistent" : true
+  }, {
+    "args" : [ ],
+    "expected" : true,
+    "id" : 1,
+    "op" : "isConsistent"
+  } ]
+}

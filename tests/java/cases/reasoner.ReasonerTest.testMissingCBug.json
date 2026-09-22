@@ -1,0 +1,38 @@
+{
+  "java" : "reasoner.ReasonerTest.testMissingCBug",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "4a46a60648cf3c61d873385bae7fc364880abfd1f5a00c13d9437a0aa20ca667.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "class hierarchy" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\n\nOntology(<file:/c/test.owl#>\n\nEquivalentClasses( owl:Thing :C ) Declaration( Class( :C ) )\n\n  SubObjectPropertyOf( :p owl:topObjectProperty ) Declaration( ObjectProperty( :p ) )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  }, {
+    "args" : [ [ "class hierarchy" ] ],
+    "expected" : null,
+    "id" : 0,
+    "op" : "precomputeInferences"
+  }, {
+    "args" : [ true, true, true ],
+    "expected" : "Prefix(:=<file:/c/test.owl#>)\n\nOntology(<file:/c/test.owl#>\n\nEquivalentClasses( owl:Thing :C ) Declaration( Class( :C ) )\n\n  SubObjectPropertyOf( :p owl:topObjectProperty ) Declaration( ObjectProperty( :p ) )\n\n)\n",
+    "id" : 0,
+    "op" : "printHierarchies"
+  } ]
+}

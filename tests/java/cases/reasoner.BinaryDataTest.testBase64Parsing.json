@@ -1,0 +1,29 @@
+{
+  "java" : "reasoner.BinaryDataTest.testBase64Parsing",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#base64Binary",
+      "lexical" : "ZXdyZA=="
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "65777264"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  }, {
+    "argument" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#base64Binary",
+      "lexical" : " Z  X d y Z A ==  "
+    },
+    "expected" : {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "lexical" : "65777264"
+    },
+    "op" : "datatype",
+    "operation" : "parse",
+    "ranges" : [ ]
+  } ]
+}

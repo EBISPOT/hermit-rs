@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanT11",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "8719b42f27811e6ac5c92e82e42d61af93e977a31f68ae66b0e215741673f361.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectComplementOf(<file:/c/test.owl#p>) ObjectSomeValuesFrom(<file:/c/test.owl#r> ObjectAllValuesFrom(<file:/c/test.owl#s-> <file:/c/test.owl#p>)) ObjectSomeValuesFrom(<file:/c/test.owl#s> <file:/c/test.owl#p>) ObjectMaxCardinality(1 <file:/c/test.owl#r>))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

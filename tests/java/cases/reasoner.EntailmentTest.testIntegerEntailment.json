@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.EntailmentTest.testIntegerEntailment",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "a27cb0932a2bb2c8f92779a5157e8c5922ea488953882a07d62778a3b7694e82.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ [ "DataPropertyAssertion(<file:/c/test.owl#dp> <file:/c/test.owl#a> \"0010\"^^<http://www.w3.org/2001/XMLSchema#integer>)" ] ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

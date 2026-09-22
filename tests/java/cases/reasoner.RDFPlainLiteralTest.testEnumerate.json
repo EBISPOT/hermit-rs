@@ -1,0 +1,24 @@
+{
+  "java" : "reasoner.RDFPlainLiteralTest.testEnumerate",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "argument" : null,
+    "expected" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "lexical" : ""
+    } ],
+    "op" : "datatype",
+    "operation" : "enumerate",
+    "ranges" : [ {
+      "datatype" : "http://www.w3.org/2001/XMLSchema#string",
+      "facets" : [ [ "http://www.w3.org/2001/XMLSchema#minLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "0"
+      } ], [ "http://www.w3.org/2001/XMLSchema#maxLength", {
+        "datatype" : "http://www.w3.org/2001/XMLSchema#integer",
+        "lexical" : "0"
+      } ] ],
+      "negated" : false
+    } ]
+  } ]
+}

@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanBug3",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "b18a37d84dffe08a81c4e841050706e3e067204d77ae3b3c9681edf89352ed33.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#r> <file:/c/test.owl#a>) ObjectMinCardinality(2 <file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#e> ObjectComplementOf(ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#d>)))) ObjectMinCardinality(3 <file:/c/test.owl#r> <file:/c/test.owl#c>) ObjectMinCardinality(3 <file:/c/test.owl#r> <file:/c/test.owl#d>) ObjectMaxCardinality(2 <file:/c/test.owl#r> ObjectIntersectionOf(<file:/c/test.owl#c> <file:/c/test.owl#d>)) ObjectMaxCardinality(4 <file:/c/test.owl#r>))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isSatisfiable"
+  } ]
+}

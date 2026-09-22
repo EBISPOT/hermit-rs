@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerTest.testObjectPropertyDomainsTimothyBug",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "407e222dd99cbfb778e5a1e68bd5c943047b18b3622a6ccc8c51fe8cc2ec4402.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<file:/c/test.owl#q>", true ],
+    "expected" : [ [ "<file:/c/test.owl#B>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyDomains"
+  }, {
+    "args" : [ "<file:/c/test.owl#q>", false ],
+    "expected" : [ [ "<file:/c/test.owl#A>" ], [ "<file:/c/test.owl#B>" ], [ "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getObjectPropertyDomains"
+  } ]
+}

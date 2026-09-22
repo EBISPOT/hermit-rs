@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  CARGO_BUILD_JOBS: 1
+  RUST_TEST_THREADS: 1
+  OWLMAKE_CLASSIFY_THREADS: 1
 
 jobs:
   build-and-test:
@@ -33,14 +36,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Check complete Java test inventory
+        run: python3 scripts/java-tests/check_inventory.py
+
       - name: Build (all targets)
-        run: cargo build --all-targets --verbose
+        run: cargo build --release --all-targets --verbose
 
       - name: Test
-        run: cargo test --all-targets --verbose
+        run: cargo test --release --all-targets --verbose
 
       - name: Doc tests
-        run: cargo test --doc --verbose
+        run: cargo test --release --doc --verbose
 
   lint:
     name: Clippy (non-blocking)

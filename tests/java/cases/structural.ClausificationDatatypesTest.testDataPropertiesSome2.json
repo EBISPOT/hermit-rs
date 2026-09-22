@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesSome2",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ "atLeast(1 :dp xsd:string)(X) :- :A(X)" ],
+    "ontology" : "d42c3f563c13b372e655a4e860e6051dfa434e5543412f9a76ae2f09cd971387.ofn",
+    "op" : "clausify"
+  } ]
+}

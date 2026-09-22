@@ -1,0 +1,9 @@
+{
+  "java" : "structural.ClausificationDatatypesTest.testDataPropertiesMax4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "expected" : [ ":A(X) v atLeast(4 :dp xsd:integer)(X) :- owl:Thing(X)" ],
+    "ontology" : "a392e20596590355e4242445360f2dd154cd5d551bde7f2d9fc9c64fe6da5349.ofn",
+    "op" : "clausify"
+  } ]
+}

@@ -1,0 +1,23 @@
+{
+  "java" : "reasoner.OWLLinkTest.testObjectProperties",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "369d01db663a6a93f092706117ea379dcfa0b7214d5cd73a616c410e7fb81444.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "<http://example.com/owl/families/hasParent>" ],
+    "expected" : [ [ "<http://www.w3.org/2002/07/owl#bottomObjectProperty>" ] ],
+    "id" : 0,
+    "op" : "getDisjointObjectProperties"
+  } ]
+}

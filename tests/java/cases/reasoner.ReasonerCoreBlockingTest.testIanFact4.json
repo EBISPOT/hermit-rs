@@ -1,0 +1,28 @@
+{
+  "java" : "reasoner.ReasonerCoreBlockingTest.testIanFact4",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "SIMPLE_CORE",
+    "buffer_changes" : true,
+    "cache" : "NOT_CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "SINGLE",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "8a99f58fc92e2995ba7782242cc497b308057864d0c4c40aa29537402c8ff26f.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "SubClassOf(ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#rx3> <file:/c/test.owl#c1>) ObjectSomeValuesFrom(<file:/c/test.owl#rx4> <file:/c/test.owl#c2>)) ObjectSomeValuesFrom(<file:/c/test.owl#rx3> ObjectIntersectionOf(<file:/c/test.owl#c1> <file:/c/test.owl#c2>)))" ],
+    "expected" : true,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "SubClassOf(ObjectIntersectionOf(ObjectSomeValuesFrom(<file:/c/test.owl#rx3a> <file:/c/test.owl#c1>) ObjectSomeValuesFrom(<file:/c/test.owl#rx4a> <file:/c/test.owl#c2>)) ObjectSomeValuesFrom(<file:/c/test.owl#rx3a> ObjectIntersectionOf(<file:/c/test.owl#c1> <file:/c/test.owl#c2>)))" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  } ]
+}

@@ -1,0 +1,43 @@
+{
+  "java" : "reasoner.ReasonerTest.testFreshEntityEntailment",
+  "java_errors" : [ ],
+  "operations" : [ {
+    "blocking" : "OPTIMAL",
+    "buffer_changes" : true,
+    "cache" : "CACHED",
+    "description_graphs" : 0,
+    "direct_blocking" : "OPTIMAL",
+    "existential" : "CREATION_ORDER",
+    "id" : 0,
+    "ignore_unsupported" : false,
+    "individual_policy" : "BY_NAME",
+    "ontology" : "8f405f8161ac762c29b8789577a912c64cca7708240b3f713cb5629c18de38e3.ofn",
+    "op" : "create",
+    "throw_inconsistent" : false
+  }, {
+    "args" : [ "ClassAssertion(<file:/c/test.owl#C> <file:/c/test.owl#a>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "ObjectPropertyAssertion(<file:/c/test.owl#t> <file:/c/test.owl#a> <file:/c/test.owl#b>)" ],
+    "expected" : false,
+    "id" : 0,
+    "op" : "isEntailed"
+  }, {
+    "args" : [ "<file:/c/test.owl#a>", false ],
+    "expected" : [ [ "<file:/c/test.owl#B>", "<http://www.w3.org/2002/07/owl#Thing>" ] ],
+    "id" : 0,
+    "op" : "getTypes"
+  }, {
+    "args" : [ "<file:/c/test.owl#C>", false ],
+    "expected" : [ ],
+    "id" : 0,
+    "op" : "getInstances"
+  }, {
+    "args" : [ "<file:/c/test.owl#t>" ],
+    "expected" : { },
+    "id" : 0,
+    "op" : "getObjectPropertyInstances"
+  } ]
+}

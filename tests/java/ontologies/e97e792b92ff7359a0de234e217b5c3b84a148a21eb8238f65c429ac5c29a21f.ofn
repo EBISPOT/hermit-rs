@@ -1,0 +1,12 @@
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Ontology(
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#A>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#B>))
+Declaration(Class(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#EquivA>))
+DisjointClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#A> <http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#B>)
+EquivalentClasses(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#EquivA> ObjectComplementOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#B>))
+EquivalentClasses(<http://www.w3.org/2002/07/owl#Nothing> ObjectIntersectionOf(ObjectComplementOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#A>) ObjectComplementOf(<http://www.informatik.uni-ulm.de/ki/Liebig/reasoner-eval/23.owl#B>)))
+)

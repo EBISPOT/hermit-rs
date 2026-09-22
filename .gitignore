@@ -1,2 +1,3 @@
 /target
 /tests/owl_wg/results.txt
+__pycache__/

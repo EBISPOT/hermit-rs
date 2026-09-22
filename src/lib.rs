@@ -50,3 +50,6 @@ pub(crate) mod time {
     #[cfg(not(target_arch = "wasm32"))]
     pub use std::time::{Instant, SystemTime, UNIX_EPOCH};
 }
+
+#[cfg(test)]
+mod java_test_support;
