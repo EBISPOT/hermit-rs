@@ -57,6 +57,8 @@ fn leaf_build_max_workers() -> usize {
 #[cfg(test)]
 thread_local! {
     static TEST_SATURATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_PROPERTY_MARKERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static TEST_PROPERTY_DELTA_CLAUSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// One iteration of HermiT's `doIteration`: returns whether work was done.
@@ -2879,7 +2881,10 @@ impl<'r, 'd> ConceptSubsumptionOracle<'r, 'd> {
         build: &Build<crate::structural::A>,
         acs: std::collections::HashSet<crate::model::AtomicConcept>,
     ) -> std::collections::HashSet<horned_owl::model::Class<crate::structural::A>> {
-        acs.into_iter().map(|c| self.class_of(build, c)).collect()
+        acs.into_iter()
+            .filter(|c| !c.iri().starts_with("internal:"))
+            .map(|c| self.class_of(build, c))
+            .collect()
     }
 }
 
@@ -2891,7 +2896,7 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
         concept: &horned_owl::model::Class<crate::structural::A>,
     ) -> Option<crate::quasi_order::ModelReadOff<horned_owl::model::Class<crate::structural::A>>> {
         let build = Build::new_arc();
-        let (known_concepts, label_concepts) = self.reasoner.concept_model_read_off(
+        let (known_concepts, label_concepts) = self.reasoner.classification_model_read_off(
             &mut self.manager,
             &crate::model::AtomicConcept::create(concept.0.to_string()),
         )?;
@@ -3064,7 +3069,7 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
                         if i >= queries.len() {
                             break;
                         }
-                        let result = worker.concept_model_read_off(&mut manager, &queries[i]);
+                        let result = worker.classification_model_read_off(&mut manager, &queries[i]);
                         sink.lock().unwrap().push((i, result));
                     }
                 });
@@ -3293,7 +3298,7 @@ impl<'r> ConceptStreamingPool<'r> {
                         // Work channel closed (pool dropping): exit.
                         Err(_) => break,
                     };
-                    let result = worker.concept_model_read_off(&mut manager, &concept);
+                    let result = worker.classification_model_read_off(&mut manager, &concept);
                     // Drop this worker's tableau now if that build blew it up, so an
                     // idle worker does not pin a multi-GB allocation while the memory
                     // governor throttles dispatch (the throttle relies on quiescent
@@ -3371,13 +3376,21 @@ impl<'r> crate::quasi_order::StreamingModelPool<horned_owl::model::Class<crate::
         let model = raw.map(|(known_concepts, label_concepts)| {
             let mut query_known: std::collections::HashSet<
                 horned_owl::model::Class<crate::structural::A>,
-            > = known_concepts.into_iter().map(|c| self.class_of(&build, c)).collect();
+            > = known_concepts.into_iter()
+                .filter(|c| !c.iri().starts_with("internal:"))
+                .map(|c| self.class_of(&build, c))
+                .collect();
             query_known.insert(self.thing.clone());
             let node_labels: Vec<
                 std::collections::HashSet<horned_owl::model::Class<crate::structural::A>>,
             > = label_concepts
                 .into_iter()
-                .map(|acs| acs.into_iter().map(|c| self.class_of(&build, c)).collect())
+                .map(|acs| {
+                    acs.into_iter()
+                        .filter(|c| !c.iri().starts_with("internal:"))
+                        .map(|c| self.class_of(&build, c))
+                        .collect()
+                })
                 .collect();
             crate::quasi_order::ModelReadOff {
                 query_known,
@@ -4272,6 +4285,15 @@ fn read_off_node_concepts(
     node: NodeId,
     empty_set: &crate::tableau::dependency_set::PermanentDependencySet,
 ) -> Vec<crate::instance_manager::ReadOffConcept> {
+    read_off_node_concepts_matching(tableau, node, empty_set, |_| true)
+}
+
+fn read_off_node_concepts_matching(
+    tableau: &Tableau,
+    node: NodeId,
+    empty_set: &crate::tableau::dependency_set::PermanentDependencySet,
+    include: impl Fn(crate::model::AtomicConcept) -> bool,
+) -> Vec<crate::instance_manager::ReadOffConcept> {
     use crate::instance_manager::ReadOffConcept;
     use crate::tableau::dependency_set::DependencySetOps;
     use crate::tableau::extension_table::View;
@@ -4282,14 +4304,21 @@ fn read_off_node_concepts(
     );
     let mut labels = Vec::new();
     for &tuple_index in &retrieval.tuple_indices {
-        if let TableauObject::Concept(Concept::AtomicConcept(c)) =
-            tableau.binary_extension_table.get_tuple_object(tuple_index, 0)
+        if let TableauObject::Concept(Concept::AtomicConcept(c)) = tableau
+            .binary_extension_table
+            .get_tuple_object(tuple_index, 0)
         {
+            if !include(*c) {
+                continue;
+            }
             let known = tableau
                 .binary_extension_table
                 .get_dependency_set(tuple_index, empty_set)
                 .is_empty();
-            labels.push(ReadOffConcept { concept_iri: c.iri().to_string(), known });
+            labels.push(ReadOffConcept {
+                concept_iri: c.iri().to_string(),
+                known,
+            });
         }
     }
     labels
@@ -4361,8 +4390,8 @@ pub type ObjectPropertyInstances = std::collections::HashSet<(
 
 /// A reusable read-off of every object property's known and possible instances.
 ///
-/// Construction saturates one model, including read-off axioms for all complex
-/// roles. Queries only test that role's possible pairs and cache the decisions;
+/// Construction shares a consistency model and bounded complex-role read-off
+/// batches across all properties. Queries only test possible pairs and cache decisions;
 /// inverse queries reuse the same decisions with the endpoints reversed. The
 /// index owns an immutable ontology snapshot. Rebuild it after ontology changes,
 /// or use [`IncrementalReasoner`], which invalidates its index on flush.
@@ -4374,6 +4403,148 @@ pub struct ObjectPropertyInstanceIndex {
     consistent: bool,
 }
 
+/// An over-approximation of atomic object-role tuples the permanent tableau
+/// program can generate. Equality copies existing labels; existential expansion
+/// uses AtLeastConcept roles. Concept/data guards are treated as satisfiable,
+/// and every disjunctive head is included. Thus a missing role cannot become a
+/// transition label even if different branching or blocking choices are made.
+/// This restriction is ONLY for fresh read-off automata, never original axioms.
+fn possible_object_role_labels(
+    dl: &DLOntology,
+) -> std::collections::HashSet<crate::structural::ObjectPropExpr> {
+    use crate::model::AtomicRole;
+    use horned_owl::model::ObjectPropertyExpression as OPE;
+    use std::collections::HashSet;
+    fn produced(predicate: &DLPredicate) -> Option<AtomicRole> {
+        match predicate {
+            DLPredicate::AtomicRole(role) => Some(*role),
+            DLPredicate::AtLeastConcept(c) if c.number() > 0 => Some(match c.on_role() {
+                Role::AtomicRole(r) => *r,
+                Role::InverseRole(r) => *r.get_inverse_of(),
+            }),
+            _ => None,
+        }
+    }
+    let mut live: HashSet<_> = dl
+        .get_positive_facts()
+        .iter()
+        .filter_map(|atom| produced(atom.get_dl_predicate()))
+        .collect();
+    loop {
+        let before = live.len();
+        for clause in dl.get_dl_clauses() {
+            if (0..clause.get_body_length()).all(|i| {
+                match clause.get_body_atom(i).get_dl_predicate() {
+                    DLPredicate::AtomicRole(r) if dl.get_all_atomic_object_roles().contains(r) => {
+                        live.contains(r)
+                    }
+                    _ => true,
+                }
+            }) {
+                for i in 0..clause.get_head_length() {
+                    if let Some(role) = produced(clause.get_head_atom(i).get_dl_predicate()) {
+                        live.insert(role);
+                    }
+                }
+            }
+        }
+        if live.len() == before {
+            break;
+        }
+    }
+    let build = Build::new_arc();
+    live.into_iter()
+        .flat_map(|r| {
+            let p = build.object_property(r.iri());
+            [
+                OPE::ObjectProperty(p.clone()),
+                OPE::InverseObjectProperty(p),
+            ]
+        })
+        .collect()
+}
+
+/// A named subject can start a complex-role path only on a live first label of
+/// that role's automaton. Read both directions, all aliases, and edges touching
+/// anonymous nodes. Missing paths in this model refute entailment; uncertainty
+/// does not license pruning an edge which is present.
+fn complex_role_marker_sources(
+    tableau: &Tableau,
+    nodes: &HashMap<crate::model::Individual, NodeId>,
+    manager: &crate::structural::ObjectPropertyInclusionManager,
+    complex: &[String],
+    individuals: &[String],
+) -> HashMap<String, std::collections::HashSet<String>> {
+    use crate::structural::{inverse_property, ObjectPropExpr};
+    use crate::tableau::extension_table::View;
+    use horned_owl::model::ObjectPropertyExpression as OPE;
+    use std::collections::HashSet;
+
+    let names = names_for_canonical_nodes(tableau, nodes);
+    let build = Build::new_arc();
+    let mut live = HashSet::new();
+    let mut subjects: HashMap<ObjectPropExpr, HashSet<String>> = HashMap::new();
+    let retrieval = tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
+    for &i in &retrieval.tuple_indices {
+        let TableauObject::DLPredicate(DLPredicate::AtomicRole(role)) =
+            tableau.ternary_extension_table.get_tuple_object(i, 0)
+        else {
+            continue;
+        };
+        let source = tableau
+            .ternary_extension_table
+            .get_tuple_object(i, 1)
+            .as_node()
+            .unwrap();
+        let target = tableau
+            .ternary_extension_table
+            .get_tuple_object(i, 2)
+            .as_node()
+            .unwrap();
+        if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
+            continue;
+        }
+        let forward = OPE::ObjectProperty(build.object_property(role.iri()));
+        let backward = inverse_property(&forward);
+        live.insert(forward.clone());
+        live.insert(backward.clone());
+        for (label, node) in [(forward, source), (backward, target)] {
+            if let Some(aliases) = names.get(&node) {
+                subjects
+                    .entry(label)
+                    .or_default()
+                    .extend(aliases.iter().map(|(name, _)| name.clone()));
+            }
+        }
+    }
+    let mut result: HashMap<String, HashSet<String>> = HashMap::new();
+    // Named roots normally cannot be blocked. Keep the conservative all-source
+    // fallback for configurations which can block one: its missing outgoing
+    // tuples need not describe its unfolded model.
+    let blocked_named = names.keys().any(|node| tableau.node(*node).is_blocked());
+    for role in complex {
+        let ope = OPE::ObjectProperty(build.object_property(role.as_str()));
+        let (nullable, labels) = manager
+            .automaton(&ope)
+            .map(|a| a.live_first_labels(&live))
+            .unwrap_or((true, HashSet::new()));
+        let sources: HashSet<_> = if nullable || blocked_named {
+            individuals.iter().cloned().collect()
+        } else {
+            labels
+                .iter()
+                .filter_map(|label| subjects.get(label))
+                .flatten()
+                .cloned()
+                .collect()
+        };
+        for source in sources {
+            result.entry(source).or_default().insert(role.clone());
+        }
+    }
+    result
+}
+
 impl ObjectPropertyInstanceIndex {
     pub fn new(ontology: &SetOntology<crate::structural::A>) -> Result<Self, String> {
         Self::with_configuration(ontology, &crate::configuration::Configuration::default())
@@ -4383,12 +4554,20 @@ impl ObjectPropertyInstanceIndex {
         ontology: &SetOntology<crate::structural::A>,
         configuration: &crate::configuration::Configuration,
     ) -> Result<Self, String> {
+        Self::with_configuration_and_batch_limit(ontology, configuration, 10_000)
+    }
+
+    fn with_configuration_and_batch_limit(
+        ontology: &SetOntology<crate::structural::A>,
+        configuration: &crate::configuration::Configuration,
+        additional_axiom_limit: usize,
+    ) -> Result<Self, String> {
         use crate::model::{AtomicConcept, Role};
         use crate::tableau::dependency_set::DependencySetOps;
         use crate::tableau::extension_table::View;
         use horned_owl::model::{ObjectPropertyExpression as OPE, SubClassOf};
 
-        let dl = clausify_ontology_with_configuration(ontology, configuration)?;
+        let (dl, mut role_manager) = clausify_ontology_with_role_automata(ontology, configuration)?;
         let individuals: Vec<_> = dl
             .get_all_individuals()
             .iter()
@@ -4413,84 +4592,142 @@ impl ObjectPropertyInstanceIndex {
             .map(|r| r.iri().to_owned())
             .collect();
 
-        // Each source marker is shared across roles. Fresh target markers map
-        // directly to (role, source), so all complex results need one table scan.
-        let mut markers = HashMap::new();
-        let dl = if !complex.is_empty() && !individuals.is_empty() {
+        let reasoner = Reasoner::with_configuration(&dl, configuration.clone());
+        let mut permanent_manager = reasoner.new_manager();
+        let mut base_model = reasoner
+            .saturate_for_instances_with_manager(&mut permanent_manager)
+            .map_err(|e| format!("{e:?}"))?;
+        let base_consistent = base_model.is_some();
+        // Keep the original constraints intact. Only fresh marker automata can
+        // discard labels that no clause/fact/existential can ever generate.
+        // Description graphs have their own edge generators outside DL clauses.
+        if dl.get_all_description_graphs().is_empty() {
+            role_manager.restrict_for_property_read_off(&possible_object_role_labels(&dl));
+        }
+        let mut sources: Vec<_> = base_model
+            .as_ref()
+            .map(|(tableau, nodes)| {
+                complex_role_marker_sources(tableau, nodes, &role_manager, &complex, &individuals)
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        sources.sort_by(|(a, _), (b, _)| a.cmp(b));
+        // Java's 10,000-added-axiom budget, aligned to individual boundaries.
+        // A preliminary model allows us to omit provably irrelevant pairs.
+        let mut batches = Vec::new();
+        let mut start = 0;
+        while start < sources.len() {
+            let mut end = start;
+            let mut count = 0;
+            while end < sources.len() && count < additional_axiom_limit {
+                count += 2 * sources[end].1.len();
+                end += 1;
+            }
+            batches.push((start, end));
+            start = end;
+        }
+        if batches.is_empty() {
+            batches.push((0, 0));
+        } else {
+            // Do not retain two tableaux while compiling the marker delta.
+            drop(base_model.take());
+        }
+        let mut consistent = true;
+        for (batch, (start, end)) in batches.into_iter().enumerate() {
             let build = Build::new_arc();
-            let mut augmented = ontology.clone();
-            for source in &individuals {
-                let a = build.class(fresh_witness_iri("property-source"));
-                augmented.insert(ClassAssertion {
-                    ce: CE::Class(a.clone()),
-                    i: OwlIndividual::Named(build.named_individual(source.as_str())),
-                });
-                for role in &complex {
-                    let target = build.class(fresh_witness_iri("property-target"));
-                    markers.insert(
-                        AtomicConcept::create(target.0.to_string()),
-                        (role.clone(), source.clone()),
-                    );
-                    augmented.insert(SubClassOf {
-                        sub: CE::Class(a.clone()),
-                        sup: CE::ObjectAllValuesFrom {
-                            ope: OPE::ObjectProperty(build.object_property(role.as_str())),
-                            bce: Box::new(CE::Class(target)),
-                        },
+            let mut additional = SetOntology::new();
+            let mut markers = HashMap::new();
+            if !complex.is_empty() {
+                for (source, roles) in &sources[start..end] {
+                    let a = build.class(fresh_witness_iri("property-source"));
+                    additional.insert(ClassAssertion {
+                        ce: CE::Class(a.clone()),
+                        i: OwlIndividual::Named(build.named_individual(source.as_str())),
                     });
+                    for role in roles {
+                        #[cfg(test)]
+                        TEST_PROPERTY_MARKERS.with(|count| count.set(count.get() + 1));
+                        let target = build.class(fresh_witness_iri("property-target"));
+                        markers.insert(
+                            AtomicConcept::create(target.0.to_string()),
+                            (role.clone(), source.clone()),
+                        );
+                        additional.insert(SubClassOf {
+                            sub: CE::Class(a.clone()),
+                            sup: CE::ObjectAllValuesFrom {
+                                ope: OPE::ObjectProperty(build.object_property(role.as_str())),
+                                bce: Box::new(CE::Class(target)),
+                            },
+                        });
+                    }
                 }
             }
-            drop(dl);
-            clausify_ontology_with_configuration(&augmented, configuration)?
-        } else {
-            dl
-        };
-        let reasoner = Reasoner::with_configuration(&dl, configuration.clone());
-        let model = reasoner
-            .saturate_for_instances_checked()
-            .map_err(|e| format!("{e:?}"))?;
-        let consistent = model.is_some();
-        if !consistent && configuration.throw_inconsistent_ontology_exception {
-            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
-        }
-        if let Some((tableau, nodes_for_individuals)) = model {
+            let model = if sources.is_empty() {
+                base_model.take()
+            } else {
+                let delta = create_delta_dl_ontology_with_manager(
+                    &additional,
+                    &dl,
+                    Some(&role_manager),
+                    configuration,
+                )?;
+                #[cfg(test)]
+                TEST_PROPERTY_DELTA_CLAUSES
+                    .with(|count| count.set(count.get() + delta.get_dl_clauses().len()));
+                reasoner
+                    .saturate_with_delta(&delta, &mut permanent_manager)
+                    .map_err(|e| format!("{e:?}"))?
+            };
+            let Some((tableau, nodes_for_individuals)) = model else {
+                if base_consistent {
+                    return Err("Complex-role read-off contradicted a consistent ontology".into());
+                }
+                consistent = false;
+                if configuration.throw_inconsistent_ontology_exception {
+                    return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
+                }
+                break;
+            };
             let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
             let empty = tableau.dependency_set_factory.empty_set();
-            let retrieval =
-                tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
-            for &i in &retrieval.tuple_indices {
-                let TableauObject::DLPredicate(DLPredicate::AtomicRole(role)) =
-                    tableau.ternary_extension_table.get_tuple_object(i, 0)
-                else {
-                    continue;
-                };
-                let Some(role_pairs) = pairs.get_mut(role.iri()) else {
-                    continue;
-                };
-                let source = tableau
-                    .ternary_extension_table
-                    .get_tuple_object(i, 1)
-                    .as_node()
-                    .unwrap();
-                let target = tableau
-                    .ternary_extension_table
-                    .get_tuple_object(i, 2)
-                    .as_node()
-                    .unwrap();
-                if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
-                    continue;
-                }
-                let (Some(sources), Some(targets)) = (names.get(&source), names.get(&target))
-                else {
-                    continue;
-                };
-                let known = tableau
-                    .ternary_extension_table
-                    .get_dependency_set(i, &empty)
-                    .is_empty();
-                for (s, s_known) in sources {
-                    for (t, t_known) in targets {
-                        role_pairs.insert(s, t, known && *s_known && *t_known);
+            if batch == 0 {
+                let retrieval =
+                    tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
+                for &i in &retrieval.tuple_indices {
+                    let TableauObject::DLPredicate(DLPredicate::AtomicRole(role)) =
+                        tableau.ternary_extension_table.get_tuple_object(i, 0)
+                    else {
+                        continue;
+                    };
+                    let Some(role_pairs) = pairs.get_mut(role.iri()) else {
+                        continue;
+                    };
+                    let source = tableau
+                        .ternary_extension_table
+                        .get_tuple_object(i, 1)
+                        .as_node()
+                        .unwrap();
+                    let target = tableau
+                        .ternary_extension_table
+                        .get_tuple_object(i, 2)
+                        .as_node()
+                        .unwrap();
+                    if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
+                        continue;
+                    }
+                    let (Some(sources), Some(targets)) = (names.get(&source), names.get(&target))
+                    else {
+                        continue;
+                    };
+                    let known = tableau
+                        .ternary_extension_table
+                        .get_dependency_set(i, &empty)
+                        .is_empty();
+                    for (s, s_known) in sources {
+                        for (t, t_known) in targets {
+                            role_pairs.insert(s, t, known && *s_known && *t_known);
+                        }
                     }
                 }
             }
@@ -4558,7 +4795,8 @@ impl ObjectPropertyInstanceIndex {
         ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
     ) -> Result<ObjectPropertyInstances, String> {
         let iri = crate::structural::named_property(&ope).0.as_ref();
-        if self.configuration.fresh_entity_policy == crate::configuration::FreshEntityPolicy::Disallow
+        if self.configuration.fresh_entity_policy
+            == crate::configuration::FreshEntityPolicy::Disallow
             && !self.pairs.contains_key(iri)
             && !crate::prefixes::Prefixes::is_internal_iri(iri)
             && iri != "http://www.w3.org/2002/07/owl#topObjectProperty"
@@ -4736,7 +4974,7 @@ mod object_property_read_off_tests {
     }
 
     #[test]
-    fn property_sweep_uses_one_saturation_including_all_complex_roles() {
+    fn property_sweep_uses_bounded_saturations_including_all_complex_roles() {
         for complex in [false, true] {
             let mut body = String::new();
             for i in 0..331 {
@@ -4752,12 +4990,14 @@ mod object_property_read_off_tests {
             }
             let onto = load(&body);
             TEST_SATURATIONS.with(|c| c.set(0));
+            TEST_PROPERTY_MARKERS.with(|c| c.set(0));
             let mut index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
             let properties = index.object_properties();
             assert_eq!(properties.len(), 111);
             for property in properties {
                 let expected = if complex
-                    && ["http://ex/r0", "http://ex/r1", "http://ex/r3"].contains(&property.0.as_ref())
+                    && ["http://ex/r0", "http://ex/r1", "http://ex/r3"]
+                        .contains(&property.0.as_ref())
                 {
                     3
                 } else {
@@ -4773,9 +5013,90 @@ mod object_property_read_off_tests {
                     );
                 }
             }
-            TEST_SATURATIONS
-                .with(|c| assert_eq!(c.get(), 1, "one model for 111 roles; complex={complex}"));
+            TEST_SATURATIONS.with(|c| assert_eq!(c.get(), if complex { 2 } else { 1 }));
+            TEST_PROPERTY_MARKERS.with(|c| assert_eq!(c.get(), if complex { 6 } else { 0 }));
         }
+    }
+
+    #[test]
+    fn property_batches_include_the_last_individual() {
+        // The Java bug reproduces with 73 roles and its 10,000-axiom limit.
+        // After pruning dormant roles, scale the budget to retain the same
+        // 69-individual first batch and one-individual final batch. All 70 sources entail
+        // every target through the transitive ring, whichever name comes last.
+        let mut body = String::new();
+        for r in 0..73 {
+            body.push_str(&format!("TransitiveObjectProperty(:r{r})"));
+        }
+        for i in 0..70 {
+            body.push_str(&format!(
+                "ObjectPropertyAssertion(:r0 :i{i} :i{})",
+                (i + 1) % 70
+            ));
+        }
+        let onto = load(&body);
+        TEST_SATURATIONS.with(|c| c.set(0));
+        TEST_PROPERTY_MARKERS.with(|c| c.set(0));
+        let mut index = ObjectPropertyInstanceIndex::with_configuration_and_batch_limit(
+            &onto,
+            &crate::configuration::Configuration::default(),
+            138,
+        )
+        .unwrap();
+        let r = Build::new_arc().object_property("http://ex/r0");
+        for ope in [
+            OPE::ObjectProperty(r.clone()),
+            OPE::InverseObjectProperty(r),
+        ] {
+            assert_eq!(index.object_property_instances(ope).unwrap().len(), 70 * 70);
+        }
+        TEST_PROPERTY_MARKERS.with(|c| assert_eq!(c.get(), 70));
+        TEST_SATURATIONS.with(|c| assert_eq!(c.get(), 3));
+    }
+
+    #[test]
+    fn dormant_chains_and_isolated_individuals_do_not_expand_the_read_off() {
+        let mut body =
+            "ObjectPropertyAssertion(:p :a :b) ObjectPropertyAssertion(:q0 :b :c)".to_owned();
+        for i in 0..200 {
+            body.push_str(&format!("SubObjectPropertyOf(ObjectPropertyChain(:p :q{i}) :r) Declaration(NamedIndividual(:unused{i}))"));
+        }
+        let onto = load(&body);
+        TEST_PROPERTY_MARKERS.with(|c| c.set(0));
+        TEST_PROPERTY_DELTA_CLAUSES.with(|c| c.set(0));
+        let mut index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
+        let b = Build::new_arc();
+        assert_eq!(
+            index
+                .object_property_instances(OPE::ObjectProperty(b.object_property("http://ex/r")))
+                .unwrap(),
+            std::collections::HashSet::from([(
+                b.named_individual("http://ex/a"),
+                b.named_individual("http://ex/c")
+            )])
+        );
+        TEST_PROPERTY_MARKERS.with(|c| assert_eq!(c.get(), 1));
+        TEST_PROPERTY_DELTA_CLAUSES.with(|c| assert!(c.get() < 50, "{} marker clauses", c.get()));
+    }
+
+    #[test]
+    fn classification_projects_auxiliary_concepts_before_collecting_labels() {
+        let onto = load("TransitiveObjectProperty(:r) SubClassOf(:A ObjectAllValuesFrom(:r :B))");
+        let dl = clausify_ontology(&onto).unwrap();
+        let reasoner = Reasoner::new(&dl);
+        let mut manager = reasoner.new_manager();
+        let a = crate::model::AtomicConcept::create("http://ex/A");
+        let (raw, _) = reasoner.concept_model_read_off(&mut manager, &a).unwrap();
+        assert!(raw.iter().any(|c| c.iri().starts_with("internal:")));
+        let (known, labels) = reasoner
+            .classification_model_read_off(&mut manager, &a)
+            .unwrap();
+        assert!(known.contains(&a));
+        assert!(known
+            .iter()
+            .chain(labels.iter().flatten())
+            .all(|c| !c.iri().starts_with("internal:")));
+        assert!(!known.contains(&crate::model::AtomicConcept::create("http://ex/B")));
     }
 
     #[test]
@@ -4902,7 +5223,10 @@ mod object_property_read_off_tests {
                 OPE::ObjectProperty(role.clone()),
                 OPE::InverseObjectProperty(role),
             ] {
-                assert_eq!(reasoner.object_property_instances(ope).unwrap().len(), expected);
+                assert_eq!(
+                    reasoner.object_property_instances(ope).unwrap().len(),
+                    expected
+                );
             }
         }
         reasoner
@@ -6990,9 +7314,22 @@ fn clausify_ontology_with_configuration(
     ontology: &SetOntology<crate::structural::A>,
     configuration: &crate::configuration::Configuration,
 ) -> Result<DLOntology, String> {
+    clausify_ontology_with_role_automata(ontology, configuration).map(|(dl, _)| dl)
+}
+
+fn clausify_ontology_with_role_automata(
+    ontology: &SetOntology<crate::structural::A>,
+    configuration: &crate::configuration::Configuration,
+) -> Result<
+    (
+        DLOntology,
+        crate::structural::ObjectPropertyInclusionManager,
+    ),
+    String,
+> {
     use crate::structural::{
-        BuiltInPropertyManager, Configuration, ObjectPropertyInclusionManager, OWLAxioms,
-        OWLAxiomsExpressivity, OWLClausification, OWLNormalization,
+        BuiltInPropertyManager, Configuration, OWLAxioms, OWLAxiomsExpressivity, OWLClausification,
+        OWLNormalization, ObjectPropertyInclusionManager,
     };
     let mut normalization = OWLNormalization::new(OWLAxioms::new(), 0);
     normalization.process_ontology(ontology)?;
@@ -7011,13 +7348,15 @@ fn clausify_ontology_with_configuration(
     let _ = next_index;
     manager.rewrite_axioms(&mut axioms, 0)?;
     let expressivity = OWLAxiomsExpressivity::new(&axioms);
-    OWLClausification::new(Configuration {
+    let dl = OWLClausification::new(Configuration {
         ignore_unsupported_datatypes: configuration.ignore_unsupported_datatypes,
-    }).clausify(
+    })
+    .clausify(
         "http://hermit-rs/anonymous-ontology",
         &axioms,
         &expressivity,
-    )
+    )?;
+    Ok((dl, manager))
 }
 
 /// Port of `Reasoner.createDeltaDLOntology` (Reasoner.java:2058-2083), the
@@ -7040,9 +7379,23 @@ fn create_delta_dl_ontology(
     additional: &horned_owl::ontology::set::SetOntology<crate::structural::A>,
     original: &DLOntology,
 ) -> Result<DLOntology, String> {
+    create_delta_dl_ontology_with_manager(
+        additional,
+        original,
+        None,
+        &crate::configuration::Configuration::default(),
+    )
+}
+
+fn create_delta_dl_ontology_with_manager(
+    additional: &SetOntology<crate::structural::A>,
+    original: &DLOntology,
+    role_manager: Option<&crate::structural::ObjectPropertyInclusionManager>,
+    configuration: &crate::configuration::Configuration,
+) -> Result<DLOntology, String> {
     use crate::structural::{
-        BuiltInPropertyManager, Configuration, ObjectPropertyInclusionManager, OWLAxioms,
-        OWLAxiomsExpressivity, OWLClausification, OWLNormalization,
+        BuiltInPropertyManager, Configuration, OWLAxioms, OWLAxiomsExpressivity, OWLClausification,
+        OWLNormalization, ObjectPropertyInclusionManager,
     };
     // Reasoner.java:2061-2062 / isUnsupportedExtensionAxiom (Reasoner.java:1932):
     // the additional (delta) ontology cannot carry role inclusions, transitivity,
@@ -7088,7 +7441,13 @@ fn create_delta_dl_ontology(
     );
     // Reasoner.java:2072-2074 runs the object-property inclusion manager
     // unconditionally on the delta.
-    let manager = ObjectPropertyInclusionManager::new(&mut axioms)?;
+    let local_manager;
+    let manager = if let Some(manager) = role_manager {
+        manager
+    } else {
+        local_manager = ObjectPropertyInclusionManager::new(&mut axioms)?;
+        &local_manager
+    };
     // Thread the replacement index (NOT 0) so the additional ∀R.C rewriting's
     // `internal:all#` concepts are disjoint from the original's.
     let current_replacement_index =
@@ -7101,11 +7460,10 @@ fn create_delta_dl_ontology(
     expressivity.has_inverse_roles |= original.has_inverse_roles();
     expressivity.has_nominals |= original.has_nominals();
     expressivity.has_datatypes |= original.has_datatypes();
-    OWLClausification::new(Configuration::default()).clausify(
-        "uri:urn:internal-kb",
-        &axioms,
-        &expressivity,
-    )
+    OWLClausification::new(Configuration {
+        ignore_unsupported_datatypes: configuration.ignore_unsupported_datatypes,
+    })
+    .clausify("uri:urn:internal-kb", &axioms, &expressivity)
 }
 
 pub struct Reasoner<'a> {
@@ -7430,9 +7788,18 @@ impl<'a> Reasoner<'a> {
         Option<(Tableau, HashMap<crate::model::Individual, NodeId>)>,
         crate::tableau::interrupt_flag::InterruptError,
     > {
+        self.saturate_for_instances_with_manager(&mut self.new_manager())
+    }
+
+    fn saturate_for_instances_with_manager(
+        &self,
+        manager: &mut HyperresolutionManager,
+    ) -> Result<
+        Option<(Tableau, HashMap<crate::model::Individual, NodeId>)>,
+        crate::tableau::interrupt_flag::InterruptError,
+    > {
         let mut tableau = Tableau::with_configuration(&self.configuration);
-        let mut manager = self.new_manager();
-        tableau.update_extension_flags(&manager);
+        tableau.update_extension_flags(manager);
         self.configure_tableau_datatypes(&mut tableau);
         tableau.set_functional_roles_from_clauses(self.dl_ontology.get_dl_clauses());
         self.configure_tableau_description_graphs(&mut tableau);
@@ -7443,7 +7810,7 @@ impl<'a> Reasoner<'a> {
             tableau.monitor_event(|m| m.is_satisfiable_finished(false));
             return Ok(None);
         }
-        let consistent = run_calculus(&mut tableau, &mut manager)?;
+        let consistent = run_calculus(&mut tableau, manager)?;
         tableau.monitor_event(|m| m.is_satisfiable_finished(consistent));
         if !consistent {
             return Ok(None);
@@ -7672,6 +8039,29 @@ impl<'a> Reasoner<'a> {
         std::collections::HashSet<crate::model::AtomicConcept>,
         Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
     )> {
+        self.concept_model_read_off_filtered(manager, element, false)
+    }
+
+    fn classification_model_read_off(
+        &self,
+        manager: &mut HyperresolutionManager,
+        element: &crate::model::AtomicConcept,
+    ) -> Option<(
+        std::collections::HashSet<crate::model::AtomicConcept>,
+        Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
+    )> {
+        self.concept_model_read_off_filtered(manager, element, true)
+    }
+
+    fn concept_model_read_off_filtered(
+        &self,
+        manager: &mut HyperresolutionManager,
+        element: &crate::model::AtomicConcept,
+        classification_only: bool,
+    ) -> Option<(
+        std::collections::HashSet<crate::model::AtomicConcept>,
+        Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
+    )> {
         use crate::tableau::dependency_set::DependencySetOps;
         let mut guard = self.checkout_test_tableau(manager)?;
         let tableau = &mut *guard;
@@ -7706,7 +8096,11 @@ impl<'a> Reasoner<'a> {
         let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
             std::collections::HashSet::new();
         if root_deterministic {
-            for label in read_off_node_concepts(&*tableau, canonical_root, &empty_set) {
+            for label in
+                read_off_node_concepts_matching(&*tableau, canonical_root, &empty_set, |c| {
+                    !classification_only || !c.iri().starts_with("internal:")
+                })
+            {
                 if label.known {
                     root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
                 }
@@ -7719,8 +8113,12 @@ impl<'a> Reasoner<'a> {
         let mut node = tableau.get_first_tableau_node();
         while let Some(id) = node {
             if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
-                let label: std::collections::HashSet<crate::model::AtomicConcept> =
-                    tableau.atomic_concepts_on_node(id).into_iter().collect();
+                let label: std::collections::HashSet<crate::model::AtomicConcept> = tableau
+                    .atomic_concepts_on_node_matching(id, |c| {
+                        !classification_only || !c.iri().starts_with("internal:")
+                    })
+                    .into_iter()
+                    .collect();
                 if !label.is_empty() {
                     node_labels.push(label);
                 }
@@ -8177,11 +8575,26 @@ impl<'a> Reasoner<'a> {
         &self,
         additional: &SetOntology<crate::structural::A>,
     ) -> Result<bool, String> {
-        use crate::tableau::dl_clause_evaluator::CoreVariablePolicy;
-        // createDeltaDLOntology: clausify the added axioms against the original KB
-        // (index-threaded so fresh definition concepts do not collide).
         let delta = create_delta_dl_ontology(additional, self.dl_ontology)?;
-        let permanent_manager = self.new_manager();
+        let mut permanent_manager = self.new_manager();
+        Ok(self
+            .saturate_with_delta(&delta, &mut permanent_manager)
+            .ok()
+            .flatten()
+            .is_some())
+    }
+
+    /// Java's getTableau(additionalAxioms): compile only the delta and reuse the
+    /// permanent clause programs. Each returned model is released after read-off.
+    fn saturate_with_delta(
+        &self,
+        delta: &DLOntology,
+        permanent_manager: &mut HyperresolutionManager,
+    ) -> Result<
+        Option<(Tableau, HashMap<crate::model::Individual, NodeId>)>,
+        crate::tableau::interrupt_flag::InterruptError,
+    > {
+        use crate::tableau::dl_clause_evaluator::CoreVariablePolicy;
         // m_additionalHyperresolutionManager = new HyperresolutionManager(delta clauses).
         let mut additional_manager = HyperresolutionManager::with_core_variable_policy(
             delta.get_dl_clauses(),
@@ -8189,7 +8602,7 @@ impl<'a> Reasoner<'a> {
                 self.configuration.blocking_strategy_type,
             ),
         );
-        let mut tableau = self.build_test_tableau(&permanent_manager);
+        let mut tableau = self.build_test_tableau(permanent_manager);
         // updateFlagsDependentOnAdditionalOntology: the node-seeding and datatype
         // flags must cover both the permanent and additional ontologies.
         tableau.merge_extension_flags(&additional_manager);
@@ -8206,7 +8619,11 @@ impl<'a> Reasoner<'a> {
         let combined_has_inverses =
             self.dl_ontology.has_inverse_roles() || delta.has_inverse_roles();
         let combined_has_nominals = self.dl_ontology.has_nominals() || delta.has_nominals();
-        tableau.configure_blocking(&self.configuration, combined_has_inverses, combined_has_nominals);
+        tableau.configure_blocking(
+            &self.configuration,
+            combined_has_inverses,
+            combined_has_nominals,
+        );
         if tableau.blocking_uses_validator() {
             let mut combined_clauses = self.dl_ontology.get_dl_clauses().clone();
             combined_clauses.extend(delta.get_dl_clauses().iter().cloned());
@@ -8244,7 +8661,7 @@ impl<'a> Reasoner<'a> {
         {
             self.assert_fact(&mut tableau, atom, &mut nodes_for_terms, &empty, false);
             if tableau.contains_clash() {
-                return Ok(false);
+                return Ok(None);
             }
         }
         for atom in self
@@ -8255,7 +8672,7 @@ impl<'a> Reasoner<'a> {
         {
             self.assert_fact(&mut tableau, atom, &mut nodes_for_terms, &empty, true);
             if tableau.contains_clash() {
-                return Ok(false);
+                return Ok(None);
             }
         }
         // "Ensure that at least one individual exists" (Tableau.java:307-309).
@@ -8263,13 +8680,25 @@ impl<'a> Reasoner<'a> {
             tableau.create_new_ni_node(&empty);
         }
 
-        let mut permanent_manager = permanent_manager;
-        Ok(run_calculus_with_additional(
+        let consistent = run_calculus_with_additional(
             &mut tableau,
-            &mut permanent_manager,
+            permanent_manager,
             Some(&mut additional_manager),
-        )
-        .unwrap_or(false))
+        )?;
+        if !consistent {
+            return Ok(None);
+        }
+        let nodes = nodes_for_terms
+            .into_iter()
+            .filter_map(|(term, node)| {
+                if let Term::Individual(individual) = term {
+                    Some((individual, node))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(Some((tableau, nodes)))
     }
 
     /// Whether the atomic concept `element` is satisfiable, reusing `manager`.

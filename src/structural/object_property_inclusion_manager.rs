@@ -136,6 +136,16 @@ pub struct ObjectPropertyInclusionManager {
 }
 
 impl ObjectPropertyInclusionManager {
+    pub(crate) fn automaton(&self, property: &ObjectPropExpr) -> Option<&Automaton> {
+        self.automata_by_property.get(property)
+    }
+
+    pub(crate) fn restrict_for_property_read_off(&mut self, live: &HashSet<ObjectPropExpr>) {
+        for automaton in self.automata_by_property.values_mut() {
+            *automaton = automaton.restricted_to_labels(live);
+        }
+    }
+
     /// Mirrors `new ObjectPropertyInclusionManager(axioms)`: builds the
     /// per-property automata and records which properties are non-simple in
     /// `axioms.complex_object_property_expressions`.

@@ -356,3 +356,26 @@ fn index_respects_inconsistency_and_fresh_entity_configuration() {
         .unwrap_err()
         .starts_with("FreshEntitiesException"));
 }
+
+#[test]
+fn complex_role_read_off_keeps_generated_edges_and_anonymous_paths() {
+    for body in [
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :q) :r)
+         ClassAssertion(ObjectSomeValuesFrom(:p ObjectHasValue(:q :b)) :a)",
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :q) ObjectInverseOf(:r))
+         ClassAssertion(ObjectSomeValuesFrom(:p ObjectHasValue(:q :b)) :a)",
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :p) :r)
+         ClassAssertion(ObjectHasSelf(:p) :a) Declaration(NamedIndividual(:b))",
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :p) :r)
+         ReflexiveObjectProperty(:p) Declaration(NamedIndividual(:a))
+         Declaration(NamedIndividual(:b))",
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :q) :r)
+         ClassAssertion(ObjectUnionOf(ObjectHasValue(:r :b)
+             ObjectSomeValuesFrom(:p ObjectHasValue(:q :b))) :a)",
+        "SubObjectPropertyOf(ObjectPropertyChain(:p :q) :r)
+         SubClassOf(owl:Thing ObjectSomeValuesFrom(:p ObjectHasValue(:q :b)))
+         Declaration(NamedIndividual(:a))",
+    ] {
+        check_against_oracle(body, &["a", "b"], "http://ex/r");
+    }
+}

@@ -8,8 +8,8 @@ explicit expected outcomes. HERMIT_JAVA_STRICT=1 reports every Java mismatch
 as a failing test.
 
 For queries across many object properties, reuse ObjectPropertyInstanceIndex or
-IncrementalReasoner::object_property_instances. This reads every role from one
-model rather than saturating once per property. Usage and validation:
+IncrementalReasoner::object_property_instances. This shares consistency and
+complex-role read-off across the whole property sweep. Usage and validation:
 docs/object-property-instances.md.
 
 The original Java project README follows.

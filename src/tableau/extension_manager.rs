@@ -580,6 +580,14 @@ impl Tableau {
     /// saturated model: every atomic concept on the fresh node `x` after asserting
     /// `element(x)` is a subsumer of `element`.
     pub fn atomic_concepts_on_node(&self, node: NodeId) -> Vec<crate::model::AtomicConcept> {
+        self.atomic_concepts_on_node_matching(node, |_| true)
+    }
+
+    pub(crate) fn atomic_concepts_on_node_matching(
+        &self,
+        node: NodeId,
+        include: impl Fn(crate::model::AtomicConcept) -> bool,
+    ) -> Vec<crate::model::AtomicConcept> {
         let retrieval = self.create_binary_retrieval(
             [-1, 1],
             [None, Some(TableauObject::Node(node))],
@@ -590,7 +598,9 @@ impl Tableau {
             if let TableauObject::Concept(crate::model::Concept::AtomicConcept(c)) =
                 self.binary_extension_table.get_tuple_object(tuple_index, 0)
             {
-                concepts.push(c.clone());
+                if include(*c) {
+                    concepts.push(*c);
+                }
             }
         }
         concepts
