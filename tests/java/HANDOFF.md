@@ -80,7 +80,7 @@ two overrides are empty in the original Java source.
 | [#14](https://github.com/EBISPOT/hermit-rs/issues/14) | Count dateTime boundary values after subtracting an open interval (**resolved**) | 1 |
 | [#15](https://github.com/EBISPOT/hermit-rs/issues/15) | Enumerate finite mixed numeric ranges for inequality assignment (**resolved**) | 1 |
 | [#16](https://github.com/EBISPOT/hermit-rs/issues/16) | Subtract enumerated exclusions from mixed numeric value spaces (**resolved** with #15) | 1 |
-| [#17](https://github.com/EBISPOT/hermit-rs/issues/17) | Detect an empty plain-literal range after excluding its sole value | 1 |
+| [#17](https://github.com/EBISPOT/hermit-rs/issues/17) | Detect an empty plain-literal range after excluding its sole value (**resolved**) | 1 |
 | [#18](https://github.com/EBISPOT/hermit-rs/issues/18) | Infer data-property subsumption forced by singleton values | 3 |
 | [#19](https://github.com/EBISPOT/hermit-rs/issues/19) | Return only the most specific direct individual types | 3 |
 | [#20](https://github.com/EBISPOT/hermit-rs/issues/20) | Correct property hierarchy axioms emitted by printHierarchies | 3 |
