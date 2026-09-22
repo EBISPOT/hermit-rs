@@ -2,24 +2,24 @@
 
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
-#10/#11 excluded-URI fix, the issue #12 binary-length fix and the issue #14
-dateTime-interval fix. All 598 declared Java methods are accounted for;
-inherited methods also run under their individual-reuse and core-blocking
-suites.
+#10/#11 excluded-URI fix, the issue #12 binary-length fix, the issue #14
+dateTime-interval fix and the issue #15/#16 numeric value-space fix. All 598
+declared Java methods are accounted for; inherited methods also run under their
+individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 867 | 55 | 2 |
+| Query/structural replay | 869 | 53 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 917 | 58 | 2 |
+| Total, excluding OWL WG | 919 | 56 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 58 failures are:
+The Rust port does **not** yet have full Java test parity. The 56 failures are:
 
-* **38 Rust/Java discrepancies**, including inherited repetitions: datatype
-  consistency (numeric, plain/XML literals); property
-  hierarchy and entailment results; direct results and hierarchy printing;
-  three core-blocking Widmann scenarios; and description-graph/SWRL integration.
+* **36 Rust/Java discrepancies**, including inherited repetitions: datatype
+  consistency (plain/XML literals); property hierarchy and entailment results;
+  direct results and hierarchy printing; three core-blocking Widmann scenarios;
+  and description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure
@@ -102,6 +102,38 @@ and `testFinite2_1` pass only because of the extra value: under XSD 1.1 their
 ranges hold one and two values, fewer than the two and four they require.
 Three native `DateTimeInterval` tests assert the same representation.
 Correcting it is left to a separate change.
+
+Issues #15 and #16 had one cause, in the numeric value spaces. owl:real,
+owl:rational, xsd:decimal and the integer datatypes share one value space, whose
+values nest (OWL 2 Structural Specification §4.1). It was counted from the
+positive restrictions, and a negated restriction or an excluded value was
+subtracted on some paths only. The ranges of `NumericsTest.testDecimalMinusInt*`
+hold the xsd:int values from 1.2 to 7.2 that are not integers from 2.2 to 5.2,
+which are 2, 6 and 7. The count was right, but the values were never listed, and
+the distinct-value assignment gives up on a space it cannot list, so a value
+distinct from 2, 6.0 and 7.0 was taken to exist (#15). Excluding those three
+values subtracted nothing, and the space counted as infinite (#16). The value
+space now follows HermiT's `OWLRealValueSpaceSubset`: it intersects the
+intervals of the positive restrictions, subtracts each negated restriction of
+these datatypes, then the excluded values that remain. The emptiness check, the
+cardinality and the distinct-value assignment all use it. xsd:float and
+xsd:double, whose value spaces are disjoint from it and from each other (§4.2),
+are built the same way. Listing small spaces also removed a false clash: two
+nodes that had to differ, each confined to a different single number of a dense
+range, clashed, because unlisted spaces with the same count were treated as one
+value space.
+
+Two corrections deviate from Java; no Java case depends on either, and both make
+the value space agree with the membership test. A float or double range with
+ordering facets never holds NaN (XSD 1.1 Part 2 §3.3.4.1 and §3.3.5.1), so its
+complement does. HermiT drops NaN when it subtracts such a range from the whole
+value space, and so did Rust: `xsd:float` outside `xsd:float[minInclusive -INF]`
+counted as empty, but it is `{NaN}`. And HermiT's
+`Numbers.getNearestIntegerInBound` subtracts 11 instead of 1 from an exclusive
+upper bound of -2147483648, which dropped the ten integers from -2147483658 to
+-2147483649. A NaN facet bound still follows HermiT: xsd:double ignores it, and
+xsd:float ignores it in `maxInclusive` and `maxExclusive`, although under XSD
+1.1 such a range is empty. Correcting that is left to a separate change.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
