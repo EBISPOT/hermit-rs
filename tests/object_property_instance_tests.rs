@@ -1,7 +1,8 @@
 //! Property-instance read-off must agree with exhaustive entailment, including
 //! pairs absent from one chosen model and names joined by uncertain equality.
 use hermit_rs::reasoner::{
-    get_object_property_values, is_entailed, object_property_instances, INCONSISTENT_ONTOLOGY_ERROR,
+    get_object_property_values, is_entailed, object_property_instances, IncrementalReasoner,
+    ObjectPropertyInstanceIndex, INCONSISTENT_ONTOLOGY_ERROR,
 };
 use horned_owl::model::{
     AnnotatedComponent, Build, Component, Individual, ObjectPropertyAssertion,
@@ -31,6 +32,7 @@ fn check_against_oracle(body: &str, individuals: &[&str], property: &str) {
     let ontology = load(body);
     let build = Build::new_arc();
     let role = build.object_property(property);
+    let mut index = ObjectPropertyInstanceIndex::new(&ontology).unwrap();
     let individuals: Vec<_> = individuals
         .iter()
         .map(|name| build.named_individual(format!("http://ex/{name}")))
@@ -60,6 +62,10 @@ fn check_against_oracle(body: &str, individuals: &[&str], property: &str) {
             object_property_instances(&ontology, ope.clone()).unwrap(),
             expected,
             "property {ope:?} in {body}"
+        );
+        assert_eq!(
+            index.object_property_instances(ope.clone()).unwrap(),
+            expected
         );
         // Explicitly declaring the property also exercises the values API for
         // empty/fresh extensions without relying on a declaration's absence.
@@ -253,4 +259,100 @@ fn inconsistent_ontology_throws_even_for_builtins_or_empty_abox() {
             );
         }
     }
+}
+
+#[test]
+fn one_index_handles_several_complex_roles_and_uncertain_aliases() {
+    let ontology = load(
+        "TransitiveObjectProperty(:r) TransitiveObjectProperty(:s)
+        SubObjectPropertyOf(ObjectPropertyChain(:p :q) :t)
+        ObjectPropertyAssertion(:r :a :b) ObjectPropertyAssertion(:r :b :c)
+        ObjectPropertyAssertion(:s :c :b) ObjectPropertyAssertion(:s :b :a)
+        ObjectPropertyAssertion(:q :b :c)
+        ClassAssertion(ObjectUnionOf(ObjectHasValue(:p :b) ObjectHasValue(:u :b)) :a)
+        SubObjectPropertyOf(:u :p) SameIndividual(:c :cc)
+        ClassAssertion(ObjectOneOf(:a :b) :x)",
+    );
+    let b = Build::new_arc();
+    let individuals: Vec<_> = ["a", "b", "c", "cc", "x"]
+        .iter()
+        .map(|name| b.named_individual(format!("http://ex/{name}")))
+        .collect();
+    let mut index = ObjectPropertyInstanceIndex::new(&ontology).unwrap();
+    for property in index.object_properties() {
+        for ope in [
+            OPE::ObjectProperty(property.clone()),
+            OPE::InverseObjectProperty(property),
+        ] {
+            let mut expected = HashSet::new();
+            for from in &individuals {
+                for to in &individuals {
+                    let assertion = ObjectPropertyAssertion {
+                        ope: ope.clone(),
+                        from: Individual::Named(from.clone()),
+                        to: Individual::Named(to.clone()),
+                    };
+                    if is_entailed(&ontology, &assertion.into()).unwrap() {
+                        expected.insert((from.clone(), to.clone()));
+                    }
+                }
+            }
+            assert_eq!(
+                index.object_property_instances(ope.clone()).unwrap(),
+                expected,
+                "{ope:?}"
+            );
+            assert_eq!(index.object_property_instances(ope).unwrap(), expected);
+        }
+    }
+}
+
+#[test]
+fn cached_property_queries_follow_tbox_changes() {
+    let b = Build::new_arc();
+    let p = b.object_property("http://ex/p");
+    let r = OPE::ObjectProperty(b.object_property("http://ex/r"));
+    let mut reasoner = IncrementalReasoner::new(load("ObjectPropertyAssertion(:p :a :b)"));
+    assert!(reasoner
+        .object_property_instances(r.clone())
+        .unwrap()
+        .is_empty());
+    reasoner.add_axiom(
+        horned_owl::model::SubObjectPropertyOf {
+            sub: horned_owl::model::SubObjectPropertyExpression::ObjectPropertyExpression(
+                OPE::ObjectProperty(p),
+            ),
+            sup: r.clone(),
+        }
+        .into(),
+    );
+    assert!(reasoner
+        .object_property_instances(r.clone())
+        .unwrap()
+        .is_empty());
+    reasoner.flush();
+    assert_eq!(reasoner.object_property_instances(r).unwrap().len(), 1);
+    assert_eq!(reasoner.last_flush_was_incremental(), Some(false));
+}
+
+#[test]
+fn index_respects_inconsistency_and_fresh_entity_configuration() {
+    let b = Build::new_arc();
+    let r = OPE::ObjectProperty(b.object_property("http://ex/fresh"));
+    let ontology = load("ClassAssertion(owl:Nothing :a) Declaration(NamedIndividual(:b))");
+    let config = hermit_rs::configuration::Configuration {
+        throw_inconsistent_ontology_exception: false,
+        ..Default::default()
+    };
+    let mut index = ObjectPropertyInstanceIndex::with_configuration(&ontology, &config).unwrap();
+    assert_eq!(index.object_property_instances(r.clone()).unwrap().len(), 4);
+    let config = hermit_rs::configuration::Configuration {
+        fresh_entity_policy: hermit_rs::configuration::FreshEntityPolicy::Disallow,
+        ..Default::default()
+    };
+    let mut index = ObjectPropertyInstanceIndex::with_configuration(&load(""), &config).unwrap();
+    assert!(index
+        .object_property_instances(r)
+        .unwrap_err()
+        .starts_with("FreshEntitiesException"));
 }

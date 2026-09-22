@@ -7,6 +7,11 @@ and known failures. CI executes the cases and rejects regressions against the
 explicit expected outcomes. HERMIT_JAVA_STRICT=1 reports every Java mismatch
 as a failing test.
 
+For queries across many object properties, reuse ObjectPropertyInstanceIndex or
+IncrementalReasoner::object_property_instances. This reads every role from one
+model rather than saturating once per property. Usage and validation:
+docs/object-property-instances.md.
+
 The original Java project README follows.
 -----------------------------------------
 

@@ -54,6 +54,11 @@ fn leaf_build_max_workers() -> usize {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_SATURATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One iteration of HermiT's `doIteration`: returns whether work was done.
 fn do_iteration(
     tableau: &mut Tableau,
@@ -151,6 +156,8 @@ fn run_calculus_with_additional(
     manager: &mut HyperresolutionManager,
     mut additional_manager: Option<&mut HyperresolutionManager>,
 ) -> Result<bool, crate::tableau::interrupt_flag::InterruptError> {
+    #[cfg(test)]
+    TEST_SATURATIONS.with(|count| count.set(count.get() + 1));
     tableau.start_task();
     // `Tableau.runCalculus` reads `existentialsAreExact` once at the top.
     // With the DEFAULT pairwise blocking + creation-order strategy this is `true`,
@@ -4346,68 +4353,252 @@ fn role_assertion_is_deterministic(
         .is_empty()
 }
 
-/// The pairs of named individuals `(a, b)` for which `ope(a, b)` is entailed
-/// (HermiT's `getObjectPropertyInstances` / `getObjectPropertyValues`). Known
-/// pairs are read directly from a model; only possible pairs need entailment
-/// tests. A pair absent from the model is already refuted by that model.
+/// The pairs of named individuals entailed for an object property expression.
+pub type ObjectPropertyInstances = std::collections::HashSet<(
+    NamedIndividual<crate::structural::A>,
+    NamedIndividual<crate::structural::A>,
+)>;
+
+/// A reusable read-off of every object property's known and possible instances.
+///
+/// Construction saturates one model, including read-off axioms for all complex
+/// roles. Queries only test that role's possible pairs and cache the decisions;
+/// inverse queries reuse the same decisions with the endpoints reversed. The
+/// index owns an immutable ontology snapshot. Rebuild it after ontology changes,
+/// or use [`IncrementalReasoner`], which invalidates its index on flush.
+pub struct ObjectPropertyInstanceIndex {
+    ontology: SetOntology<crate::structural::A>,
+    configuration: crate::configuration::Configuration,
+    individuals: Vec<String>,
+    pairs: HashMap<String, ObjectPropertyPairs>,
+    consistent: bool,
+}
+
+impl ObjectPropertyInstanceIndex {
+    pub fn new(ontology: &SetOntology<crate::structural::A>) -> Result<Self, String> {
+        Self::with_configuration(ontology, &crate::configuration::Configuration::default())
+    }
+
+    pub fn with_configuration(
+        ontology: &SetOntology<crate::structural::A>,
+        configuration: &crate::configuration::Configuration,
+    ) -> Result<Self, String> {
+        use crate::model::{AtomicConcept, Role};
+        use crate::tableau::dependency_set::DependencySetOps;
+        use crate::tableau::extension_table::View;
+        use horned_owl::model::{ObjectPropertyExpression as OPE, SubClassOf};
+
+        let dl = clausify_ontology_with_configuration(ontology, configuration)?;
+        let individuals: Vec<_> = dl
+            .get_all_individuals()
+            .iter()
+            .filter(|i| !i.is_anonymous() && !i.iri().starts_with("internal:"))
+            .map(|i| i.iri().to_owned())
+            .collect();
+        let mut pairs: HashMap<String, ObjectPropertyPairs> = dl
+            .get_all_atomic_object_roles()
+            .iter()
+            .filter(|r| !r.iri().starts_with("internal:"))
+            .map(|r| (r.iri().to_owned(), ObjectPropertyPairs::default()))
+            .collect();
+        let complex: Vec<_> = dl
+            .get_all_atomic_object_roles()
+            .iter()
+            .filter(|r| {
+                !r.iri().starts_with("internal:")
+                    && **r != *crate::model::AtomicRole::top_object_role()
+                    && **r != *crate::model::AtomicRole::bottom_object_role()
+                    && dl.is_complex_object_role(&Role::AtomicRole(**r))
+            })
+            .map(|r| r.iri().to_owned())
+            .collect();
+
+        // Each source marker is shared across roles. Fresh target markers map
+        // directly to (role, source), so all complex results need one table scan.
+        let mut markers = HashMap::new();
+        let dl = if !complex.is_empty() && !individuals.is_empty() {
+            let build = Build::new_arc();
+            let mut augmented = ontology.clone();
+            for source in &individuals {
+                let a = build.class(fresh_witness_iri("property-source"));
+                augmented.insert(ClassAssertion {
+                    ce: CE::Class(a.clone()),
+                    i: OwlIndividual::Named(build.named_individual(source.as_str())),
+                });
+                for role in &complex {
+                    let target = build.class(fresh_witness_iri("property-target"));
+                    markers.insert(
+                        AtomicConcept::create(target.0.to_string()),
+                        (role.clone(), source.clone()),
+                    );
+                    augmented.insert(SubClassOf {
+                        sub: CE::Class(a.clone()),
+                        sup: CE::ObjectAllValuesFrom {
+                            ope: OPE::ObjectProperty(build.object_property(role.as_str())),
+                            bce: Box::new(CE::Class(target)),
+                        },
+                    });
+                }
+            }
+            drop(dl);
+            clausify_ontology_with_configuration(&augmented, configuration)?
+        } else {
+            dl
+        };
+        let reasoner = Reasoner::with_configuration(&dl, configuration.clone());
+        let model = reasoner
+            .saturate_for_instances_checked()
+            .map_err(|e| format!("{e:?}"))?;
+        let consistent = model.is_some();
+        if !consistent && configuration.throw_inconsistent_ontology_exception {
+            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
+        }
+        if let Some((tableau, nodes_for_individuals)) = model {
+            let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
+            let empty = tableau.dependency_set_factory.empty_set();
+            let retrieval =
+                tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
+            for &i in &retrieval.tuple_indices {
+                let TableauObject::DLPredicate(DLPredicate::AtomicRole(role)) =
+                    tableau.ternary_extension_table.get_tuple_object(i, 0)
+                else {
+                    continue;
+                };
+                let Some(role_pairs) = pairs.get_mut(role.iri()) else {
+                    continue;
+                };
+                let source = tableau
+                    .ternary_extension_table
+                    .get_tuple_object(i, 1)
+                    .as_node()
+                    .unwrap();
+                let target = tableau
+                    .ternary_extension_table
+                    .get_tuple_object(i, 2)
+                    .as_node()
+                    .unwrap();
+                if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
+                    continue;
+                }
+                let (Some(sources), Some(targets)) = (names.get(&source), names.get(&target))
+                else {
+                    continue;
+                };
+                let known = tableau
+                    .ternary_extension_table
+                    .get_dependency_set(i, &empty)
+                    .is_empty();
+                for (s, s_known) in sources {
+                    for (t, t_known) in targets {
+                        role_pairs.insert(s, t, known && *s_known && *t_known);
+                    }
+                }
+            }
+            if !markers.is_empty() {
+                let retrieval =
+                    tableau.create_binary_retrieval([-1, -1], [None, None], View::Total);
+                for &i in &retrieval.tuple_indices {
+                    let TableauObject::Concept(Concept::AtomicConcept(c)) =
+                        tableau.binary_extension_table.get_tuple_object(i, 0)
+                    else {
+                        continue;
+                    };
+                    let Some((role, source)) = markers.get(c) else {
+                        continue;
+                    };
+                    let target = tableau
+                        .binary_extension_table
+                        .get_tuple_object(i, 1)
+                        .as_node()
+                        .unwrap();
+                    if !tableau.node(target).is_active() {
+                        continue;
+                    }
+                    let known = tableau
+                        .binary_extension_table
+                        .get_dependency_set(i, &empty)
+                        .is_empty();
+                    if let Some(targets) = names.get(&target) {
+                        for (target, target_known) in targets {
+                            // The source marker already carries its merge dependencies.
+                            pairs.get_mut(role).unwrap().insert(
+                                source,
+                                target,
+                                known && *target_known,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(Self {
+            ontology: ontology.clone(),
+            configuration: configuration.clone(),
+            individuals,
+            pairs,
+            consistent,
+        })
+    }
+
+    /// The named properties in the indexed DL vocabulary, including empty roles.
+    pub fn object_properties(
+        &self,
+    ) -> Vec<horned_owl::model::ObjectProperty<crate::structural::A>> {
+        let build = Build::new_arc();
+        let mut iris: Vec<_> = self.pairs.keys().collect();
+        iris.sort();
+        iris.into_iter()
+            .map(|iri| build.object_property(iri.as_str()))
+            .collect()
+    }
+
+    /// Query one role without another model read-off or consistency precheck.
+    pub fn object_property_instances(
+        &mut self,
+        ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
+    ) -> Result<ObjectPropertyInstances, String> {
+        let iri = crate::structural::named_property(&ope).0.as_ref();
+        if self.configuration.fresh_entity_policy == crate::configuration::FreshEntityPolicy::Disallow
+            && !self.pairs.contains_key(iri)
+            && !crate::prefixes::Prefixes::is_internal_iri(iri)
+            && iri != "http://www.w3.org/2002/07/owl#topObjectProperty"
+            && iri != "http://www.w3.org/2002/07/owl#bottomObjectProperty"
+        {
+            return Err(format!("FreshEntitiesException: {:?}", [iri]));
+        }
+        let ontology = &self.ontology;
+        let configuration = &self.configuration;
+        resolve_object_property_pairs(
+            &mut self.pairs,
+            &self.individuals,
+            self.consistent,
+            &ope,
+            |from, to| {
+                // Negative assertions on complex roles must pass through the role
+                // automaton rewriting; injecting a negative atomic tuple is insufficient.
+                let mut test = ontology.clone();
+                test.insert(horned_owl::model::NegativeObjectPropertyAssertion {
+                    ope: ope.clone(),
+                    from: OwlIndividual::Named(from),
+                    to: OwlIndividual::Named(to),
+                });
+                let dl = clausify_ontology_with_configuration(&test, configuration)?;
+                Reasoner::with_configuration(&dl, configuration.clone())
+                    .is_consistent_checked()
+                    .map(|consistent| !consistent)
+                    .map_err(|e| format!("{e:?}"))
+            },
+        )
+    }
+}
+
+/// Convenience query for one property. For a property sweep, construct one
+/// [`ObjectPropertyInstanceIndex`] and query it repeatedly instead.
 pub fn object_property_instances(
     ontology: &SetOntology<crate::structural::A>,
     ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-) -> Result<
-    std::collections::HashSet<(
-        NamedIndividual<crate::structural::A>,
-        NamedIndividual<crate::structural::A>,
-    )>,
-    String,
-> {
-    object_property_instances_with_oracle(ontology, &ope, |from, to| {
-        is_entailed_core(
-            ontology,
-            &Component::ObjectPropertyAssertion(horned_owl::model::ObjectPropertyAssertion {
-                ope: ope.clone(),
-                from: OwlIndividual::Named(from),
-                to: OwlIndividual::Named(to),
-            }),
-        )
-    })
-}
-
-/// Keep the candidate selection shared with the call-count regressions: an
-/// exhaustive oracle fallback would give correct answers on many small tests
-/// while making a property sweep quadratic in the number of individuals.
-fn object_property_instances_with_oracle<F>(
-    ontology: &SetOntology<crate::structural::A>,
-    ope: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-    mut is_instance: F,
-) -> Result<
-    std::collections::HashSet<(
-        NamedIndividual<crate::structural::A>,
-        NamedIndividual<crate::structural::A>,
-    )>,
-    String,
->
-where
-    F: FnMut(
-        NamedIndividual<crate::structural::A>,
-        NamedIndividual<crate::structural::A>,
-    ) -> Result<bool, String>,
-{
-    // The read-off also performs the initial consistency check, preserving
-    // getObjectPropertyInstances' default InconsistentOntologyException behavior.
-    let ObjectPropertyPairs { known, possible } = build_object_property_pairs(ontology, ope)?;
-    let build = Build::new_arc();
-    let mut result: std::collections::HashSet<_> = known
-        .into_iter()
-        .map(|(s, t)| (build.named_individual(s), build.named_individual(t)))
-        .collect();
-    for (source, target) in possible {
-        let from = build.named_individual(source);
-        let to = build.named_individual(target);
-        if is_instance(from.clone(), to.clone())? {
-            result.insert((from, to));
-        }
-    }
-    Ok(result)
+) -> Result<ObjectPropertyInstances, String> {
+    ObjectPropertyInstanceIndex::new(ontology)?.object_property_instances(ope)
 }
 
 #[derive(Default)]
@@ -4428,54 +4619,78 @@ impl ObjectPropertyPairs {
     }
 }
 
-/// Read known and possible pairs as in InstanceManager.readOffPropertyInstances
-/// and readOffComplexRoleSuccessors. Inverse expressions swap both projections.
-fn build_object_property_pairs(
-    ontology: &SetOntology<crate::structural::A>,
+fn resolve_object_property_pairs<F>(
+    roles: &mut HashMap<String, ObjectPropertyPairs>,
+    individuals: &[String],
+    consistent: bool,
     ope: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-) -> Result<ObjectPropertyPairs, String> {
-    use crate::model::{AtomicRole, Role};
+    mut is_instance: F,
+) -> Result<ObjectPropertyInstances, String>
+where
+    F: FnMut(
+        NamedIndividual<crate::structural::A>,
+        NamedIndividual<crate::structural::A>,
+    ) -> Result<bool, String>,
+{
     use horned_owl::model::ObjectPropertyExpression as OPE;
-
-    let (role_iri, is_inverse) = match ope {
+    let (iri, inverse) = match ope {
         OPE::ObjectProperty(p) => (p.0.as_ref(), false),
         OPE::InverseObjectProperty(p) => (p.0.as_ref(), true),
     };
-    let dl_ontology = clausify_ontology(ontology)?;
-    let individuals: Vec<_> = dl_ontology
-        .get_all_individuals()
-        .iter()
-        .filter(|i| !i.iri().starts_with("internal:"))
-        .map(|i| i.iri().to_owned())
-        .collect();
-    let mut forward = if role_iri == "http://www.w3.org/2002/07/owl#topObjectProperty"
-        || role_iri == "http://www.w3.org/2002/07/owl#bottomObjectProperty"
-    {
-        // Top need not occur in the ontology (and hence need not have tuples in
-        // its model). Its extension is still the full cross product. Check
-        // consistency before either built-in shortcut, including an empty ABox.
-        if !Reasoner::new(&dl_ontology).is_consistent() {
-            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
-        }
-        let mut pairs = ObjectPropertyPairs::default();
-        if role_iri == "http://www.w3.org/2002/07/owl#topObjectProperty" {
-            for source in &individuals {
-                for target in &individuals {
-                    pairs.insert(source, target, true);
-                }
-            }
-        }
-        pairs
-    } else if dl_ontology.is_complex_object_role(&Role::AtomicRole(AtomicRole::create(role_iri))) {
-        complex_role_forward_pairs(ontology, role_iri, &individuals)?
-    } else {
-        plain_role_forward_pairs(&dl_ontology, role_iri)?
-    };
-    if is_inverse {
-        forward.known = forward.known.into_iter().map(|(s, t)| (t, s)).collect();
-        forward.possible = forward.possible.into_iter().map(|(s, t)| (t, s)).collect();
+    let build = Build::new_arc();
+    if !consistent || iri == "http://www.w3.org/2002/07/owl#topObjectProperty" {
+        return Ok(individuals
+            .iter()
+            .flat_map(|s| {
+                individuals
+                    .iter()
+                    .map(|t| (build.named_individual(s.as_str()), build.named_individual(t.as_str())))
+            })
+            .collect());
     }
-    Ok(forward)
+    if iri == "http://www.w3.org/2002/07/owl#bottomObjectProperty" {
+        return Ok(Default::default());
+    }
+    let Some(pairs) = roles.get_mut(iri) else {
+        return Ok(Default::default());
+    };
+    let named_pair = |s: &String, t: &String| {
+        let (s, t) = if inverse { (t, s) } else { (s, t) };
+        (build.named_individual(s.as_str()), build.named_individual(t.as_str()))
+    };
+    // Remove a candidate only after a successful oracle decision: an error must
+    // leave unresolved candidates available to a later retry.
+    for (s, t) in pairs.possible.iter().cloned().collect::<Vec<_>>() {
+        let (from, to) = named_pair(&s, &t);
+        let entailed = is_instance(from, to)?;
+        pairs.possible.remove(&(s.clone(), t.clone()));
+        if entailed {
+            pairs.known.insert((s, t));
+        }
+    }
+    Ok(pairs.known.iter().map(|(s, t)| named_pair(s, t)).collect())
+}
+
+#[cfg(test)]
+fn object_property_instances_with_oracle<F>(
+    ontology: &SetOntology<crate::structural::A>,
+    ope: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
+    is_instance: F,
+) -> Result<ObjectPropertyInstances, String>
+where
+    F: FnMut(
+        NamedIndividual<crate::structural::A>,
+        NamedIndividual<crate::structural::A>,
+    ) -> Result<bool, String>,
+{
+    let mut index = ObjectPropertyInstanceIndex::new(ontology)?;
+    resolve_object_property_pairs(
+        &mut index.pairs,
+        &index.individuals,
+        index.consistent,
+        ope,
+        is_instance,
+    )
 }
 
 /// All result-relevant names for each canonical node, with the determinism of
@@ -4501,142 +4716,6 @@ fn names_for_canonical_nodes(
     names
 }
 
-/// Direct ternary read-off for a simple role. Both aliases' merge dependencies
-/// must be empty, as well as the tuple's, before a pair can be marked known.
-fn plain_role_forward_pairs(
-    dl_ontology: &DLOntology,
-    role_iri: &str,
-) -> Result<ObjectPropertyPairs, String> {
-    use crate::tableau::dependency_set::DependencySetOps;
-    use crate::tableau::extension_table::View;
-
-    let reasoner = Reasoner::new(dl_ontology);
-    let Some((tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
-        return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
-    };
-    let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
-    let mut pairs = ObjectPropertyPairs::default();
-    let empty_set = tableau.dependency_set_factory.empty_set();
-    let retrieval = tableau.create_ternary_retrieval([-1, -1, -1], [None, None, None], View::Total);
-    for &tuple_index in &retrieval.tuple_indices {
-        match tableau
-            .ternary_extension_table
-            .get_tuple_object(tuple_index, 0)
-        {
-            TableauObject::DLPredicate(DLPredicate::AtomicRole(r)) if r.iri() == role_iri => {}
-            _ => continue,
-        }
-        let Some(source) = tableau
-            .ternary_extension_table
-            .get_tuple_object(tuple_index, 1)
-            .as_node()
-        else {
-            continue;
-        };
-        let Some(target) = tableau
-            .ternary_extension_table
-            .get_tuple_object(tuple_index, 2)
-            .as_node()
-        else {
-            continue;
-        };
-        // Merged or pruned nodes can retain stale extension-table tuples.
-        if !tableau.node(source).is_active() || !tableau.node(target).is_active() {
-            continue;
-        }
-        let (Some(sources), Some(targets)) = (names.get(&source), names.get(&target)) else {
-            continue;
-        };
-        let known = tableau
-            .ternary_extension_table
-            .get_dependency_set(tuple_index, &empty_set)
-            .is_empty();
-        for (source_iri, source_known) in sources {
-            for (target_iri, target_known) in targets {
-                pairs.insert(
-                    source_iri,
-                    target_iri,
-                    known && *source_known && *target_known,
-                );
-            }
-        }
-    }
-    Ok(pairs)
-}
-
-/// For a complex role, add A_a(a), A_a ⊑ ∀role.A_a^role for each named
-/// individual a. Universal propagation follows the role automaton, including
-/// transitivity and property chains which the direct ternary read-off misses.
-fn complex_role_forward_pairs(
-    ontology: &SetOntology<crate::structural::A>,
-    role_iri: &str,
-    individuals: &[String],
-) -> Result<ObjectPropertyPairs, String> {
-    use crate::model::AtomicConcept;
-    use crate::tableau::dependency_set::DependencySetOps;
-    use crate::tableau::extension_table::View;
-    use horned_owl::model::{ObjectPropertyExpression as OPE, SubClassOf};
-
-    let build = Build::new_arc();
-    let mut augmented = ontology.clone();
-    let role_property = build.object_property(role_iri);
-    for ind_iri in individuals {
-        let a_concept = build.class(format!("internal:individual-concept#{ind_iri}"));
-        let ar_concept = build.class(format!("internal:individual-concept#{role_iri}#{ind_iri}"));
-        augmented.insert(Component::ClassAssertion(ClassAssertion {
-            ce: CE::Class(a_concept.clone()),
-            i: OwlIndividual::Named(build.named_individual(ind_iri.clone())),
-        }));
-        augmented.insert(Component::SubClassOf(SubClassOf {
-            sub: CE::Class(a_concept),
-            sup: CE::ObjectAllValuesFrom {
-                ope: OPE::ObjectProperty(role_property.clone()),
-                bce: Box::new(CE::Class(ar_concept)),
-            },
-        }));
-    }
-
-    let dl_ontology = clausify_ontology(&augmented)?;
-    let reasoner = Reasoner::new(&dl_ontology);
-    let Some((tableau, nodes_for_individuals)) = reasoner.saturate_for_instances() else {
-        return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
-    };
-    let names = names_for_canonical_nodes(&tableau, &nodes_for_individuals);
-    let empty_set = tableau.dependency_set_factory.empty_set();
-    let mut pairs = ObjectPropertyPairs::default();
-    for ind_iri in individuals {
-        let ar_concept = TableauObject::Concept(Concept::AtomicConcept(AtomicConcept::create(
-            format!("internal:individual-concept#{role_iri}#{ind_iri}"),
-        )));
-        let retrieval =
-            tableau.create_binary_retrieval([0, -1], [Some(ar_concept), None], View::Total);
-        for &tuple_index in &retrieval.tuple_indices {
-            let Some(target) = tableau
-                .binary_extension_table
-                .get_tuple_object(tuple_index, 1)
-                .as_node()
-            else {
-                continue;
-            };
-            if !tableau.node(target).is_active() {
-                continue;
-            }
-            let known = tableau
-                .binary_extension_table
-                .get_dependency_set(tuple_index, &empty_set)
-                .is_empty();
-            if let Some(targets) = names.get(&target) {
-                for (target_iri, target_known) in targets {
-                    // The source name is encoded in the auxiliary concept; its
-                    // merge dependencies have already propagated into this tuple.
-                    pairs.insert(ind_iri, target_iri, known && *target_known);
-                }
-            }
-        }
-    }
-    Ok(pairs)
-}
-
 #[cfg(test)]
 mod object_property_read_off_tests {
     use super::*;
@@ -4654,6 +4733,208 @@ mod object_property_read_off_tests {
         )
         .unwrap();
         onto.into()
+    }
+
+    #[test]
+    fn property_sweep_uses_one_saturation_including_all_complex_roles() {
+        for complex in [false, true] {
+            let mut body = String::new();
+            for i in 0..331 {
+                body.push_str(&format!("Declaration(NamedIndividual(:i{i}))"));
+            }
+            for i in 0..111 {
+                body.push_str(&format!(
+                    "ObjectPropertyAssertion(:r{i} :i0 :i1) ObjectPropertyAssertion(:r{i} :i1 :i2)"
+                ));
+            }
+            if complex {
+                body.push_str("TransitiveObjectProperty(:r0) TransitiveObjectProperty(:r1) SubObjectPropertyOf(ObjectPropertyChain(:r2 :r2) :r3)");
+            }
+            let onto = load(&body);
+            TEST_SATURATIONS.with(|c| c.set(0));
+            let mut index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
+            let properties = index.object_properties();
+            assert_eq!(properties.len(), 111);
+            for property in properties {
+                let expected = if complex
+                    && ["http://ex/r0", "http://ex/r1", "http://ex/r3"].contains(&property.0.as_ref())
+                {
+                    3
+                } else {
+                    2
+                };
+                for ope in [
+                    OPE::ObjectProperty(property.clone()),
+                    OPE::InverseObjectProperty(property),
+                ] {
+                    assert_eq!(
+                        index.object_property_instances(ope).unwrap().len(),
+                        expected
+                    );
+                }
+            }
+            TEST_SATURATIONS
+                .with(|c| assert_eq!(c.get(), 1, "one model for 111 roles; complex={complex}"));
+        }
+    }
+
+    #[test]
+    fn incremental_property_cache_is_invalidated_only_on_flush() {
+        let build = Build::new_arc();
+        let r = OPE::ObjectProperty(build.object_property("http://ex/r"));
+        let edge: Component<crate::structural::A> = horned_owl::model::ObjectPropertyAssertion {
+            ope: r.clone(),
+            from: OwlIndividual::Named(build.named_individual("http://ex/a")),
+            to: OwlIndividual::Named(build.named_individual("http://ex/c")),
+        }
+        .into();
+        for buffering in [true, false] {
+            let onto = load("ObjectPropertyAssertion(:r :a :b) Declaration(NamedIndividual(:c))");
+            let mut reasoner = IncrementalReasoner::with_configuration(
+                onto,
+                crate::configuration::Configuration {
+                    buffer_changes: buffering,
+                    ..Default::default()
+                },
+            );
+            TEST_SATURATIONS.with(|c| c.set(0));
+            reasoner
+                .precompute(&[InferenceType::ObjectPropertyAssertions])
+                .unwrap();
+            assert!(reasoner.is_precomputed(InferenceType::ObjectPropertyAssertions));
+            assert!(reasoner.is_consistent().unwrap());
+            assert_eq!(
+                reasoner.object_property_instances(r.clone()).unwrap().len(),
+                1
+            );
+            TEST_SATURATIONS.with(|c| assert_eq!(c.get(), 1));
+            reasoner.add_axiom(edge.clone());
+            if buffering {
+                assert_eq!(
+                    reasoner.object_property_instances(r.clone()).unwrap().len(),
+                    1
+                );
+                TEST_SATURATIONS.with(|c| assert_eq!(c.get(), 1));
+                reasoner.flush();
+            }
+            assert!(!reasoner.is_precomputed(InferenceType::ObjectPropertyAssertions));
+            assert_eq!(
+                reasoner.object_property_instances(r.clone()).unwrap().len(),
+                2
+            );
+            TEST_SATURATIONS.with(|c| assert_eq!(c.get(), 2));
+            reasoner.remove_axiom(edge.clone());
+            reasoner.flush();
+            assert_eq!(
+                reasoner.object_property_instances(r.clone()).unwrap().len(),
+                1
+            );
+            reasoner.flush(); // An empty flush preserves the cache.
+            assert_eq!(
+                reasoner.object_property_instances(r.clone()).unwrap().len(),
+                1
+            );
+            TEST_SATURATIONS.with(|c| assert_eq!(c.get(), 3));
+        }
+    }
+
+    #[test]
+    fn cached_oracle_decisions_are_shared_with_inverse_queries() {
+        for entailed in [false, true] {
+            let prefix = if entailed {
+                "SubObjectPropertyOf(:p :r) SubObjectPropertyOf(:q :r)"
+            } else {
+                ""
+            };
+            let onto = load(&format!("{prefix} ClassAssertion(ObjectUnionOf(ObjectHasValue(:p :b) ObjectHasValue(:q :b)) :a)"));
+            let mut index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
+            let property = if entailed {
+                "http://ex/r"
+            } else {
+                index
+                    .pairs
+                    .iter()
+                    .find(|(_, p)| !p.possible.is_empty())
+                    .unwrap()
+                    .0
+                    .as_str()
+            }
+            .to_owned();
+            let role = Build::new_arc().object_property(property);
+            let mut calls = 0;
+            for ope in [
+                OPE::ObjectProperty(role.clone()),
+                OPE::InverseObjectProperty(role),
+            ] {
+                let result = resolve_object_property_pairs(
+                    &mut index.pairs,
+                    &index.individuals,
+                    index.consistent,
+                    &ope,
+                    |_, _| {
+                        calls += 1;
+                        Ok(entailed)
+                    },
+                )
+                .unwrap();
+                assert_eq!(result.len(), usize::from(entailed));
+            }
+            assert_eq!(calls, 1);
+        }
+    }
+
+    #[test]
+    fn property_precompute_resolves_candidates_for_every_role() {
+        let onto = load(
+            "SubObjectPropertyOf(:p :r) SubObjectPropertyOf(:q :r)
+            ClassAssertion(ObjectUnionOf(ObjectHasValue(:p :b) ObjectHasValue(:q :b)) :a)",
+        );
+        let mut reasoner = IncrementalReasoner::new(onto);
+        TEST_SATURATIONS.with(|c| c.set(0));
+        reasoner
+            .precompute(&[InferenceType::ObjectPropertyAssertions])
+            .unwrap();
+        let calls = TEST_SATURATIONS.with(|c| c.get());
+        assert!(calls > 1, "precompute must confirm possible pairs");
+        for (name, expected) in [("p", 0), ("q", 0), ("r", 1)] {
+            let role = Build::new_arc().object_property(format!("http://ex/{name}"));
+            for ope in [
+                OPE::ObjectProperty(role.clone()),
+                OPE::InverseObjectProperty(role),
+            ] {
+                assert_eq!(reasoner.object_property_instances(ope).unwrap().len(), expected);
+            }
+        }
+        reasoner
+            .precompute(&[InferenceType::ObjectPropertyAssertions])
+            .unwrap();
+        TEST_SATURATIONS.with(|c| assert_eq!(c.get(), calls));
+    }
+
+    #[test]
+    fn failed_oracle_queries_leave_candidates_available_for_retry() {
+        let onto =
+            load("ClassAssertion(ObjectUnionOf(ObjectHasValue(:p :b) ObjectHasValue(:q :b)) :a)");
+        let mut index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
+        let role = index
+            .pairs
+            .iter()
+            .find(|(_, p)| !p.possible.is_empty())
+            .unwrap()
+            .0
+            .clone();
+        let ope = OPE::ObjectProperty(Build::new_arc().object_property(role.as_str()));
+        assert!(resolve_object_property_pairs(
+            &mut index.pairs,
+            &index.individuals,
+            index.consistent,
+            &ope,
+            |_, _| Err("interrupted".into())
+        )
+        .is_err());
+        assert_eq!(index.pairs[&role].possible.len(), 1);
+        assert!(index.object_property_instances(ope).unwrap().is_empty());
+        assert!(index.pairs[&role].possible.is_empty());
     }
 
     #[test]
@@ -4750,7 +5031,8 @@ mod object_property_read_off_tests {
         let ope = OPE::ObjectProperty(Build::new_arc().object_property("http://ex/r"));
         // Whichever nominal is chosen, x has an outgoing tuple in that model.
         // Its uncertainty comes from the merge, not the asserted role tuple.
-        let pairs = build_object_property_pairs(&onto, &ope).unwrap();
+        let index = ObjectPropertyInstanceIndex::new(&onto).unwrap();
+        let pairs = &index.pairs[crate::structural::named_property(&ope).0.as_ref()];
         assert!(pairs
             .known
             .iter()
@@ -6525,40 +6807,7 @@ pub fn precompute(
     ontology: &SetOntology<crate::structural::A>,
     inference_types: &[InferenceType],
 ) -> Result<(), String> {
-    check_pre_conditions(ontology)?;
-    use InferenceType::*;
-    let requested: std::collections::HashSet<InferenceType> =
-        inference_types.iter().copied().collect();
-    if requested.contains(&ClassHierarchy) {
-        classify(ontology)?;
-    }
-    if requested.contains(&ObjectPropertyHierarchy) {
-        classify_object_properties(ontology)?;
-    }
-    if requested.contains(&DataPropertyHierarchy) {
-        classify_data_properties(ontology)?;
-    }
-    if requested.contains(&ClassAssertions) {
-        realize(ontology)?;
-    }
-    if requested.contains(&ObjectPropertyAssertions) {
-        let build = Build::new_arc();
-        // realiseObjectProperties precomputes the object-property instance graph;
-        // exercising it over the top object property primes the same path.
-        let _ = object_property_instances(
-            ontology,
-            horned_owl::model::ObjectPropertyExpression::ObjectProperty(
-                build.object_property("http://www.w3.org/2002/07/owl#topObjectProperty"),
-            ),
-        )?;
-    }
-    if requested.contains(&SameIndividual) {
-        // precomputeSameAsEquivalenceClasses: warming the same-as relation. Under
-        // BY_NAME this is a no-op beyond classification; we touch realize so the
-        // realisation it depends on is ready.
-        realize(ontology)?;
-    }
-    Ok(())
+    IncrementalReasoner::new(ontology.clone()).precompute(inference_types)
 }
 
 /// `Reasoner.precomputeDisjointClasses` (Reasoner.java:891).
@@ -6734,6 +6983,13 @@ pub fn is_ontology_consistent_with_configuration(
 fn clausify_ontology(
     ontology: &horned_owl::ontology::set::SetOntology<crate::structural::A>,
 ) -> Result<DLOntology, String> {
+    clausify_ontology_with_configuration(ontology, &crate::configuration::Configuration::default())
+}
+
+fn clausify_ontology_with_configuration(
+    ontology: &SetOntology<crate::structural::A>,
+    configuration: &crate::configuration::Configuration,
+) -> Result<DLOntology, String> {
     use crate::structural::{
         BuiltInPropertyManager, Configuration, ObjectPropertyInclusionManager, OWLAxioms,
         OWLAxiomsExpressivity, OWLClausification, OWLNormalization,
@@ -6755,7 +7011,9 @@ fn clausify_ontology(
     let _ = next_index;
     manager.rewrite_axioms(&mut axioms, 0)?;
     let expressivity = OWLAxiomsExpressivity::new(&axioms);
-    OWLClausification::new(Configuration::default()).clausify(
+    OWLClausification::new(Configuration {
+        ignore_unsupported_datatypes: configuration.ignore_unsupported_datatypes,
+    }).clausify(
         "http://hermit-rs/anonymous-ontology",
         &axioms,
         &expressivity,
@@ -7163,6 +7421,15 @@ impl<'a> Reasoner<'a> {
     pub fn saturate_for_instances(
         &self,
     ) -> Option<(Tableau, HashMap<crate::model::Individual, NodeId>)> {
+        self.saturate_for_instances_checked().ok().flatten()
+    }
+
+    fn saturate_for_instances_checked(
+        &self,
+    ) -> Result<
+        Option<(Tableau, HashMap<crate::model::Individual, NodeId>)>,
+        crate::tableau::interrupt_flag::InterruptError,
+    > {
         let mut tableau = Tableau::with_configuration(&self.configuration);
         let mut manager = self.new_manager();
         tableau.update_extension_flags(&manager);
@@ -7174,14 +7441,14 @@ impl<'a> Reasoner<'a> {
         let nodes_for_individuals = self.load_abox_tracking_individuals(&mut tableau, &[], &[]);
         if tableau.contains_clash() {
             tableau.monitor_event(|m| m.is_satisfiable_finished(false));
-            return None;
+            return Ok(None);
         }
-        let consistent = run_calculus(&mut tableau, &mut manager).unwrap_or(false);
+        let consistent = run_calculus(&mut tableau, &mut manager)?;
         tableau.monitor_event(|m| m.is_satisfiable_finished(consistent));
         if !consistent {
-            return None;
+            return Ok(None);
         }
-        Some((tableau, nodes_for_individuals))
+        Ok(Some((tableau, nodes_for_individuals)))
     }
 
     /// A compiled hyperresolution manager over this ontology's clauses, built once
@@ -8423,6 +8690,8 @@ pub struct IncrementalReasoner {
     /// changes (Java's per-cache completion flags read by `isPrecomputed`). Stateful,
     /// unlike the free `is_precomputed` (which has no instance to remember).
     precomputed_inferences: std::collections::HashSet<InferenceType>,
+    /// Shared property read-off and resolved candidates for the current snapshot.
+    object_property_index: Option<ObjectPropertyInstanceIndex>,
 }
 
 impl IncrementalReasoner {
@@ -8473,6 +8742,7 @@ impl IncrementalReasoner {
             original_atomic_concept_count: 0,
             last_flush_was_incremental: None,
             precomputed_inferences: std::collections::HashSet::new(),
+            object_property_index: None,
         }
     }
 
@@ -8486,13 +8756,23 @@ impl IncrementalReasoner {
     /// controls whether that task runs (Reasoner.java:557-583).
     pub fn precompute(&mut self, inference_types: &[InferenceType]) -> Result<(), String> {
         self.flush_changes_if_required();
-        check_pre_conditions(&self.ontology)?;
         // Java: boolean doAll = m_configuration.prepareReasonerInferences==null;
         let do_all = self.configuration.prepare_reasoner_inferences.is_none();
         let pri = self.configuration.prepare_reasoner_inferences.as_ref();
         use InferenceType::*;
         let requested: std::collections::HashSet<InferenceType> =
             inference_types.iter().copied().collect();
+        let prepare_properties = requested.contains(&ObjectPropertyAssertions)
+            && (do_all || pri.map_or(false, |p| p.object_property_realisation_required));
+        // The property model itself decides consistency. Initialize it before
+        // the precondition so property-only precompute needs just one saturation.
+        if prepare_properties {
+            self.ensure_object_property_index()?;
+        }
+        if !self.is_consistent()? && self.configuration.throw_inconsistent_ontology_exception {
+            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
+        }
+        let pri = self.configuration.prepare_reasoner_inferences.as_ref();
         // Java Reasoner.java:560-562
         if requested.contains(&ClassHierarchy)
             && (do_all || pri.map_or(false, |p| p.class_classification_required))
@@ -8531,17 +8811,14 @@ impl IncrementalReasoner {
                 self.precomputed_inferences.insert(SameIndividual);
             }
         }
-        // Java Reasoner.java:575-577
-        if requested.contains(&ObjectPropertyAssertions)
-            && (do_all || pri.map_or(false, |p| p.object_property_realisation_required))
-        {
-            let build = Build::new_arc();
-            let _ = object_property_instances(
-                &self.ontology,
-                horned_owl::model::ObjectPropertyExpression::ObjectProperty(
-                    build.object_property("http://www.w3.org/2002/07/owl#topObjectProperty"),
-                ),
-            )?;
+        // Realize every indexed role, not just the top-role shortcut.
+        if prepare_properties {
+            let index = self.object_property_index.as_mut().unwrap();
+            for property in index.object_properties() {
+                index.object_property_instances(
+                    horned_owl::model::ObjectPropertyExpression::ObjectProperty(property),
+                )?;
+            }
             self.precomputed_inferences.insert(ObjectPropertyAssertions);
         }
         // Java Reasoner.java:581-583
@@ -8715,6 +8992,7 @@ impl IncrementalReasoner {
         // on a flush that applies changes).
         self.cached_consistent = None;
         self.precomputed_inferences.clear();
+        self.object_property_index = None;
     }
 
     /// Whether the most recent `flush` that applied changes took the incremental
@@ -8997,6 +9275,43 @@ impl IncrementalReasoner {
     // are applied before reading, while BUFFERING changes stay pending until an
     // explicit `flush`. The reasoning itself delegates to the existing free
     // functions over the owned `SetOntology`.
+
+    fn ensure_object_property_index(&mut self) -> Result<(), String> {
+        self.flush_changes_if_required();
+        if self.cached_consistent == Some(false)
+            && self.configuration.throw_inconsistent_ontology_exception
+        {
+            return Err(INCONSISTENT_ONTOLOGY_ERROR.into());
+        }
+        if self.object_property_index.is_none() {
+            match ObjectPropertyInstanceIndex::with_configuration(&self.ontology, &self.configuration) {
+                Ok(index) => {
+                    self.cached_consistent = Some(index.consistent);
+                    self.object_property_index = Some(index);
+                }
+                Err(error) => {
+                    if error == INCONSISTENT_ONTOLOGY_ERROR {
+                        self.cached_consistent = Some(false);
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Query a property using the shared model read-off. Repeated and inverse
+    /// queries reuse candidate decisions until an ontology change is flushed.
+    pub fn object_property_instances(
+        &mut self,
+        ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
+    ) -> Result<ObjectPropertyInstances, String> {
+        self.ensure_object_property_index()?;
+        self.object_property_index
+            .as_mut()
+            .unwrap()
+            .object_property_instances(ope)
+    }
 
     /// Whether the current ontology is consistent (Java's `isConsistent`). The
     /// result is cached between flushes (Java's `m_isConsistent`), and the check
