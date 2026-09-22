@@ -2,21 +2,22 @@
 
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
-#10/#11 excluded-URI fix and the issue #12 binary-length fix. All 598 declared
-Java methods are accounted for; inherited methods also run under their
-individual-reuse and core-blocking suites.
+#10/#11 excluded-URI fix, the issue #12 binary-length fix and the issue #14
+dateTime-interval fix. All 598 declared Java methods are accounted for;
+inherited methods also run under their individual-reuse and core-blocking
+suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 866 | 56 | 2 |
+| Query/structural replay | 867 | 55 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 916 | 59 | 2 |
+| Total, excluding OWL WG | 917 | 58 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 59 failures are:
+The Rust port does **not** yet have full Java test parity. The 58 failures are:
 
-* **39 Rust/Java discrepancies**, including inherited repetitions: datatype
-  consistency (datetime, numeric, plain/XML literals); property
+* **38 Rust/Java discrepancies**, including inherited repetitions: datatype
+  consistency (numeric, plain/XML literals); property
   hierarchy and entailment results; direct results and hierarchy printing;
   three core-blocking Widmann scenarios; and description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
@@ -75,6 +76,32 @@ same datatype, then the excluded values in the remaining windows. The emptiness
 check, the cardinality and the distinct-value assignment all use it. A negated
 restriction of the other binary datatype removes nothing, because the two value
 spaces are disjoint.
+
+Issue #14 was the same gap for dateTime. The dateTime value space took its
+intervals from the positive restrictions only. So the closed interval between
+`1965-04-15T00:00:00` and `1965-05-01T00:00:00`, outside its open interior,
+counted as infinite, and five distinct values fitted, although only the two
+bounds remain. The dateTime value space now follows HermiT's
+`DateTimeValueSpaceSubset`. It treats values with a timezone offset and values
+without one separately: it subtracts the interval that each negated dateTime
+restriction gives that kind, then the excluded values that remain. A bound of
+the other kind is widened by the 14-hour offset window and made exclusive,
+because a value within 14 hours of it is incomparable with it (XSD 1.1 Part 2
+§D.2.1). An interval that spans two instants is infinite; a single instant is
+counted exactly. The emptiness check, the cardinality and the distinct-value
+assignment all use it. Enumerating these values also removed a false clash: two
+different single-instant ranges with the same count were treated as one value
+space, so two values that had to differ clashed.
+
+The count at a single instant follows HermiT, which counts `24:00:00` as a
+value separate from `00:00:00` of the next day, and so treats the two spellings
+as different constants. XSD 1.1 maps both spellings to one value (Part 2
+§3.3.7.2, §E.3.5 and §E.3.1). So asserting both spellings for a functional
+data property clashes, wrongly, in Java as in Rust. `DateTimeTest.testFinite1_1`
+and `testFinite2_1` pass only because of the extra value: under XSD 1.1 their
+ranges hold one and two values, fewer than the two and four they require.
+Three native `DateTimeInterval` tests assert the same representation.
+Correcting it is left to a separate change.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
