@@ -143,6 +143,35 @@ fn nondeterministic_merges_do_not_certify_role_instances() {
 }
 
 #[test]
+fn nondeterministic_merges_can_entail_simple_role_instances() {
+    // The converse of the test above. x is a or b, and both have r to c, so
+    // r(x,c) is entailed although x only shares that tuple through the merge
+    // the model chose. Likewise y is c or d and a has r to both, so r(a,y) is
+    // entailed, while r(x,d), r(x,f) and r(b,y) hold only under one choice.
+    // These alias pairs are possible: skipping one as absent loses an answer.
+    // one_index_handles_several_complex_roles_and_uncertain_aliases covers
+    // aliases of complex roles, which are read off marker concepts instead.
+    let body = "ClassAssertion(ObjectOneOf(:a :b) :x) ClassAssertion(ObjectOneOf(:c :d) :y)
+        ObjectPropertyAssertion(:r :a :c) ObjectPropertyAssertion(:r :b :c)
+        ObjectPropertyAssertion(:r :a :d) ObjectPropertyAssertion(:r :b :f)";
+    check_against_oracle(body, &["a", "b", "c", "d", "f", "x", "y"], "http://ex/r");
+    let build = Build::new_arc();
+    let pairs = object_property_instances(
+        &load(body),
+        OPE::ObjectProperty(build.object_property("http://ex/r")),
+    )
+    .unwrap();
+    let has = |from: &str, to: &str| {
+        pairs.contains(&(
+            build.named_individual(format!("http://ex/{from}")),
+            build.named_individual(format!("http://ex/{to}")),
+        ))
+    };
+    assert!(has("x", "c") && has("a", "y"));
+    assert!(!has("x", "d") && !has("x", "f") && !has("b", "y"));
+}
+
+#[test]
 fn possible_pairs_are_confirmed_or_refuted() {
     // Both choices imply r(a,b), while neither p(a,b) nor q(a,b) is certain.
     // The possible pair present in the chosen branch must be tested, not
