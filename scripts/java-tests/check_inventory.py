@@ -35,9 +35,13 @@ for name,failure in expected.items():
  assert failure['signature'],name
 corrections=json.loads((fixtures/'corrections.json').read_text())
 for name,c in corrections.items():
- assert name in executed and name not in native.values() and not name.startswith('reasoner.DatalogEngineTest.'),f'{name}: corrections apply only to replayed traces'
- row=json.loads((fixtures/'cases'/(name+'.json')).read_text())['operations'][c['operation']]
- assert (row['op'],row['expected'])==(c['op'],c['java']) and c['corrected']!=c['java'],f'{name}: stale correction'
+ traced=name in native and native[name].startswith('tableau::datatype_manager::java_tests::')
+ assert (name in executed or traced) and name not in native.values() and not name.startswith('reasoner.DatalogEngineTest.'),f'{name}: corrections apply only to recorded traces'
+ rows=json.loads((fixtures/'cases'/(name+'.json')).read_text())['operations']
+ for op in c.get('operations',[c]):
+  row=rows[op['operation']];assert row.get('operation',row['op'])==op['op'],f'{name}: stale correction'
+  if 'remove' in op:assert op['remove'] and all(v in row['expected'] for v in op['remove']),f'{name}: stale correction'
+  else:assert row['expected']==op['java'] and op['corrected']!=op['java'],f'{name}: stale correction'
  assert c['issue'] and c['justification'] and c['regressions'],name
  for test in c['regressions']:
   function=test.rsplit('::',1)[1]

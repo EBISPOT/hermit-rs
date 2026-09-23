@@ -12,7 +12,8 @@ properties, the issue #19 fix for the direct types of individuals, the issue
 core-blocking fix, which also resolved #29 and #30, the issue #32/#33
 blocking-validator fixture repair, the issue #34 description-graph rule
 fix, the semantic clause comparison for issues #35 to #50, and the issue #51
-key-normalization fix and expectation correction. All 598
+key-normalization fix and expectation correction, and the dateTime `24:00:00`
+fix and expectation corrections. All 598
 declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
@@ -24,13 +25,13 @@ individual-reuse and core-blocking suites.
 
 These are strict-mode results, before applying expected-failure exceptions.
 Every executable imported case passes in strict mode, and
-`expected-failures.json` is empty. Two passes use a documented correction
+`expected-failures.json` is empty. Eight passes use a documented correction
 instead of the recorded Java expectation (see below); the two empty upstream
 overrides have no assertions to run. The original controls and Java failure
 messages are retained as provenance, rather than rewritten to match Rust's
 output.
 
-Two passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
+Eight passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
 `xsd:anyURI[minLength 1]` to be empty, but under XSD 1.1 and the OWL 2 Direct
 Semantics it contains exactly the empty URI (issue #9). Java misses it because
@@ -38,7 +39,8 @@ dk.brics `getFiniteStrings` omits the empty word of a non-singleton automaton.
 The trace keeps Java's `false`; [corrections.json](corrections.json) records the
 corrected `true`, its evidence and independent membership and cardinality
 regressions. `structural.NormalizationTest.testKeys2` is the second; see issue
-#51 below.
+#51 below. The other six are dateTime cases that count `24:00:00` as a value of
+its own; see the dateTime value space below.
 
 Every case still executes in the default gate. `expected-failures.json` identifies
 each discrepancy and its failing assertion. A new failure, a changed failing
@@ -127,15 +129,25 @@ assignment all use it. Enumerating these values also removed a false clash: two
 different single-instant ranges with the same count were treated as one value
 space, so two values that had to differ clashed.
 
-The count at a single instant follows HermiT, which counts `24:00:00` as a
-value separate from `00:00:00` of the next day, and so treats the two spellings
-as different constants. XSD 1.1 maps both spellings to one value (Part 2
-§3.3.7.2, §E.3.5 and §E.3.1). So asserting both spellings for a functional
-data property clashes, wrongly, in Java as in Rust. `DateTimeTest.testFinite1_1`
-and `testFinite2_1` pass only because of the extra value: under XSD 1.1 their
-ranges hold one and two values, fewer than the two and four they require.
-Three native `DateTimeInterval` tests assert the same representation.
-Correcting it is left to a separate change.
+HermiT counts `24:00:00` as a value separate from `00:00:00` of the next day
+(`DateTime.m_lastDayInstant`), and so treats the two spellings as different
+constants. XSD 1.1 maps both spellings to one value (Part 2 §3.3.7.2, §E.3.5
+and §E.3.1), and OWL 2 takes xsd:dateTime from XSD 1.1 (Structural
+Specification §4.7). So asserting both spellings for a functional data
+property clashed, wrongly, and a single instant held an extra value at each
+local midnight. Rust now parses `24:00:00` to the next day's `00:00:00` value
+and counts one value per timezone offset at an instant (1681 with an offset,
+1 without). This deliberately deviates from Java. `DateTimeTest.testFinite1_1`
+and `testFinite2_1` passed in Java only because of the extra value: their
+ranges hold one and two values, fewer than the two and four they require, so
+their ontologies are inconsistent. The native `testExactIntervalsWithoutTZ2`,
+`testExactIntervalsWithTZ2` and `testExactIntervalsWithTZ3` count and list the
+extra values, and `testParsing` prints `24:00:00` back. The traces keep the
+Java expectations; [corrections.json](corrections.json) records the corrected
+ones for all six cases, which the native datatype port applies too.
+`tests/datetime_24h.rs` checks equality, enumerations, interval bounds, counting,
+xsd:dateTimeStamp and the lexical edge cases (`24:00:00.0` and a timezone are
+valid; `24:00:01` is malformed).
 
 Issues #15 and #16 had one cause, in the numeric value spaces. owl:real,
 owl:rational, xsd:decimal and the integer datatypes share one value space, whose

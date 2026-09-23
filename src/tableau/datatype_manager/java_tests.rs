@@ -28,19 +28,14 @@ fn date_lexical(value: &DataValue) -> String {
     let DataValue::DateTime {
         millis,
         has_tz,
-        last_day,
         tz_offset,
     } = value
     else {
         panic!("dateTime")
     };
     let local = millis + i64::from(*tz_offset) * 60_000;
-    let days = local.div_euclid(86_400_000) - i64::from(*last_day);
-    let day_ms = if *last_day {
-        86_400_000
-    } else {
-        local.rem_euclid(86_400_000)
-    };
+    let days = local.div_euclid(86_400_000);
+    let day_ms = local.rem_euclid(86_400_000);
     let z = days + 719468;
     let era = z.div_euclid(146097);
     let doe = z - era * 146097;
@@ -91,7 +86,9 @@ fn run(name: &str) {
         .join(format!("{name}.json"));
     let case: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     assert_eq!(case["java_errors"], serde_json::json!([]));
-    for (index, row) in case["operations"].as_array().unwrap().iter().enumerate() {
+    let mut rows = case["operations"].as_array().unwrap().clone();
+    crate::java_test_support::corrections::correct(name, &mut rows);
+    for (index, row) in rows.iter().enumerate() {
         let ranges: Vec<_> = row["ranges"]
             .as_array()
             .unwrap()
