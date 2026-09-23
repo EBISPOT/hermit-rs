@@ -47,7 +47,9 @@ Java elements to `remove`), with the specification evidence, the Java cause
 and independent regression tests. Traces stay as exported: the replay runner,
 and the native datatype port that reads the same traces, substitute the
 corrected value, in strict mode too, only while the trace still records that
-Java value. The inventory check validates every entry.
+Java value. A corrected value `{"invalid": error}` records that the
+ontology must be rejected: the reasoner's creation becomes an `invalid`
+operation and its queries are dropped. The inventory check validates every entry.
 
 Missing operations, empty recordings, unexpected exceptions, timeouts, and
 allocation failures are failures, with the same explicit exception policy. `upstream-failures.json` separately preserves assertions that already fail

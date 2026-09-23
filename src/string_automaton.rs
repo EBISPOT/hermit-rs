@@ -1557,11 +1557,13 @@ const STEP_LIMIT: u64 = 4096;
 /// Words longer than this are never materialised.
 const ENUMERATION_LENGTH_LIMIT: u64 = 4096;
 
-/// Above this many string-part states, a count over a long window is not
-/// computed by matrix powers (cubic in the states); it is reported as
-/// `u128::MAX`, the saturated "at least this many", which never causes a
-/// cardinality clash.
-const MATRIX_STATE_LIMIT: usize = 160;
+/// The most multiplications the sparse matrix powers of one count may take.
+/// A count whose powers would take more is reported as `u128::MAX`, the
+/// saturated "at least this many", which never causes a cardinality clash.
+/// The powers of a sparse step matrix (a cycle, a chain of choices) stay
+/// sparse, so only a large, densely connected automaton, whose words over a
+/// long window are far too many to matter, reaches the budget.
+const MATRIX_WORK_LIMIT: u64 = 1 << 29;
 
 /// The string part of a determinised automaton as a graph whose steps are the
 /// characters before SEPARATOR, so that a word's string-part length is the
@@ -1851,68 +1853,87 @@ impl LengthView {
             }
             return total;
         }
-        if n > MATRIX_STATE_LIMIT {
-            return u128::MAX;
-        }
         // With M the step matrix and t the tails, A = [[M, t], [0, 1]] has
         // A^k = [[M^k, sum_{j<k} M^j t], [0, 1]]. The count is
         // e_start M^min sum_{j<=max-min} M^j t.
         let size = n + 1;
-        let mut a = vec![vec![0u128; size]; size];
+        let mut a: SparseMatrix = vec![Vec::new(); size];
         for (q, out) in self.succ.iter().enumerate() {
+            let mut row: Vec<(usize, u128)> = Vec::new();
             for &(to, width) in out {
-                a[q][to] = a[q][to].saturating_add(width);
+                match row.iter_mut().find(|(j, _)| *j == to) {
+                    Some((_, count)) => *count = count.saturating_add(width),
+                    None => row.push((to, width)),
+                }
             }
-            a[q][n] = self.tail[q];
+            if self.tail[q] > 0 {
+                row.push((n, self.tail[q]));
+            }
+            a[q] = row;
         }
-        a[n][n] = 1;
-        let at_min = matrix_power(&a, min);
-        let sums = matrix_power(&a, max - min + 1);
+        a[n] = vec![(n, 1)];
+        let mut work = 0u64;
+        let (Some(at_min), Some(sums)) =
+            (matrix_power(&a, min, &mut work), matrix_power(&a, max - min + 1, &mut work))
+        else {
+            return u128::MAX;
+        };
         let mut total: u128 = 0;
-        for q in 0..n {
-            total = total.saturating_add(at_min[start][q].saturating_mul(sums[q][n]));
+        for &(q, count) in at_min[start].iter().filter(|&&(q, _)| q < n) {
+            if let Some(&(_, sum)) = sums[q].iter().find(|(j, _)| *j == n) {
+                total = total.saturating_add(count.saturating_mul(sum));
+            }
         }
         total
     }
 }
 
-/// Saturating product of square matrices of counts.
-fn matrix_product(a: &[Vec<u128>], b: &[Vec<u128>]) -> Vec<Vec<u128>> {
+/// A square matrix of counts, each row as its nonzero entries.
+type SparseMatrix = Vec<Vec<(usize, u128)>>;
+
+/// Saturating product of square matrices of counts, or `None` when the work
+/// done so far would exceed `MATRIX_WORK_LIMIT`.
+fn matrix_product(a: &SparseMatrix, b: &SparseMatrix, work: &mut u64) -> Option<SparseMatrix> {
     let size = a.len();
-    let mut out = vec![vec![0u128; size]; size];
-    for i in 0..size {
-        for k in 0..size {
-            let x = a[i][k];
-            if x == 0 {
-                continue;
-            }
-            for j in 0..size {
-                let y = b[k][j];
-                if y != 0 {
-                    out[i][j] = out[i][j].saturating_add(x.saturating_mul(y));
+    let cost: u64 = a.iter().flatten().map(|&(k, _)| b[k].len() as u64 + 1).sum();
+    *work = work.saturating_add(cost).saturating_add(size as u64);
+    if *work > MATRIX_WORK_LIMIT {
+        return None;
+    }
+    let mut accumulator = vec![0u128; size];
+    let mut touched: Vec<usize> = Vec::new();
+    let mut out: SparseMatrix = Vec::with_capacity(size);
+    for row in a {
+        for &(k, x) in row {
+            for &(j, y) in &b[k] {
+                if accumulator[j] == 0 {
+                    touched.push(j);
                 }
+                accumulator[j] = accumulator[j].saturating_add(x.saturating_mul(y));
             }
         }
+        touched.sort_unstable();
+        out.push(touched.iter().map(|&j| (j, std::mem::take(&mut accumulator[j]))).collect());
+        touched.clear();
     }
-    out
+    Some(out)
 }
 
-/// `a^exponent` with saturating counts.
-fn matrix_power(a: &[Vec<u128>], mut exponent: u64) -> Vec<Vec<u128>> {
+/// `a^exponent` with saturating counts, or `None` past the work budget.
+fn matrix_power(a: &SparseMatrix, mut exponent: u64, work: &mut u64) -> Option<SparseMatrix> {
     let size = a.len();
-    let mut result: Vec<Vec<u128>> =
-        (0..size).map(|i| (0..size).map(|j| (i == j) as u128).collect()).collect();
-    let mut power = a.to_vec();
+    let mut result: SparseMatrix = (0..size).map(|i| vec![(i, 1)]).collect();
+    let mut power = a.clone();
     while exponent > 0 {
         if exponent & 1 == 1 {
-            result = matrix_product(&result, &power);
+            result = matrix_product(&result, &power, work)?;
         }
         exponent >>= 1;
         if exponent > 0 {
-            power = matrix_product(&power, &power);
+            power = matrix_product(&power, &power, work)?;
         }
     }
-    result
+    Some(result)
 }
 
 impl Automaton {
@@ -2336,6 +2357,21 @@ mod tests {
         let tagged = xsd_pattern_to_automaton("a").unwrap().concatenate(&nonempty_lang_tag());
         assert_eq!(tagged.cardinality_within(&[(1, Some(1))]), None);
         assert_eq!(tagged.cardinality_within(&[(2, Some(huge))]), Some(0));
+    }
+
+    #[test]
+    fn long_windows_over_many_states_are_counted_exactly() {
+        // `(a{200})*` has 200 string states; a long window was counted as
+        // `u128::MAX` ("at least") above 160 states.
+        let cycle = xsd_pattern_to_automaton("(a{200})*").unwrap().concatenate(&empty_lang_tag());
+        assert_eq!(cycle.cardinality_within(&[(5000, Some(5000))]), Some(1));
+        assert_eq!(cycle.cardinality_within(&[(5001, Some(5199))]), Some(0));
+        assert_eq!(cycle.cardinality_within(&[(5000, Some(5399))]), Some(2));
+        let huge = 2_147_483_000u64; // a multiple of 200
+        assert_eq!(cycle.cardinality_within(&[(huge, Some(huge + 399))]), Some(2));
+        // Two choices in a long cycle: 2^25 words of length 5000.
+        let choices = xsd_pattern_to_automaton("([ab]a{199})*").unwrap().concatenate(&empty_lang_tag());
+        assert_eq!(choices.cardinality_within(&[(5000, Some(5000))]), Some(1 << 25));
     }
 
     #[test]

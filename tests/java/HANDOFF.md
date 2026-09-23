@@ -112,6 +112,17 @@ had length 2; `\d`, `\w` and `.` followed dk.brics or the `regex` crate; and
 length and exhausted memory. See `tests/string_datatype_edge_cases.rs` and
 [RESULTS.md](RESULTS.md).
 
+Large value spaces, anonymous constants, unsupported dateTime values and the
+`Infinity` spellings (**resolved**, no issue; rejecting `"Infinity"` deviates
+from Java and corrects `DatatypesTest.testINF`). Cliques of more than 4096
+nodes compared unlisted value spaces by count, survivors were listed only up to
+4096 values, a string count over more than 160 states saturated, and a
+`DataOneOf` holding an anonymous constant was infinite. See
+`tests/datatype_robustness.rs` and [RESULTS.md](RESULTS.md). Still open: a
+bounded repetition in a pattern (`a{2147483000}`) builds one automaton state
+per repetition, and dateTime values beyond ±9999 or finer than milliseconds are
+rejected rather than represented.
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
@@ -134,8 +145,9 @@ are grouped; every issue lists its exact cases, reproduction command, findings,
 and acceptance criteria. At the release baseline, 912 imported cases pass and
 two overrides are empty in the original Java source. All 43 are now resolved.
 In strict mode, all 975 executable cases pass and `expected-failures.json` is
-empty. Nine of those passes use documented corrections of the Java expectation
-(#9, #51, six dateTime `24:00:00` cases and one base64Binary case).
+empty. Ten of those passes use documented corrections of the Java expectation
+(#9, #51, six dateTime `24:00:00` cases, one base64Binary case and
+`DatatypesTest.testINF`).
 
 | Issue | Work | Cases |
 | --- | --- | ---: |

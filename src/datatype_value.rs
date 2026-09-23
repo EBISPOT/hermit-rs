@@ -805,16 +805,14 @@ fn any_uri_grammar(s: &str) -> bool {
     }
     true
 }
-/// Parse an `xsd:double`/`xsd:float` special-value lexical form the way
-/// `Double.parseDouble`/`Float.parseFloat` do (accept `Infinity`/`-Infinity`/
-/// `+Infinity`/`NaN`), plus HermiT's `INF`/`-INF`. Returns `Some(true/false/...)`
-/// classification via the closure the caller applies; here it normalizes the
-/// special spellings to a canonical token, or `None` to fall through to a numeric
-/// parse. Rejects `+INF` and the lowercase spellings, as Java does.
+/// Classifies an `xsd:double`/`xsd:float` special-value lexical form of XSD 1.1
+/// (Part 2 §3.3.4.2, §3.3.5.2): `INF`, `+INF`, `-INF` or `NaN`, or `None` to
+/// fall through to a numeric parse. Java's `Infinity` spellings and the
+/// lowercase ones are not special values.
 pub fn float_special(t: &str) -> Option<FloatSpecial> {
     match t {
-        "INF" | "Infinity" | "+Infinity" => Some(FloatSpecial::PosInf),
-        "-INF" | "-Infinity" => Some(FloatSpecial::NegInf),
+        "INF" | "+INF" => Some(FloatSpecial::PosInf),
+        "-INF" => Some(FloatSpecial::NegInf),
         "NaN" => Some(FloatSpecial::Nan),
         _ => None,
     }
@@ -945,6 +943,67 @@ fn encode_hex_upper(bytes: &[u8]) -> String {
 }
 
 /// Maximum number of days in `month` of `year` (proleptic Gregorian).
+/// Whether `lexical` is a valid XSD 1.1 xsd:dateTime (or xsd:dateTimeStamp)
+/// lexical form whose value is not supported: a year beyond ±9999 or a
+/// fraction of a second finer than milliseconds. XSD 1.1 Part 2 §3.3.7 allows
+/// both (yearFrag has any number of digits, secondFrag any number of fraction
+/// digits), but values are held as milliseconds within HermiT's years, so
+/// such a literal is rejected with its own error instead of being called
+/// malformed or rounded to a different value.
+pub fn is_unsupported_datetime_lexical(lexical: &str, datatype_uri: &str) -> bool {
+    if !is_datetime_datatype(datatype_uri) || parse_value(lexical, datatype_uri).is_some() {
+        return false;
+    }
+    let s = lexical.trim();
+    if !s.is_ascii() {
+        return false;
+    }
+    let (sign, rest) = match s.strip_prefix('-') {
+        Some(rest) => ("-", rest),
+        None => ("", s),
+    };
+    let Some(year_end) = rest.find('-') else {
+        return false;
+    };
+    let year = &rest[..year_end];
+    if year.len() < 4 || !year.bytes().all(|b| b.is_ascii_digit()) || (year.len() > 4 && year.starts_with('0')) {
+        return false;
+    }
+    // A year with the same leap-year rule (the Gregorian calendar repeats
+    // every 400 years) and four digits.
+    let cycle = year.bytes().fold(0u32, |r, b| (r * 10 + u32::from(b - b'0')) % 400);
+    let mut normalized = format!("{sign}{}{}", 2000 + cycle, &rest[year_end..]);
+    // Keep three fraction digits; 24:00:00 allows a zero fraction only.
+    if let Some(t) = normalized.find('T') {
+        let time = normalized[t..].to_string();
+        if let Some(dot) = time.find('.') {
+            let digits = time[dot + 1..].bytes().take_while(u8::is_ascii_digit).count();
+            if digits > 3 {
+                if time.starts_with("T24") && time[dot + 4..dot + 1 + digits].bytes().any(|b| b != b'0') {
+                    return false;
+                }
+                normalized = format!("{}{}{}", &normalized[..t], &time[..dot + 4], &time[dot + 1 + digits..]);
+            }
+        }
+    }
+    parse_value(&normalized, datatype_uri).is_some()
+}
+
+/// The error for a literal that `parse_value` rejects: an unsupported
+/// dateTime value (see `is_unsupported_datetime_lexical`), or else a
+/// malformed literal (HermiT's `MalformedLiteralException`).
+pub fn literal_error(lexical: &str, datatype_uri: &str) -> String {
+    if is_unsupported_datetime_lexical(lexical, datatype_uri) {
+        format!(
+            "UnsupportedDatatypeValue: \"{lexical}\" is a valid value of datatype <{datatype_uri}>, \
+             but only dateTime values with a year from -9999 to 9999 and at most millisecond \
+             precision are supported"
+        )
+    } else {
+        format!("MalformedLiteralException: \"{lexical}\" is not a well-formed value of datatype <{datatype_uri}>")
+    }
+}
+
 /// Direct port of `DateTime.java:266-277` `daysInMonth(year, month)`.
 fn days_in_month(year: i64, month: i64) -> i64 {
     if month == 2 {
@@ -1223,9 +1282,11 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         // FloatDatatypeHandler.parseLiteral: Float.parseFloat (which trims and
         // accepts "Infinity"/"NaN") is tried first; only on failure is the lexical
         // form matched EXACTLY (untrimmed) against "INF"/"-INF". So " INF " is
-        // ill-typed while " Infinity " is not. "+INF" is in the XSD 1.1 lexical
-        // space (Part 2 §3.3.4.2) although Java rejects it. Java's trailing
-        // f/F/d/D type suffix ("1.0f") is not, so it is ill-typed here.
+        // ill-typed. "+INF" is in the XSD 1.1 lexical space (Part 2 §3.3.4.2)
+        // although Java rejects it. Java's "Infinity", "+Infinity" and
+        // "-Infinity" are not (the special values are spelled INF, +INF, -INF
+        // and NaN), and neither is its trailing f/F/d/D type suffix ("1.0f"),
+        // so they are ill-typed here.
         let v: f32 = if lexical == "INF" || lexical == "+INF" {
             f32::INFINITY
         } else if lexical == "-INF" {
@@ -1233,8 +1294,6 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         } else {
             let t = lexical.trim();
             match t {
-                "Infinity" | "+Infinity" => f32::INFINITY,
-                "-Infinity" => f32::NEG_INFINITY,
                 "NaN" => f32::NAN,
                 // `str::parse` accepts the XSD numerals plus case-insensitive
                 // "inf"/"infinity"/"nan", which have no digit. It rounds an
@@ -1248,9 +1307,9 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         };
         Some(DataValue::Float(if v.is_nan() { f32::NAN.to_bits() } else { v.to_bits() }))
     } else if is_xsd_double(datatype) {
-        // As for xsd:float: Double.parseDouble (trims, accepts "Infinity"/"NaN")
-        // is tried first; "INF"/"+INF"/"-INF" are matched only as an exact,
-        // untrimmed fallback, and a type suffix is ill-typed.
+        // As for xsd:float: "NaN" is trimmed, "INF"/"+INF"/"-INF" are matched
+        // only as an exact, untrimmed form, and Java's "Infinity" spellings and
+        // type suffixes are ill-typed.
         let v: f64 = if lexical == "INF" || lexical == "+INF" {
             f64::INFINITY
         } else if lexical == "-INF" {
@@ -1258,8 +1317,6 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         } else {
             let t = lexical.trim();
             match t {
-                "Infinity" | "+Infinity" => f64::INFINITY,
-                "-Infinity" => f64::NEG_INFINITY,
                 "NaN" => f64::NAN,
                 // As for xsd:float, a numeral with a digit or nothing.
                 _ => match t.parse::<f64>() {

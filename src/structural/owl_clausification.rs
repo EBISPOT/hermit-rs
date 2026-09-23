@@ -78,7 +78,7 @@ pub(crate) fn build_validated_constant(
     if !crate::datatype_value::is_supported_datatype(&datatype_uri) {
         // UnsupportedDatatypeException analogue.
         if ignore_unsupported_datatypes {
-            return Ok(Constant::create_anonymous(&lexical_form));
+            return Ok(Constant::create_unsupported_literal(&lexical_form));
         }
         return Err(format!(
             "Unsupported datatype '{datatype_uri}': literals can only use the datatypes \
@@ -108,10 +108,7 @@ pub(crate) fn build_validated_constant(
     if lexical_well_formed {
         Ok(Constant::create(lexical_form, datatype_uri))
     } else {
-        Err(format!(
-            "MalformedLiteralException: \"{lexical_form}\" is not a well-formed value of datatype \
-             <{datatype_uri}>"
-        ))
+        Err(crate::datatype_value::literal_error(&lexical_form, &datatype_uri))
     }
 }
 
@@ -390,9 +387,13 @@ impl<'a> DataRangeConverter<'a> {
                                 "minInclusive" | "maxInclusive"
                                 | "minExclusive" | "maxExclusive",
                             ) if is_datetime_datatype(&datatype_uri) => {
+                                // A valid but unsupported dateTime is reported by the
+                                // literal check, with its own error.
                                 !matches!(
                                     crate::datatype_value::parse_value(fv_lexical, fv_dtype),
                                     Some(DataValue::DateTime { .. })
+                                ) && !crate::datatype_value::is_unsupported_datetime_lexical(
+                                    fv_lexical, fv_dtype,
                                 )
                             }
                             // xsd:pattern: value must be a string AND a valid regex.
