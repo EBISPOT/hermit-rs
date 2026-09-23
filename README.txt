@@ -1,11 +1,14 @@
 Rust port
 ---------
-This branch contains hermit-rs. Full Java test parity is not yet achieved.
-All Java test methods are inventoried in tests/java/inventory.json; see
-tests/java/README.md for commands and tests/java/RESULTS.md for measured results
-and known failures. CI executes the cases and rejects regressions against the
-explicit expected outcomes. HERMIT_JAVA_STRICT=1 reports every Java mismatch
-as a failing test.
+This branch contains hermit-rs. All 598 declared Java test methods are
+inventoried in tests/java/inventory.json, and every executable imported case
+passes in strict mode (HERMIT_JAVA_STRICT=1): 922 replayed and 53 native cases,
+with no expected failures. Ten of those cases use a documented correction where
+the recorded Java expectation is wrong (tests/java/corrections.json); hermit-rs
+deliberately does not reproduce those Java bugs. All 359 scoped OWL WG
+conformance cases also pass, with no skips. See tests/java/README.md for
+commands and tests/java/RESULTS.md for the measured results and every
+deliberate deviation from Java. CI executes all cases and rejects regressions.
 
 For queries across many object properties, reuse ObjectPropertyInstanceIndex or
 IncrementalReasoner::object_property_instances. This shares consistency and
