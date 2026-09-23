@@ -1580,6 +1580,11 @@ pub fn any_uri_string_automaton() -> Automaton {
 /// character, and the escapes `%` HEX HEX. So a count over the value space is
 /// a count of this automaton's words.
 pub fn any_uri_value_automaton() -> Automaton {
+    static URIS: std::sync::OnceLock<Automaton> = std::sync::OnceLock::new();
+    URIS.get_or_init(build_any_uri_value_automaton).clone()
+}
+
+fn build_any_uri_value_automaton() -> Automaton {
     let chars = |s: &str| -> Vec<(u32, u32)> { s.chars().map(|c| (c as u32, c as u32)).collect() };
     let set = |ranges: Vec<(u32, u32)>| Automaton::ranges(&normalize_ranges(&ranges));
     let mut unreserved = vec![(0x30, 0x39), (0x41, 0x5A), (0x61, 0x7A)];
@@ -1907,6 +1912,10 @@ const ENUMERATION_LENGTH_LIMIT: u64 = 4096;
 /// over many states would pass the budget, and it is then reported as the
 /// cap ("at least"), which never causes a cardinality clash.
 const MATRIX_WORK_LIMIT: u64 = 1 << 31;
+
+/// The most bitset words of the entries at the cap one capped matrix power
+/// may hold (32 MiB), past which the count is reported as the cap too.
+const MATRIX_BITSET_WORDS: usize = 1 << 22;
 
 /// The string part of a determinised automaton as a graph whose steps are the
 /// characters before SEPARATOR, so that a word's string-part length is the
@@ -2283,7 +2292,8 @@ impl LengthView {
     /// repeats late, and its sparse matrix powers are cheap instead.
     fn count_periodic(&self, start: usize, min: u64, max: u64, cap: u128) -> Option<u128> {
         let edges: u64 = self.succ.iter().map(|out| out.len() as u64 + 1).sum();
-        let limit = PERIODIC_WORK_LIMIT / edges.max(1);
+        // At most 2^20 lengths, whose counts are kept.
+        let limit = (PERIODIC_WORK_LIMIT / edges.max(1)).min(1 << 20);
         let mut first = vec![0u128; self.len()];
         first[start] = 1;
         let (mu, period) = cycle_of(&first, |row| self.step_row(row, cap), limit)?;
@@ -2364,7 +2374,8 @@ fn cycle_of<T: Clone + PartialEq>(first: &T, step: impl Fn(&T) -> T, limit: u64)
 const PERIODIC_WORK_LIMIT: u64 = 1 << 26;
 
 /// A square matrix of counts capped at `cap`: per row, the columns whose
-/// entry is `cap` as a bitset, and the other nonzero entries.
+/// entry is `cap` as a bitset (empty when there are none), and the other
+/// nonzero entries.
 #[derive(Clone)]
 struct CappedMatrix {
     cap: u128,
@@ -2373,10 +2384,22 @@ struct CappedMatrix {
     small: Vec<Vec<(usize, u128)>>,
 }
 
+/// Sets bit `j` of a bitset of `words` words that may still be empty.
+fn set_bit(bits: &mut Vec<u64>, words: usize, j: usize) {
+    if bits.is_empty() {
+        *bits = vec![0; words];
+    }
+    bits[j / 64] |= 1 << (j % 64);
+}
+
+fn has_bit(bits: &[u64], j: usize) -> bool {
+    bits.get(j / 64).is_some_and(|word| word & (1 << (j % 64)) != 0)
+}
+
 impl CappedMatrix {
     fn new(size: usize, cap: u128) -> CappedMatrix {
         let words = size.div_ceil(64);
-        CappedMatrix { cap, words, full: vec![vec![0; words]; size], small: vec![Vec::new(); size] }
+        CappedMatrix { cap, words, full: vec![Vec::new(); size], small: vec![Vec::new(); size] }
     }
 
     fn size(&self) -> usize {
@@ -2386,78 +2409,84 @@ impl CappedMatrix {
     /// Sets row `i` from its nonzero entries, each at most `cap`, with
     /// distinct columns.
     fn set_row(&mut self, i: usize, entries: Vec<(usize, u128)>) {
-        self.full[i] = vec![0; self.words];
+        self.full[i] = Vec::new();
         self.small[i] = Vec::new();
         for (j, x) in entries {
             if x >= self.cap {
-                self.full[i][j / 64] |= 1 << (j % 64);
+                set_bit(&mut self.full[i], self.words, j);
             } else if x > 0 {
                 self.small[i].push((j, x));
             }
         }
     }
 
-    /// The capped product `self · other`, or `None` past the work budget. An
-    /// entry is `cap` when a term has one factor at `cap` and the other
-    /// nonzero; otherwise it is the capped sum of the terms of small factors.
+    /// The capped product `self · other`, or `None` past the work budget
+    /// (which also bounds the bitset words it allocates). An entry is `cap`
+    /// when a term has one factor at `cap` and the other nonzero; otherwise
+    /// it is the capped sum of the terms of small factors.
     fn product(&self, other: &CappedMatrix, work: &mut u64) -> Option<CappedMatrix> {
         let size = self.size();
         let cap = self.cap;
-        // Rows of `other` with the same columns at `cap`, and with the same
-        // nonzero columns, are grouped, so that a row of the product ORs each
-        // distinct bitset once: the saturated rows of a dense part repeat.
-        fn groups(rows: impl Iterator<Item = Vec<u64>>) -> (Vec<usize>, Vec<Vec<u64>>) {
-            let mut ids: HashMap<Vec<u64>, usize> = HashMap::new();
-            let mut distinct: Vec<Vec<u64>> = Vec::new();
-            let group = rows
-                .map(|bits| {
-                    *ids.entry(bits.clone()).or_insert_with(|| {
-                        distinct.push(bits);
-                        distinct.len() - 1
-                    })
+        let words = self.words;
+        // Rows of `other` with the same columns at `cap` are grouped, so that
+        // a row of the product ORs each distinct bitset once: the saturated
+        // rows of a dense part repeat.
+        let mut ids: HashMap<&[u64], usize> = HashMap::new();
+        let mut distinct: Vec<&[u64]> = Vec::new();
+        let full_group: Vec<usize> = other
+            .full
+            .iter()
+            .map(|bits| {
+                *ids.entry(bits.as_slice()).or_insert_with(|| {
+                    distinct.push(bits.as_slice());
+                    distinct.len() - 1
                 })
-                .collect();
-            (group, distinct)
-        }
-        let (full_group, full_rows) = groups(other.full.iter().cloned());
-        let (nonzero_group, nonzero_rows) = groups((0..size).map(|k| {
-            let mut bits = other.full[k].clone();
-            for &(j, _) in &other.small[k] {
-                bits[j / 64] |= 1 << (j % 64);
-            }
-            bits
-        }));
-        let mut full_seen = vec![usize::MAX; full_rows.len()];
-        let mut nonzero_seen = vec![usize::MAX; nonzero_rows.len()];
+            })
+            .collect();
+        let mut seen = vec![usize::MAX; distinct.len()];
         let mut out = CappedMatrix::new(size, cap);
         let mut accumulator = vec![0u128; size];
         let mut touched: Vec<usize> = Vec::new();
-        for i in 0..size {
-            let full = &mut out.full[i];
-            let mut row_work = self.words as u64;
-            let or = |target: &mut [u64], source: &[u64]| {
+        let mut allocated = 0usize;
+        let or = |target: &mut Vec<u64>, source: &[u64]| {
+            if source.is_empty() {
+                return;
+            }
+            if target.is_empty() {
+                *target = source.to_vec();
+            } else {
                 for (t, s) in target.iter_mut().zip(source) {
                     *t |= *s;
                 }
-            };
+            }
+        };
+        for i in 0..size {
+            let mut full: Vec<u64> = Vec::new();
+            let mut row_work = 1u64;
+            // A factor at `cap` times a nonzero one.
             for (word, &bits) in self.full[i].iter().enumerate() {
                 let mut bits = bits;
                 while bits != 0 {
-                    let g = nonzero_group[word * 64 + bits.trailing_zeros() as usize];
-                    if nonzero_seen[g] != i {
-                        nonzero_seen[g] = i;
-                        or(full, &nonzero_rows[g]);
-                        row_work += self.words as u64;
+                    let k = word * 64 + bits.trailing_zeros() as usize;
+                    let g = full_group[k];
+                    if seen[g] != i {
+                        seen[g] = i;
+                        or(&mut full, distinct[g]);
+                        row_work += words as u64;
                     }
+                    for &(j, _) in &other.small[k] {
+                        set_bit(&mut full, words, j);
+                    }
+                    row_work += other.small[k].len() as u64 + 1;
                     bits &= bits - 1;
                 }
             }
             for &(k, x) in &self.small[i] {
                 let g = full_group[k];
-                if full_seen[g] != i {
-                    full_seen[g] = i;
-                    or(full, &full_rows[g]);
-                    row_work += self.words as u64;
+                if seen[g] != i {
+                    seen[g] = i;
+                    or(&mut full, distinct[g]);
+                    row_work += words as u64;
                 }
                 row_work += other.small[k].len() as u64;
                 for &(j, y) in &other.small[k] {
@@ -2467,23 +2496,26 @@ impl CappedMatrix {
                     accumulator[j] = accumulator[j].saturating_add(x.saturating_mul(y)).min(cap);
                 }
             }
-            *work = work.saturating_add(row_work);
-            if *work > MATRIX_WORK_LIMIT {
-                return None;
-            }
             touched.sort_unstable();
             for &j in &touched {
                 let x = std::mem::take(&mut accumulator[j]);
-                if full[j / 64] & (1 << (j % 64)) != 0 {
+                if has_bit(&full, j) {
                     continue;
                 }
                 if x == cap {
-                    full[j / 64] |= 1 << (j % 64);
+                    set_bit(&mut full, words, j);
                 } else {
                     out.small[i].push((j, x));
                 }
             }
             touched.clear();
+            row_work += full.len() as u64;
+            allocated += full.len();
+            *work = work.saturating_add(row_work);
+            if *work > MATRIX_WORK_LIMIT || allocated > MATRIX_BITSET_WORDS {
+                return None;
+            }
+            out.full[i] = full;
         }
         Some(out)
     }

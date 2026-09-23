@@ -141,11 +141,20 @@ Exact dateTime values, large bounded repetitions and the exponential
 assignment search (**resolved**, no issue; accepting years beyond ±9999 and
 fractions finer than milliseconds deviates from Java, which rejects them).
 Instants are exact, a top-level `R{m,n}` among fixed-length pieces is a length
-window, and an all-different component is decided by bipartite matching. Still
-open: a large repetition nested in a group or beside a piece of varying length
-builds one state per copy, a string count over a large, dense automaton
-saturates at the work budget, and an anyURI space too large to list is counted
-by an upper bound.
+window, and an all-different component is decided by bipartite matching.
+
+The last datatype and CLI leftovers (**resolved**, no issue; writing every
+`-D` member as `<iri>` deviates from Java). The plain `-D` dump wrote the
+non-first `EquivalentDataProperties` members as `>iri>`, as
+`HierarchyDumperFSS` does. String and anyURI counts are capped at one more
+than the number of data nodes, which decides "at least k values" exactly: a
+long window is counted by stepping until the capped counts repeat, or by
+capped matrix powers, so a large, dense automaton no longer saturates, and an
+anyURI space is counted over `any_uri_value_automaton`, which accepts exactly
+the valid URIs. A large repetition inside plain groups is a length window too;
+elsewhere a pattern whose automaton would pass 65536 states is rejected with
+a resource error. See `tests/cli_hierarchy_output.rs`,
+`tests/datatype_robustness.rs` and [RESULTS.md](RESULTS.md).
 
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
