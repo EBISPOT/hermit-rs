@@ -53,6 +53,8 @@ pub enum DataValue {
     /// *distinct* from the bare `string` (and from any `xsd:string`), so
     /// `"a@en"^^rdf:PlainLiteral` ≠ `"a"^^xsd:string`. The length facet counts
     /// only the `string` part (see `RDFPlainLiteralDatatypeHandler.parseLiteral`).
+    /// The tag is in lowercase, as the value space holds it (rdf:PlainLiteral
+    /// §3), so `"a@EN"` and `"a@en"` are one value.
     LangString { string: String, lang: String },
     /// An instant on the timeline, held as an EXACT integer count of
     /// MILLISECONDS since the Unix epoch (UTC), plus whether the lexical form
@@ -1370,16 +1372,16 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         if lang.is_empty() {
             Some(DataValue::Text(string.to_string()))
         } else {
+            // The value holds the tag in lowercase (rdf:PlainLiteral §3), so tags
+            // compare case-insensitively: "a@EN" and "a@en" are one value.
+            let lang = lang.to_ascii_lowercase();
             // Mirror RDFPlainLiteralLengthInterval.contains(RDFPlainLiteralDataValue):95 —
             // s_languageTag.run(languageTag) rejects any tag that does not match the
             // full BCP47 languageTagAutomaton; return None (≡ MalformedLiteralException).
-            if !is_valid_language_bcp47(lang) {
+            if !is_valid_language_bcp47(&lang) {
                 return None;
             }
-            Some(DataValue::LangString {
-                string: string.to_string(),
-                lang: lang.to_string(),
-            })
+            Some(DataValue::LangString { string: string.to_string(), lang })
         }
     } else if is_string_datatype(datatype) {
         // The string subtypes (normalizedString/token/Name/NCName/NMTOKEN/language)

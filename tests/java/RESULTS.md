@@ -3,21 +3,22 @@
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
 #10/#11 excluded-URI fix, the issue #12 binary-length fix, the issue #14
-dateTime-interval fix and the issue #15/#16 numeric value-space fix. All 598
-declared Java methods are accounted for; inherited methods also run under their
-individual-reuse and core-blocking suites.
+dateTime-interval fix, the issue #15/#16 numeric value-space fix and the issue
+#17 string value-space fix. All 598 declared Java methods are accounted for;
+inherited methods also run under their individual-reuse and core-blocking
+suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 869 | 53 | 2 |
+| Query/structural replay | 870 | 52 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 919 | 56 | 2 |
+| Total, excluding OWL WG | 920 | 55 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 56 failures are:
+The Rust port does **not** yet have full Java test parity. The 55 failures are:
 
-* **36 Rust/Java discrepancies**, including inherited repetitions: datatype
-  consistency (plain/XML literals); property hierarchy and entailment results;
+* **35 Rust/Java discrepancies**, including inherited repetitions: datatype
+  consistency (XML literals); property hierarchy and entailment results;
   direct results and hierarchy printing; three core-blocking Widmann scenarios;
   and description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
@@ -60,11 +61,11 @@ stopped an `xsd:anyURI` value space from being built as a string automaton, so a
 pattern bounded only by a length window or a complemented length restriction
 counted as infinite, and its excluded values were never subtracted. Excluded
 anyURI values are now removed from the automaton; literals of other datatypes
-remove nothing. The string automaton lacks supplementary-plane characters (and
-U+FFFE/U+FFFF), which anyURI values may contain, so it is no longer used when the
-patterns admit one; the enumerating fallback counts those values instead. The
-regressions cover the remaining values, cardinality and distinct-value
-assignment.
+remove nothing. The string automaton lacks U+FFFE and U+FFFF, which anyURI
+values may contain (it lacked the supplementary-plane characters too before issue
+#17), so it is no longer used when the patterns admit one; the enumerating
+fallback counts those values instead. The regressions cover the remaining values,
+cardinality and distinct-value assignment.
 
 Issue #12 was a similar gap in binary data. The binary value space took its
 length window from the positive restrictions only. So
@@ -134,6 +135,45 @@ upper bound of -2147483648, which dropped the ten integers from -2147483658 to
 -2147483649. A NaN facet bound still follows HermiT: xsd:double ignores it, and
 xsd:float ignores it in `maxInclusive` and `maxExclusive`, although under XSD
 1.1 such a range is empty. Correcting that is left to a separate change.
+
+Issue #17 was the same gap for strings. The value space of rdf:PlainLiteral holds
+the strings and the pairs of a string and a lowercase language tag
+(rdf:PlainLiteral §3); xsd:string and its subtypes hold strings only. It was
+counted from the positive length facets, so `xsd:string[length 0]`, which holds
+only the empty string, still held one value once `""` was excluded
+(`RDFPlainLiteralTest.testSize_3`). The string value space now follows HermiT's
+`RDFPlainLiteralDatatypeHandler`. A restriction of xsd:string or rdf:PlainLiteral
+with length facets only is a pair of length windows, one of strings and one of
+tagged pairs; any other restriction is an automaton over the strings and their
+tags. It intersects the positive restrictions, subtracts each negated string
+restriction, then the excluded values that remain. The emptiness check, the
+cardinality and the distinct-value assignment all use it. This also corrected
+three other answers. Restrictions to three different lengths were consistent. A
+pattern on rdf:PlainLiteral held only its strings, not their tagged pairs, so two
+distinct values of `rdf:PlainLiteral[pattern "a"]` clashed. And a restriction with
+a large `maxLength` was built as an automaton, in quadratic time:
+`xsd:string[maxLength 100000]` did not finish within 20 seconds.
+
+Four corrections deviate from Java; no Java case depends on them. Language tags
+are case-insensitive, and the value space holds them in lowercase
+(rdf:PlainLiteral §3), so `"x"@en` and `"x"@EN` are one value; Rust, like
+HermiT's `RDFPlainLiteralDataValue`, compared them as written, so a functional
+data property with both values clashed. rdf:langRange matches a tag under the
+extended filtering of RFC 4647 §3.3.2, as rdf:PlainLiteral §3 requires; HermiT
+uses basic filtering, so `de-DE` did not match `de-Latn-DE`. The example in the
+specification follows basic filtering, which OWL 2 erratum 7 records as an error.
+The string automata now have every XML character (XSD 1.1 Part 2 §3.3.1), `#xD`,
+`#x80`–`#x9F` and the supplementary characters included. Rust's lacked them, so
+`xsd:string[pattern "\r"]` was empty, and HermiT's length and language-range
+automata lack them too. And HermiT turns the length windows of a subset into an
+automaton by intersecting the windows' automata, not uniting them, so conjoining
+a pattern with a subset that has a window of strings and one of tagged pairs,
+such as that of `rdf:PlainLiteral[minLength 1]`, leaves nothing.
+
+String lengths still count UTF-16 code units, as HermiT's do, while XSD 1.1
+counts characters (Part 2 §4.3.1), so a supplementary character has length 2.
+The count of a length window follows HermiT and XSD, one value per sequence of
+characters. Correcting the lengths is left to a separate change.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

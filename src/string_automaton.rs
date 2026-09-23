@@ -864,15 +864,19 @@ fn dot_ranges() -> Vec<(u32, u32)> {
     subtract_ranges(&xml_char_ranges(), &[(0x0A, 0x0A), (0x0D, 0x0D)])
 }
 
-/// The XML 1.0 Char set dk.brics uses for `.`/string automata:
-/// `#x9 #xA #x20-#x7F #xA0-#xD7FF #xE000-#xFFFD`.
+/// The XML `Char` production, whose characters make up the xsd:string values
+/// (XSD 1.1 Part 2 §3.3.1): `#x9 #xA #xD #x20-#xD7FF #xE000-#xFFFD
+/// #x10000-#x10FFFF`. HermiT's `xmlChar()` leaves out `#xD`, `#x80-#x9F` and the
+/// supplementary characters, although its xsd:string automaton
+/// (dk.brics `Datatypes.get("string")`) has them; without them the automata
+/// would miss string values.
 pub fn xml_char_ranges() -> Vec<(u32, u32)> {
     vec![
-        (0x09, 0x09),
-        (0x0A, 0x0A),
-        (0x20, 0x7F),
-        (0xA0, 0xD7FF),
+        (0x09, 0x0A),
+        (0x0D, 0x0D),
+        (0x20, 0xD7FF),
         (0xE000, 0xFFFD),
+        (0x10000, 0x10FFFF),
     ]
 }
 
@@ -1325,42 +1329,41 @@ pub fn language_automaton() -> Automaton {
     primary.concatenate(&subtag)
 }
 
-/// The full BCP47 `languageTagAutomaton` HermiT uses for rdf:PlainLiteral tags.
-/// Structure mirrors `RDFPlainLiteralPatternValueSpaceSubset.languageTagAutomaton`.
+/// The language tags of rdf:PlainLiteral values: the BCP 47 `langtag` production,
+/// in lowercase. Tags are case-insensitive, and the value space holds them in
+/// lowercase (rdf:PlainLiteral §3), so `"a"@EN` and `"a"@en` are one value.
+/// Structure mirrors `RDFPlainLiteralPatternValueSpaceSubset.languageTagAutomaton`,
+/// which also admits uppercase letters.
 pub fn language_tag_automaton() -> Automaton {
-    let alpha = || Automaton::ranges(&[(0x41, 0x5A), (0x61, 0x7A)]);
+    let alpha = || Automaton::ranges(&[(0x61, 0x7A)]);
     let digit = || Automaton::ranges(&[(0x30, 0x39)]);
-    let alnum = || Automaton::ranges(&[(0x30, 0x39), (0x41, 0x5A), (0x61, 0x7A)]);
+    let alnum = || Automaton::ranges(&[(0x30, 0x39), (0x61, 0x7A)]);
     let dash = || Automaton::char(0x2D);
-    // language: ([a-zA-Z]{2,3}((-[a-zA-Z]{3}){0,3})?) | [a-zA-Z]{4} | [a-zA-Z]{5,8}
+    // language: ([a-z]{2,3}((-[a-z]{3}){0,3})?) | [a-z]{4} | [a-z]{5,8}
     let extlang = dash().concatenate(&alpha().repeat_range(3, 3)).repeat_range(0, 3).optional();
     let lang23 = alpha().repeat_range(2, 3).concatenate(&extlang);
     let lang4 = alpha().repeat_range(4, 4);
     let lang58 = alpha().repeat_range(5, 8);
     let language = lang23.union(&lang4).union(&lang58);
-    // script: (-[a-zA-Z]{4})?
+    // script: (-[a-z]{4})?
     let script = dash().concatenate(&alpha().repeat_range(4, 4)).optional();
-    // region: (-([a-zA-Z]{2}|[0-9]{3}))?
+    // region: (-([a-z]{2}|[0-9]{3}))?
     let region = dash()
         .concatenate(&alpha().repeat_range(2, 2).union(&digit().repeat_range(3, 3)))
         .optional();
-    // variant: (-([a-zA-Z0-9]{5,8}|([0-9][a-z0-9]{3})))*
+    // variant: (-([a-z0-9]{5,8}|([0-9][a-z0-9]{3})))*
     let var_long = alnum().repeat_range(5, 8);
-    let var_dig = digit().concatenate(
-        &Automaton::ranges(&[(0x30, 0x39), (0x61, 0x7A)]).repeat_range(3, 3),
-    );
+    let var_dig = digit().concatenate(&alnum().repeat_range(3, 3));
     let variant = dash().concatenate(&var_long.union(&var_dig)).repeat();
-    // extension: (-([a-wy-zA-WY-Z0-9](-[a-zA-Z0-9]{2,8})+))*
+    // extension: (-([a-wy-z0-9](-[a-z0-9]{2,8})+))*
     let singleton = Automaton::ranges(&[
         (0x30, 0x39),
-        (0x41, 0x57),
-        (0x59, 0x5A), // A-W, Y-Z
         (0x61, 0x77),
         (0x79, 0x7A), // a-w, y-z
     ]);
     let ext_tail = dash().concatenate(&alnum().repeat_range(2, 8)).repeat_min(1);
     let extension = dash().concatenate(&singleton.concatenate(&ext_tail)).repeat();
-    // privateuse: (-x(-[a-zA-Z0-9]{1,8})+)?
+    // privateuse: (-x(-[a-z0-9]{1,8})+)?
     let priv_tail = dash().concatenate(&alnum().repeat_range(1, 8)).repeat_min(1);
     let privateuse = dash()
         .concatenate(&Automaton::char('x' as u32))
@@ -1421,36 +1424,68 @@ pub fn pattern_automaton(pattern: &str) -> Option<Automaton> {
     Some(string_part.concatenate(&any_lang_tag()))
 }
 
-/// `getLanguageRangeAutomaton(languageRange)`.
+/// `getLanguageRangeAutomaton(languageRange)`: the values `< "abc" , tag >` whose
+/// tag matches the range under the extended filtering of RFC 4647 §3.3.2, as
+/// rdf:PlainLiteral §3 (Table 1) requires. Subtags compare case-insensitively.
+/// The first subtag of the range must match the first subtag of the tag, `*`
+/// matching any. Every later subtag other than `*` must match a later subtag of
+/// the tag, and only subtags that are not singletons may lie between them. So
+/// `de-DE` matches `de-latn-de`, but neither `de` nor `de-x-de`. HermiT uses
+/// basic filtering instead, which admits only the range itself or the range
+/// followed by `-` as a prefix of the tag; the specification's own example
+/// follows it, which OWL 2 erratum 7 records as an error. A value without a tag
+/// never matches, even for the range `*`.
 pub fn language_range_automaton(language_range: &str) -> Automaton {
-    if language_range == "*" {
-        // s_anyString · s_nonemptyLangTag
-        return any_string().concatenate(&nonempty_lang_tag());
+    let range = language_range.to_ascii_lowercase();
+    let mut subtags = range.split('-');
+    let subtag_char = Automaton::ranges(&[(0x30, 0x39), (0x61, 0x7A)]);
+    let any_subtag = subtag_char.repeat_min(1);
+    let dash = Automaton::char(0x2D);
+    let mut tag = match subtags.next() {
+        Some("*") => any_subtag.clone(),
+        first => Automaton::literal(first.unwrap_or_default()),
+    };
+    let skipped = dash.concatenate(&subtag_char.repeat_min(2)).repeat();
+    for subtag in subtags.filter(|subtag| *subtag != "*") {
+        tag = tag.concatenate(&skipped).concatenate(&dash).concatenate(&Automaton::literal(subtag));
     }
-    // s_anyString · separator · (makeString(lower) · languagePatternEnd)
-    // languagePatternEnd = optional( '-' · anyString )
-    let lower = language_range.to_ascii_lowercase();
-    let lang_end = Automaton::char(0x2D).concatenate(&any_string()).optional();
+    let tag = tag.concatenate(&dash.concatenate(&any_subtag).repeat());
     any_string()
         .concatenate(&separator())
-        .concatenate(&Automaton::literal(&lower))
-        .concatenate(&lang_end)
+        .concatenate(&tag.intersection(&language_tag_automaton()))
 }
 
-/// `toAutomaton(minLength, maxLength)` for a length-bounded restriction (the
-/// string part intersected with the length window), in the combined alphabet with
-/// `s_anyLangTag`. `max == None` means unbounded (Integer.MAX_VALUE).
+/// `toAutomaton(minLength, maxLength)` for a length-bounded restriction: the
+/// strings whose length lies in `[min_length, max_length]`, followed by a tag of
+/// the given mode. `max == None` means unbounded (Integer.MAX_VALUE). The length
+/// counts UTF-16 code units, as HermiT's does (Java `String.length()`) and as
+/// `value_satisfies_facet` does, so a supplementary character, a single symbol
+/// here, counts two.
 pub fn length_automaton(min_length: usize, max_length: Option<usize>, lang: LangMode) -> Automaton {
-    let string_part = match max_length {
-        None => {
-            if min_length == 0 {
-                any_string()
+    // One state per number of code units read, up to the upper bound, or up to
+    // the lower bound, which then stands for every longer length too.
+    let last = max_length.unwrap_or(min_length);
+    let mut string_part = Automaton::new();
+    for _ in 0..=last {
+        string_part.add_state();
+    }
+    let (one_unit, two_units): (Vec<_>, Vec<_>) =
+        xml_char_ranges().into_iter().partition(|&(_, max)| max <= 0xFFFF);
+    for units in 0..=last {
+        string_part.accept[units] = units >= min_length;
+        for (width, ranges) in [(1, &one_unit), (2, &two_units)] {
+            let to = if units + width <= last {
+                units + width
+            } else if max_length.is_none() {
+                last
             } else {
-                any_string().intersection(&any_char().repeat_min(min_length))
+                continue;
+            };
+            for &(min, max) in ranges {
+                string_part.trans[units].push(Transition { min, max, to });
             }
         }
-        Some(max) => any_string().intersection(&any_char().repeat_range(min_length, max)),
-    };
+    }
     let tag = match lang {
         LangMode::Any => any_lang_tag(),
         LangMode::Absent => empty_lang_tag(),
@@ -1713,6 +1748,60 @@ mod tests {
         let b = xsd_pattern_to_automaton("[\\p{Lu}-[A]]").unwrap();
         assert!(!b.run("A"));
         assert!(b.run("B"));
+    }
+
+    #[test]
+    fn strings_have_every_xml_character() {
+        // xsd:string values are sequences of XML characters (XSD 1.1 Part 2
+        // §3.3.1): #xD, #x80-#x9F and the supplementary characters included.
+        let strings = any_string();
+        for s in ["\r", "\u{85}", "\u{10000}", "a\u{10FFFF}"] {
+            assert!(strings.run(s), "{s:?}");
+        }
+        for s in ["\u{1}", "\u{FFFE}", "\u{FFFF}"] {
+            assert!(!strings.run(s), "{s:?}");
+        }
+        // `.` matches every XML character but the line terminators.
+        let dot = xsd_pattern_to_automaton(".").unwrap();
+        assert!(dot.run("\u{85}") && dot.run("\u{10000}"));
+        assert!(!dot.run("\n") && !dot.run("\r"));
+    }
+
+    #[test]
+    fn length_windows_count_utf16_code_units() {
+        // As HermiT measures a string's length (Java String.length()), and as
+        // value_satisfies_facet does, a supplementary character has length 2.
+        let separator = char::from_u32(SEPARATOR).unwrap();
+        let word = |s: &str| format!("{s}{separator}");
+        let one = length_automaton(1, Some(1), LangMode::Absent);
+        assert!(one.run(&word("a")) && one.run(&word("\r")));
+        assert!(!one.run(&word("\u{10000}")) && !one.run(&word("")) && !one.run(&word("ab")));
+        // The strings of one code unit: every XML character below U+10000.
+        assert_eq!(one.cardinality(), Some(3 + (0xD7FF - 0x20 + 1) + (0xFFFD - 0xE000 + 1)));
+        let two = length_automaton(2, Some(2), LangMode::Absent);
+        assert!(two.run(&word("\u{10000}")) && two.run(&word("ab")));
+        assert!(!two.run(&word("a\u{10000}")));
+        let at_least_two = length_automaton(2, None, LangMode::Absent);
+        for s in ["\u{10000}", "abc", "a\u{10000}"] {
+            assert!(at_least_two.run(&word(s)), "{s:?}");
+        }
+        assert!(!at_least_two.run(&word("a")) && !at_least_two.run(&word("")));
+        // One state per code unit, so a large bound is cheap.
+        let long = length_automaton(0, Some(100_000), LangMode::Absent);
+        assert!(long.run(&word(&"a".repeat(100_000))));
+        assert!(!long.run(&word(&"a".repeat(100_001))));
+    }
+
+    #[test]
+    fn language_tags_are_lowercase() {
+        // The value space holds tags in lowercase (rdf:PlainLiteral §3).
+        let lt = language_tag_automaton();
+        for tag in ["en-gb", "de-latn-de-1996", "de-1abc", "sl-rozaj-biske", "en-a-bbb-x-a-ccc"] {
+            assert!(lt.run(tag), "{tag}");
+        }
+        for tag in ["en-GB", "EN", "de-x"] {
+            assert!(!lt.run(tag), "{tag}");
+        }
     }
 
     #[test]
