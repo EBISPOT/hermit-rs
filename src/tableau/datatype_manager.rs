@@ -1178,6 +1178,24 @@ impl Tableau {
                 if matches!(range, LiteralDataRange::InternalDatatype(_)) {
                     continue;
                 }
+                // An unknown datatype restriction and its negation are skipped too
+                // (DatatypeChecker.java:376-378,395-397): they constrain no value
+                // here, and `apply_unknown_datatype_restriction_semantics` keeps a
+                // restriction's values apart from its negation's.
+                let unknown = match &range {
+                    LiteralDataRange::DatatypeRestriction(r) => {
+                        self.unknown_datatype_restrictions.contains(r)
+                    }
+                    LiteralDataRange::AtomicNegationDataRange(n) => matches!(
+                        n.get_negated_data_range(),
+                        crate::model::AtomicDataRange::DatatypeRestriction(r)
+                            if self.unknown_datatype_restrictions.contains(r)
+                    ),
+                    _ => false,
+                };
+                if unknown {
+                    continue;
+                }
                 ranges.push((
                     range,
                     self.binary_extension_table.get_dependency_set(tuple_index, &empty),
@@ -1188,21 +1206,21 @@ impl Tableau {
     }
 
     /// Port of `DatatypeManager.applyUnknownDatatypeRestrictionSemantics`
-    /// (DatatypeManager.java:102-123). In the NON-default
-    /// `ignoreUnsupportedDatatypes` mode each unsupported datatype restriction `D`
-    /// is modelled as a fresh *infinite* value space; HermiT keeps the value space
-    /// of `D` and of `¬D` disjoint by forcing apart every pair of nodes asserting
-    /// one of `D`/`¬D` and the matching opposite. This phase walks the data-range
-    /// assertions and, for an unknown `D` (resp. `¬D`), emits an inequality to
-    /// every node carrying the opposite range.
+    /// (DatatypeManager.java:102-123). An unknown datatype restriction `D` -- an
+    /// unsupported datatype in the NON-default `ignoreUnsupportedDatatypes` mode,
+    /// or the `internal:unknown-datatype#` marker of the data-property
+    /// classification -- is modelled as a fresh *infinite* value space; HermiT
+    /// keeps the value space of `D` and of `¬D` disjoint by forcing apart every
+    /// pair of nodes asserting one of `D`/`¬D` and the matching opposite. This
+    /// phase walks the data-range assertions and, for an unknown `D` (resp. `¬D`),
+    /// emits an inequality to every node carrying the opposite range.
     ///
-    /// Faithfulness note: Java iterates only the *delta-old* slice of newly-added
-    /// assertions; we scan the TOTAL view (a superset), which is sound and
-    /// answer-identical because `Inequality` assertions are idempotent in the
-    /// extension table -- exactly as `check_datatype_constraints` already scans
-    /// TOTAL rather than delta-old. Gated by `check_unknown_datatype_restrictions`
-    /// (only ever set under `ignoreUnsupportedDatatypes`), so the default path
-    /// never enters here.
+    /// As in Java, only the *delta-old* slice -- the assertions added in the last
+    /// round -- is walked, and each of its unknown `D` (or `¬D`) assertions is
+    /// forced apart from every node carrying the opposite range so far; a later
+    /// opposite assertion is forced apart from it in its own round. Gated by
+    /// `check_unknown_datatype_restrictions`, which is set only when the
+    /// ontology has unknown datatype restrictions.
     pub fn apply_unknown_datatype_restriction_semantics(&mut self) {
         // Collect the (source range, node, dep, opposite range) work items first,
         // so the mutating `generate_inequalities_for` does not borrow the table
@@ -1215,7 +1233,7 @@ impl Tableau {
             LiteralDataRange,
         )> = Vec::new();
         let retrieval =
-            self.create_binary_retrieval([-1, -1], [None, None], View::Total);
+            self.create_binary_retrieval([-1, -1], [None, None], View::DeltaOld);
         for &tuple_index in &retrieval.tuple_indices {
             let label = self.binary_extension_table.get_tuple_object(tuple_index, 0);
             let node = match self.binary_extension_table.get_tuple_object(tuple_index, 1).as_node() {

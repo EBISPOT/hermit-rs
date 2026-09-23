@@ -543,6 +543,34 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         nodes_by_elements.insert(bottom_element, 1usize);
         Hierarchy { nodes: vec![top_node, bottom_node], top: 0, bottom: 1, nodes_by_elements }
     }
+
+    /// Port of `Hierarchy.transform` (without its optional ordering): the same
+    /// nodes and edges, with every element mapped through `transform`. A node's
+    /// representative is the image of its old representative
+    /// (`determineRepresentative` in HermiT's role classifiers).
+    pub fn transform<T, F>(&self, transform: F) -> Hierarchy<T>
+    where
+        T: Eq + Hash + Clone,
+        F: Fn(&E) -> T,
+    {
+        let nodes: Vec<HierarchyNode<T>> = self
+            .nodes
+            .iter()
+            .map(|node| HierarchyNode {
+                representative: transform(&node.representative),
+                equivalent_elements: node.equivalent_elements.iter().map(&transform).collect(),
+                parents: node.parents.clone(),
+                children: node.children.clone(),
+            })
+            .collect();
+        let mut nodes_by_elements = HashMap::new();
+        for (index, node) in nodes.iter().enumerate() {
+            for element in &node.equivalent_elements {
+                nodes_by_elements.insert(element.clone(), index);
+            }
+        }
+        Hierarchy { nodes, top: self.top, bottom: self.bottom, nodes_by_elements }
+    }
 }
 
 /// `DeterministicClassification.GraphNode` together with its Tarjan SCC state.
