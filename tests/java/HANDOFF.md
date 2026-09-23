@@ -64,14 +64,21 @@ brute-force comparison over random role boxes checks that each automaton accepts
 exactly the entailed role words. See `ROLE_AUTOMATON_CONSTRUCTION.md` and
 `tests/inverse_transitive_automaton_tests.rs`.
 
-Two gaps that no imported case covers, found while fixing #26. The
-`DisjointObjectProperties` entailment tests role atoms on the ontology's
+Two gaps that no imported case covers, found while fixing #26 (**resolved**,
+no issue; see `tests/property_query_gaps.rs`). The
+`DisjointObjectProperties` entailment tested role atoms on the ontology's
 tableau, where `owl:bottomObjectProperty` is axiomatized only when the ontology
-mentions it; otherwise `DisjointObjectProperties(owl:bottomObjectProperty :r)`
-is not entailed, as in Java, although the empty role is disjoint from every
-role. And `isFunctional`/`isInverseFunctional` test `owl:Thing <= max 1 P`,
-which rejects a non-simple `P` (a transitive property or
-`owl:topObjectProperty`) that Java's role atoms answer.
+mentions it; so `DisjointObjectProperties(owl:bottomObjectProperty :r)` was not
+entailed, as in Java, although the empty role is disjoint from every role.
+Pairs with the empty object or data role are now disjoint outright,
+`DisjointDataProperties` entailment (which threw, as in Java) uses role
+assertions on a shared anonymous constant, and the disjoint-property getters
+report a property that is empty in every model as disjoint from the top
+property too (deliberately deviating from Java, which leaves the top node out).
+And `isFunctional`/`isInverseFunctional` tested `owl:Thing <= max 1 P`, which
+rejected a non-simple `P` (a transitive property or `owl:topObjectProperty`)
+that Java's role atoms answer; they now test that `∃P.A ⊓ ∃P.¬A` is
+unsatisfiable for a fresh class `A`.
 
 Inequalities between two constant data nodes are compared by value
 (**resolved**, no issue). They were never checked, because the inequality

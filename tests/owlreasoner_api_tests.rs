@@ -117,13 +117,13 @@ fn entailment_disjoint_object_properties() {
     assert!(!reasoner::is_entailed(&empty, &concl).unwrap());
 }
 
-// FAITHFUL-TO-JAVA: the reference HermiT (1.4.0.0-SNAPSHOT) unconditionally rejects
-// owl:topDataProperty in a DataMaxCardinality filler (throwInvalidTopDPUseError), so
-// its OWN DisjointDataProperties reduction `∃p.L ⊓ ∃q.L ⊓ ≤1 owl:topDataProperty`
-// throws -- the entailment is not answerable in that HermiT. The port reproduces
-// this: is_entailed(DisjointDataProperties) returns Err (the same rejection).
+// Deliberate deviation from Java: the reference HermiT (1.4.0.0-SNAPSHOT)
+// unconditionally rejects owl:topDataProperty in a DataMaxCardinality filler
+// (throwInvalidTopDPUseError), so its own DisjointDataProperties reduction
+// `∃p.L ⊓ ∃q.L ⊓ ≤1 owl:topDataProperty` throws. The entailment is well defined,
+// and the port answers it with role assertions on a shared anonymous constant.
 #[test]
-fn entailment_disjoint_data_properties_errors_like_hermit() {
+fn entailment_disjoint_data_properties() {
     let b = Build::new_arc();
     let r = dp(&b, "http://example.org/dr");
     let s = dp(&b, "http://example.org/ds");
@@ -146,8 +146,10 @@ fn entailment_disjoint_data_properties_errors_like_hermit() {
         r.clone(),
         s.clone(),
     ]));
-    // Reference HermiT throws on its own reduction; the port returns Err — faithful.
-    assert!(reasoner::is_entailed(&o, &concl).is_err());
+    assert_eq!(reasoner::is_entailed(&o, &concl), Ok(true));
+    let other = dp(&b, "http://example.org/dt");
+    let concl = Component::DisjointDataProperties(DisjointDataProperties(vec![r.clone(), other]));
+    assert_eq!(reasoner::is_entailed(&o, &concl), Ok(false));
 }
 
 #[test]
