@@ -7054,7 +7054,11 @@ pub fn is_ontology_consistent_with_configuration(
     ontology: &horned_owl::ontology::set::SetOntology<crate::structural::A>,
     configuration: &crate::configuration::Configuration,
 ) -> Result<bool, String> {
-    let dl_ontology = clausify_ontology(ontology)?;
+    // Deviation from Java: an ontology of acyclic class definitions and
+    // assertions is checked through an equisatisfiable lazy unfolding, which
+    // avoids HermiT's exponential search on it (WebOnt description-logic-208).
+    let unfolded = crate::structural::definitorial_unfolding::unfold_definitions(ontology);
+    let dl_ontology = clausify_ontology(unfolded.as_ref().unwrap_or(ontology))?;
     Ok(Reasoner::with_configuration(&dl_ontology, configuration.clone()).is_consistent())
 }
 

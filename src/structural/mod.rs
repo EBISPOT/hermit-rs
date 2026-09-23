@@ -12,6 +12,7 @@
 
 pub mod automaton;
 pub mod built_in_property_manager;
+pub mod definitorial_unfolding;
 pub mod expression_manager;
 pub mod expressivity;
 pub mod object_property_inclusion_manager;
