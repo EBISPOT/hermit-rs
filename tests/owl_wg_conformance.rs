@@ -444,8 +444,8 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
             // some named) `owl:Ontology` header — even though every logical
             // axiom was extracted. We accept the parse when the only residue is
             // such ontology-header / version / import noise, and SKIP only when
-            // *logical* content (a stray class expression, sub-class/restriction
-            // triple, RDF list, etc.) was dropped — that is a genuine parser gap
+            // *logical* content (a referenced but unused class expression,
+            // sub-class/restriction triple, RDF list, etc.) was dropped — that is a genuine parser gap
             // where running the reasoner would silently use a truncated ontology.
             if !incomplete.is_complete() && !residue_is_benign(&incomplete) {
                 return Err(format!(

@@ -217,14 +217,14 @@ PASS	PositiveEntailment	TestCase-3AWebOnt-2Dimports-2D011
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Dmiscellaneous-2D302-2DDirect
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DsameAs-2D001
 PASS	Consistency	Bnode2somevaluesfrom
-SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Danonymous-2Dindividual
+PASS	Consistency	Owl2-2Drl-2Danonymous-2Dindividual
 PASS	Consistency	Owl2-2Drl-2Dinvalid-2Doneof
 PASS	Consistency	Owl2-2Drl-2Dinvalid-2Dunionof
-SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Dvalid-2Doneof
+PASS	Consistency	Owl2-2Drl-2Dvalid-2Doneof
 PASS	Consistency	TestCase-3AWebOnt-2DI4.5-2D001
 PASS	Consistency	TestCase-3AWebOnt-2DI5.2-2D005
 PASS	Consistency	TestCase-3AWebOnt-2DI5.2-2D006
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.26-2D001
+PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D001
 PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D002
 PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D003
 PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D004
@@ -346,8 +346,8 @@ PASS	PositiveEntailment	TestCase-3AWebOnt-2DClass-2D005-2Ddirect
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DI4.5-2D001
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D004
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D006
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.26-2D010
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.5-2D005
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.26-2D010
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.5-2D005
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DRestriction-2D005-2Ddirect
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DSymmetricProperty-2D002
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DTransitiveProperty-2D002

@@ -551,6 +551,10 @@ pub struct OntologyParser<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>>
     // Parsed OWL Objects keyed on their bnode
     class_expression: HashMap<BNode<A>, ClassExpression<A>>,
     used_class_expressions: HashSet<BNode<A>>,
+    // Blank nodes in object position of some triple, i.e. referenced by
+    // another construct. A class expression that nothing references stands
+    // alone; see `as_ontology_and_incomplete`.
+    referenced_bnodes: HashSet<BNode<A>>,
     object_property_expression: HashMap<BNode<A>, ObjectPropertyExpression<A>>,
     data_range: HashMap<BNode<A>, DataRange<A>>,
     // Annotations mapped to Triples (one entry per reifying owl:Axiom block).
@@ -582,6 +586,7 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             bnode_seq: d!(),
             class_expression: d!(),
             used_class_expressions: d!(),
+            referenced_bnodes: d!(),
             object_property_expression: d!(),
             data_range: d!(),
             ann_map: d!(),
@@ -1689,6 +1694,18 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                 ] => Ok(self
                     .retrieve_to_ni_seq(bnodeid)
                     .map(ClassExpression::ObjectOneOf)),
+                // Lenient reading, as OWLAPI's: Table 13 types an enumeration
+                // `rdf:type owl:Class`, but a non-empty list of IRIs can only
+                // be an ObjectOneOf (DataOneOf members are literals, Table 12).
+                [[_, Term::OWL(VOWL::OneOf), Term::BNode(bnodeid)]]
+                    if self.bnode_seq.get(bnodeid).is_some_and(|members| {
+                        !members.is_empty() && members.iter().all(|m| matches!(m, Term::Iri(_)))
+                    }) =>
+                {
+                    Ok(self
+                        .retrieve_to_ni_seq(bnodeid)
+                        .map(ClassExpression::ObjectOneOf))
+                }
                 [
                     [_, Term::OWL(VOWL::HasSelf), _], //:
                     [_, Term::OWL(VOWL::OnProperty), pr],
@@ -2473,6 +2490,12 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             };
             let ind = self.anonymous_individual(sub);
             let cmp: Component<A> = match t {
+                // Lenient reading, as OWLAPI's: Table 7 declares only IRIs as
+                // named individuals. Typing a blank node owl:NamedIndividual
+                // states only that it is an individual, so the triple is
+                // redundant and yields no axiom (anonymous individuals are
+                // never declared).
+                [_, Term::RDF(VRDF::Type), Term::OWL(VOWL::NamedIndividual)] => continue,
                 [_, Term::RDF(VRDF::Type), cls] => {
                     let ce = match cls {
                         Term::Iri(iri) if !is_reserved_iri(iri) => Class(iri.clone()).into(),
@@ -2806,6 +2829,13 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                     }};
                 }
                 let triple = std::mem::take(&mut self.triple);
+                self.referenced_bnodes = triple
+                    .iter()
+                    .filter_map(|t| match &t.triple()[2] {
+                        Term::BNode(id) => Some(id.clone()),
+                        _ => None,
+                    })
+                    .collect();
                 step!("group_triples", Self::group_triples(triple, &mut self.simple, &mut self.bnode));
 
                 // sort the triples, so that I can get a dependable order
@@ -3007,8 +3037,17 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
 
         let bnode: Vec<_> = self.bnode.into_values().collect();
         let bnode_seq: Vec<_> = self.bnode_seq.into_values().collect();
+        // A class expression is consumed when its pattern is matched
+        // (Section 3.2.4: "Each time a pattern is matched, the matched
+        // triples are removed from G"), whether or not an axiom uses it. So
+        // a standalone expression, one that no triple references (OWL 1
+        // tests use them to state that a class description exists), is
+        // parsed completely and contributes no axiom. One that is referenced
+        // but was never used is still reported: the reference was lost.
         let class_expression: Vec<_> = self.class_expression.into_iter()
-            .filter(|(id, _)| !self.used_class_expressions.contains(id))
+            .filter(|(id, _)| {
+                !self.used_class_expressions.contains(id) && self.referenced_bnodes.contains(id)
+            })
             .map(|(_, expression)| expression)
             .collect();
         let object_property_expression: Vec<_> =
