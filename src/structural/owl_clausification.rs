@@ -241,6 +241,10 @@ pub struct DataRangeConverter<'a> {
     /// `MalformedLiteralException` / `UnsupportedDatatypeException`; `clausify`
     /// checks it and rejects the ontology, mirroring Java.
     literal_error: Option<String>,
+    /// The first pattern whose automaton would pass the state limit
+    /// (`string_automaton::pattern_resource_error`); `clausify` rejects the
+    /// ontology with it rather than exhausting memory later.
+    resource_error: Option<String>,
 }
 
 impl<'a> DataRangeConverter<'a> {
@@ -250,6 +254,7 @@ impl<'a> DataRangeConverter<'a> {
             defined_datatype_iris,
             all_unknown_datatype_restrictions: HashSet::new(),
             literal_error: None,
+            resource_error: None,
             unsupported_datatype: None,
             unsupported_facet: None,
         }
@@ -406,9 +411,14 @@ impl<'a> DataRangeConverter<'a> {
                                     // limit on the compiled size would reject
                                     // a valid large repetition like
                                     // `a{2147483000}`.
-                                    regex_syntax::Parser::new()
+                                    let invalid = regex_syntax::Parser::new()
                                         .parse(&format!("^(?:{})$", fv_lexical))
-                                        .is_err()
+                                        .is_err();
+                                    if !invalid && self.resource_error.is_none() {
+                                        self.resource_error =
+                                            crate::string_automaton::pattern_resource_error(fv_lexical);
+                                    }
+                                    invalid
                                 }
                             }
                             // rdf:langRange: value must be a string.
@@ -1545,6 +1555,9 @@ impl OWLClausification {
         // supported datatype, or an unsupported datatype, as HermiT rethrows
         // MalformedLiteralException / UnsupportedDatatypeException from parseLiteral.
         if let Some(message) = converter.literal_error.take() {
+            return Err(message);
+        }
+        if let Some(message) = converter.resource_error.take() {
             return Err(message);
         }
         let all_unknown_datatype_restrictions =

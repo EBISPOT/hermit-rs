@@ -193,11 +193,7 @@ impl Automaton {
 
     /// `self{min,}` (at least `min` repetitions).
     pub fn repeat_min(&self, min: usize) -> Automaton {
-        let mut a = Automaton::epsilon();
-        for _ in 0..min {
-            a = a.concatenate(self);
-        }
-        a.concatenate(&self.repeat())
+        self.repeat_range(min, min).concatenate(&self.repeat())
     }
 
     /// `self{min,max}` (between `min` and `max` repetitions, inclusive).
@@ -205,17 +201,25 @@ impl Automaton {
         if max < min {
             return Automaton::empty_language();
         }
+        // One copy after another, in time linear in the copies: the accepting
+        // states of the copies so far lead to the next copy, and stay
+        // accepting once there are `min` copies (the optional tail).
         let mut a = Automaton::epsilon();
-        for _ in 0..min {
-            a = a.concatenate(self);
+        let mut finals = vec![a.start];
+        let own_finals: Vec<usize> = (0..self.trans.len()).filter(|&s| self.accept[s]).collect();
+        for copy in 0..max {
+            let offset = a.trans.len();
+            a.append_states(self);
+            for &f in &finals {
+                a.eps[f].push(self.start + offset);
+                if copy < min {
+                    a.accept[f] = false;
+                }
+            }
+            finals = own_finals.iter().map(|&s| s + offset).collect();
         }
-        // optional tail: (self (self (... )?)?)? up to max-min times
-        let optional = self.optional();
-        let mut tail = Automaton::epsilon();
-        for _ in 0..(max - min) {
-            tail = optional.concatenate(&tail);
-        }
-        a.concatenate(&tail)
+        a.deterministic = false;
+        a
     }
 
     /// `self?` (zero or one).
@@ -621,13 +625,47 @@ impl Automaton {
 /// `None` for any construct we do not model (so the caller stays sound). The
 /// alphabet element of `.`/classes is the XML character set, matching dk.brics.
 pub fn xsd_pattern_to_automaton(pattern: &str) -> Option<Automaton> {
+    build_pattern(pattern).ok().flatten()
+}
+
+/// The automaton of a pattern, `Ok(None)` when it is not modelled, or
+/// `Err(PatternTooLarge)` when it would have more than `MAX_PATTERN_STATES`
+/// states.
+fn build_pattern(pattern: &str) -> Result<Option<Automaton>, PatternTooLarge> {
     let chars: Vec<char> = pattern.chars().collect();
-    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: false, deferred: None };
-    let a = p.parse_alternation()?;
-    if p.pos != chars.len() {
-        return None;
+    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: false, deferred: None, too_large: false };
+    let a = p.parse_alternation();
+    if p.too_large {
+        return Err(PatternTooLarge);
     }
-    Some(a)
+    Ok(a.filter(|_| p.pos == chars.len()))
+}
+
+/// The most states the automaton of a pattern may have. A bounded
+/// repetition is built one copy of its body per repetition unless
+/// `xsd_pattern_term` keeps it as a length window, so this bounds the memory
+/// a pattern takes, and a pattern past it is rejected
+/// (`pattern_resource_error`) rather than exhausting memory.
+pub const MAX_PATTERN_STATES: usize = 1 << 16;
+
+/// A pattern whose automaton would have more than `MAX_PATTERN_STATES` states.
+#[derive(Debug)]
+struct PatternTooLarge;
+
+/// Why the automaton of an XSD pattern cannot be built within
+/// `MAX_PATTERN_STATES` states, or `None` when it can (or when the pattern is
+/// not modelled). The clausifier rejects such a pattern with this message.
+pub fn pattern_resource_error(pattern: &str) -> Option<String> {
+    pattern_term_result(pattern).err().map(|_| {
+        format!(
+            "Resource limit: the automaton of xsd:pattern \"{pattern}\" would have more than \
+             {MAX_PATTERN_STATES} states. A bounded repetition of more than {LARGE_REPETITION} \
+             copies is reasoned about as a length window only when it is the one such \
+             repetition of the pattern, its body has words of one length, and every other \
+             piece of the pattern, outside any alternation or quantified group, has words of \
+             one length; otherwise it is built one state per copy."
+        )
+    })
 }
 
 /// A bounded repetition of more than this many copies is a large one:
@@ -641,59 +679,143 @@ const LARGE_REPETITION: usize = 256;
 /// whose words all have one length `l > 0`, all its other pieces having words
 /// of one length each (`l1` in all before it and `l2` after), is `F1 R* F2`
 /// restricted to the lengths `l1 + l2 + k·l` for `k` in `[m, n]`: a word of
-/// `F1 R* F2` of such a length holds exactly `k` copies of `R`. So
+/// `F1 R* F2` of such a length holds exactly `k` copies of `R`. Groups that
+/// are neither quantified nor hold an alternation are part of the
+/// concatenation, so `x(y(a{3000})z)` is `xya*z` of length 3003. So
 /// `a{2147483000}` is `a*` of length 2147483000 rather than 2147483000
 /// states, and the length window is reasoned about over the automaton's
 /// cycles (`is_empty_within`, `cardinality_within`). Any other pattern is its
-/// automaton with no length bound. `None` when the pattern is not modelled.
+/// automaton with no length bound, built one state per copy of a
+/// repetition: a large repetition in a quantified group or an alternation,
+/// beside a piece of varying length, or beside a second large repetition.
+/// `None` when the pattern is not modelled, or when its automaton would have
+/// more than `MAX_PATTERN_STATES` states (`pattern_resource_error`).
 pub fn xsd_pattern_term(pattern: &str) -> Option<(Automaton, LengthWindow)> {
+    pattern_term_result(pattern).ok().flatten()
+}
+
+/// Whether the group opened at `open` is neither quantified nor holds an
+/// alternation of its own, so that it is part of the concatenation around
+/// it. The parse checks both again; this only decides whether to try.
+fn plain_group(chars: &[char], open: usize) -> bool {
+    let mut depth = 0usize;
+    let mut i = open;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            '[' => {
+                // Skip the class, with its nested subtracted classes.
+                let mut nesting = 0usize;
+                while i < chars.len() {
+                    match chars[i] {
+                        '\\' => i += 1,
+                        '[' => nesting += 1,
+                        ']' => {
+                            nesting -= 1;
+                            if nesting == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return !matches!(chars.get(i + 1), Some('?' | '*' | '+' | '{'));
+                }
+            }
+            '|' if depth == 1 => return false,
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+fn pattern_term_result(pattern: &str) -> Result<Option<(Automaton, LengthWindow)>, PatternTooLarge> {
     let chars: Vec<char> = pattern.chars().collect();
-    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: true, deferred: None };
+    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: true, deferred: None, too_large: false };
     let mut automaton = Automaton::epsilon();
     let mut fixed: u64 = 0;
     let mut large: Option<(u64, Option<u64>)> = None;
     let mut symbolic = true;
+    // The plain groups open around the current piece.
+    let mut open_groups = 0usize;
     while let Some(c) = p.peek() {
+        if c == '(' && plain_group(&chars, p.pos) {
+            p.bump();
+            if p.peek() == Some('?') && p.chars.get(p.pos + 1) == Some(&':') {
+                p.bump();
+                p.bump();
+            }
+            open_groups += 1;
+            continue;
+        }
+        if c == ')' && open_groups > 0 {
+            p.bump();
+            open_groups -= 1;
+            if matches!(p.peek(), Some('?' | '*' | '+' | '{')) {
+                symbolic = false;
+                break;
+            }
+            continue;
+        }
         if c == '|' || c == ')' {
             symbolic = false;
             break;
         }
-        let piece = p.parse_quantified()?;
+        let Some(piece) = p.parse_quantified() else {
+            if p.too_large {
+                return Err(PatternTooLarge);
+            }
+            return Ok(None);
+        };
         let length = match p.deferred.take() {
             Some((body, min, max)) => match body.fixed_length() {
                 Some(0) => Some(0),
                 Some(l) if large.is_none() => {
                     if max.is_some_and(|max| max < min) {
-                        return Some((Automaton::empty_language(), (0, None)));
+                        return Ok(Some((Automaton::empty_language(), (0, None))));
                     }
                     let max = match max {
-                        Some(max) => Some((max as u64).checked_mul(l)?),
-                        None => None,
+                        Some(max) => (max as u64).checked_mul(l).map(Some),
+                        None => Some(None),
                     };
-                    large = Some(((min as u64).checked_mul(l)?, max));
-                    Some(0)
+                    match ((min as u64).checked_mul(l), max) {
+                        (Some(min), Some(max)) => {
+                            large = Some((min, max));
+                            Some(0)
+                        }
+                        _ => None,
+                    }
                 }
                 _ => None,
             },
             None => piece.fixed_length(),
         };
-        let Some(length) = length else {
+        let Some(length) = length.and_then(|length| fixed.checked_add(length)) else {
             symbolic = false;
             break;
         };
-        fixed = fixed.checked_add(length)?;
+        fixed = length;
         automaton = automaton.concatenate(&piece);
+        if automaton.trans.len() > MAX_PATTERN_STATES {
+            return Err(PatternTooLarge);
+        }
     }
     match large {
-        Some((min, max)) if symbolic => {
-            let min = min.checked_add(fixed)?;
-            let max = match max {
-                Some(max) => Some(max.checked_add(fixed)?),
-                None => None,
+        Some((min, max)) if symbolic && open_groups == 0 => {
+            let (Some(min), Some(max)) = (min.checked_add(fixed), max.map_or(Some(None), |max| max.checked_add(fixed).map(Some)))
+            else {
+                return build_pattern(pattern).map(|a| a.map(|a| (a, (0, None))));
             };
-            Some((automaton, (min, max)))
+            Ok(Some((automaton, (min, max))))
         }
-        _ => Some((xsd_pattern_to_automaton(pattern)?, (0, None))),
+        _ => build_pattern(pattern).map(|a| a.map(|a| (a, (0, None)))),
     }
 }
 
@@ -707,6 +829,9 @@ struct Parser<'a> {
     /// (`xsd_pattern_term`).
     defer: bool,
     deferred: Option<(Automaton, usize, Option<usize>)>,
+    /// Set when a repetition or concatenation would build more than
+    /// `MAX_PATTERN_STATES` states.
+    too_large: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -739,6 +864,10 @@ impl<'a> Parser<'a> {
             }
             let piece = self.parse_quantified()?;
             a = a.concatenate(&piece);
+            if a.trans.len() > MAX_PATTERN_STATES {
+                self.too_large = true;
+                return None;
+            }
         }
         Some(a)
     }
@@ -792,20 +921,34 @@ impl<'a> Parser<'a> {
                     }
                     self.pos = start;
                 }
+                // The copies are built one by one, within `MAX_PATTERN_STATES`.
+                let states = atom.trans.len();
+                let copies = |parser: &mut Parser, count: usize| -> Option<()> {
+                    if states.saturating_mul(count.saturating_add(1)) > MAX_PATTERN_STATES {
+                        parser.too_large = true;
+                        return None;
+                    }
+                    Some(())
+                };
                 match self.peek() {
                     Some('}') => {
+                        copies(self, min)?;
                         self.bump();
                         Some(atom.repeat_range(min, min))
                     }
                     Some(',') => {
                         self.bump();
                         if self.peek() == Some('}') {
+                            copies(self, min)?;
                             self.bump();
                             Some(atom.repeat_min(min))
                         } else {
                             let max = self.parse_number()?;
                             if self.peek() != Some('}') {
                                 return None;
+                            }
+                            if max >= min {
+                                copies(self, max)?;
                             }
                             self.bump();
                             Some(atom.repeat_range(min, max))
@@ -1415,14 +1558,71 @@ pub fn any_string() -> Automaton {
     any_char().repeat()
 }
 
-/// The character sequences of anyURI values: the XML characters and U+FFFE
-/// and U+FFFF, which `is_valid_any_uri` admits too (as `java.net.URI` does). The
-/// value space is a subset, the sequences `is_valid_any_uri` accepts, so a
-/// caller enumerates these words and keeps those.
+/// The character sequences over the characters of anyURI values: the XML
+/// characters and U+FFFE and U+FFFF, which `is_valid_any_uri` admits too (as
+/// `java.net.URI` does). The value space is the subset
+/// `any_uri_value_automaton` accepts.
 pub fn any_uri_string_automaton() -> Automaton {
     let mut chars = xml_char_ranges();
     chars.push((0xFFFE, 0xFFFF));
     Automaton::ranges(&normalize_ranges(&chars)).repeat()
+}
+
+/// The strings `datatype_value::is_valid_any_uri` accepts, the anyURI values:
+/// the RFC 2396 URI references that `java.net.URI` parses, over the characters
+/// the dk.brics `URI` grammar admits. A string is `before ['#' fragment]`,
+/// with `before` either `scheme ':' ssp`, an opaque part (not starting with
+/// `/`, and not empty) or a hierarchical part starting with `/`, or else a
+/// relative reference; a hierarchical part is `['//' authority] path ['?'
+/// query]`, and an authority `[userinfo '@'] host [':' port]` or an IPv6
+/// reference. Each part is a sequence of its characters, the unreserved
+/// ASCII characters, the characters above U+0080 that are no space or control
+/// character, and the escapes `%` HEX HEX. So a count over the value space is
+/// a count of this automaton's words.
+pub fn any_uri_value_automaton() -> Automaton {
+    static URIS: std::sync::OnceLock<Automaton> = std::sync::OnceLock::new();
+    URIS.get_or_init(build_any_uri_value_automaton).clone()
+}
+
+fn build_any_uri_value_automaton() -> Automaton {
+    let chars = |s: &str| -> Vec<(u32, u32)> { s.chars().map(|c| (c as u32, c as u32)).collect() };
+    let set = |ranges: Vec<(u32, u32)>| Automaton::ranges(&normalize_ranges(&ranges));
+    let mut unreserved = vec![(0x30, 0x39), (0x41, 0x5A), (0x61, 0x7A)];
+    unreserved.extend(chars("-_.!~*'()"));
+    // `java.net.URI`'s "other": above U+0080, no space and no control
+    // character (U+0081 to U+009F are controls).
+    let spaces = [(0xA0, 0xA0), (0x1680, 0x1680), (0x2000, 0x200A), (0x2028, 0x2029), (0x202F, 0x202F), (0x205F, 0x205F), (0x3000, 0x3000), (0xD800, 0xDFFF)];
+    let other = subtract_ranges(&[(0xA1, MAX_CP)], &spaces);
+    let hex = set(vec![(0x30, 0x39), (0x41, 0x46), (0x61, 0x66)]);
+    let escape = Automaton::char('%' as u32).concatenate(&hex).concatenate(&hex);
+    // The sequences of unreserved, other, escaped and `extra` characters.
+    let part = |extra: &str| {
+        let mut ranges = unreserved.clone();
+        ranges.extend(other.iter().copied());
+        ranges.extend(chars(extra));
+        set(ranges).union(&escape).repeat()
+    };
+    let everything = Automaton::char_range(0, MAX_CP).repeat();
+    let starting = |prefix: &str| Automaton::literal(prefix).concatenate(&everything);
+    let c = |ch: char| Automaton::char(ch as u32);
+    let digits = Automaton::char_range('0' as u32, '9' as u32).repeat();
+    let uric = part(";/?:@&=+$,[]");
+    let path = part(":@&=+$,/;");
+    let port = c(':').concatenate(&digits);
+    let host_port = part("$,;&=+").union(&part("$,;:&=+").concatenate(&port));
+    let ipv6_chars = set(vec![(0x30, 0x39), (0x41, 0x46), (0x61, 0x66), (0x3A, 0x3A), (0x2E, 0x2E), (0x56, 0x56), (0x76, 0x76)]);
+    let ipv6 = c('[').concatenate(&ipv6_chars.repeat_min(1)).concatenate(&c(']')).concatenate(&port.optional());
+    let authority = part(";:&=+$,").concatenate(&c('@')).optional().concatenate(&host_port.union(&ipv6));
+    let net_path = Automaton::literal("//").concatenate(&authority).concatenate(&c('/').concatenate(&path).optional());
+    let path_part = net_path.union(&path.minus(&starting("//")));
+    let hierarchical = path_part.concatenate(&c('?').concatenate(&uric).optional());
+    let mut scheme_chars = vec![(0x30, 0x39), (0x41, 0x5A), (0x61, 0x7A)];
+    scheme_chars.extend(chars("+-."));
+    let scheme = set(vec![(0x41, 0x5A), (0x61, 0x7A)]).concatenate(&set(scheme_chars).repeat()).concatenate(&c(':'));
+    let opaque = uric.minus(&starting("/")).minus(&Automaton::epsilon());
+    let absolute = scheme.concatenate(&opaque.union(&hierarchical.intersection(&starting("/"))));
+    let relative = hierarchical.minus(&scheme.concatenate(&everything));
+    absolute.union(&relative).concatenate(&c('#').concatenate(&uric).optional()).determinize()
 }
 
 /// The `normalizedString` value-space automaton:
@@ -1556,7 +1756,7 @@ pub fn datatype_automaton(local_name: &str, is_plain_literal: bool) -> Option<Au
         "NCName" => ncname_automaton(),
         "NMTOKEN" => nmtoken_automaton(),
         "language" => language_automaton(),
-        "anyURI" => any_uri_string_automaton(),
+        "anyURI" => any_uri_value_automaton(),
         _ => return None,
     };
     Some(string_part.concatenate(&empty_lang_tag()))
@@ -1704,13 +1904,18 @@ const STEP_LIMIT: u64 = 4096;
 /// Words longer than this are never materialised.
 const ENUMERATION_LENGTH_LIMIT: u64 = 4096;
 
-/// The most multiplications the sparse matrix powers of one count may take.
-/// A count whose powers would take more is reported as `u128::MAX`, the
-/// saturated "at least this many", which never causes a cardinality clash.
-/// The powers of a sparse step matrix (a cycle, a chain of choices) stay
-/// sparse, so only a large, densely connected automaton, whose words over a
-/// long window are far too many to matter, reaches the budget.
-const MATRIX_WORK_LIMIT: u64 = 1 << 29;
+/// The most work the capped matrix powers of one count may take, in
+/// products of two small counts or bitset words. Counts are capped at the
+/// number the caller asks about, so the entries of a densely connected
+/// part, whose words grow exponentially, reach the cap after a few squarings
+/// and are then kept as bitsets; only a count whose small entries stay dense
+/// over many states would pass the budget, and it is then reported as the
+/// cap ("at least"), which never causes a cardinality clash.
+const MATRIX_WORK_LIMIT: u64 = 1 << 31;
+
+/// The most bitset words of the entries at the cap one capped matrix power
+/// may hold (32 MiB), past which the count is reported as the cap too.
+const MATRIX_BITSET_WORDS: usize = 1 << 22;
 
 /// The string part of a determinised automaton as a graph whose steps are the
 /// characters before SEPARATOR, so that a word's string-part length is the
@@ -1890,6 +2095,26 @@ impl LengthView {
         let n = self.len();
         let mut current = vec![false; n];
         current[start] = true;
+        // The sets reached repeat, usually soon: step through them first.
+        let step_set = |set: &Vec<bool>| -> Vec<bool> {
+            let mut next = vec![false; n];
+            for (q, _) in set.iter().enumerate().filter(|(_, &b)| b) {
+                for &(to, _) in &self.succ[q] {
+                    next[to] = true;
+                }
+            }
+            next
+        };
+        let edges: u64 = self.succ.iter().map(|out| out.len() as u64 + 1).sum();
+        let limit = PERIODIC_WORK_LIMIT / edges.max(1);
+        let cycle = if steps <= limit { Some((steps, 1)) } else { cycle_of(&current, step_set, limit) };
+        if let Some((mu, period)) = cycle {
+            let target = if steps < mu { steps } else { mu + (steps - mu) % period };
+            for _ in 0..target {
+                current = step_set(&current);
+            }
+            return current;
+        }
         let step = |set: &[bool], matrix: &[Vec<u64>]| -> Vec<bool> {
             let mut next = vec![false; n];
             for (q, _) in set.iter().enumerate().filter(|(_, &b)| b) {
@@ -1971,9 +2196,13 @@ impl LengthView {
     }
 
     /// The number of words whose string part has a length in `[min, max]`,
-    /// saturating; the caller has excluded infinitely many tags there.
-    fn count_between(&self, start: usize, min: u64, max: u64) -> u128 {
+    /// capped at `cap`: exact when below it, and `cap` when there are at least
+    /// `cap`; the caller has excluded infinitely many tags there. `None` only
+    /// when the capped matrix powers pass `MATRIX_WORK_LIMIT`.
+    fn count_between(&self, start: usize, min: u64, max: u64, cap: u128) -> Option<u128> {
         let n = self.len();
+        let add = |a: u128, b: u128| a.saturating_add(b).min(cap);
+        let mul = |a: u128, b: u128| a.saturating_mul(b).min(cap);
         if max <= STEP_LIMIT {
             let mut paths = vec![0u128; n];
             paths[start] = 1;
@@ -1981,7 +2210,10 @@ impl LengthView {
             for length in 0..=max {
                 if length >= min {
                     for (count, tail) in paths.iter().zip(&self.tail) {
-                        total = total.saturating_add(count.saturating_mul(*tail));
+                        total = add(total, mul(*count, *tail));
+                    }
+                    if total == cap {
+                        break;
                     }
                 }
                 if length == max {
@@ -1993,94 +2225,334 @@ impl LengthView {
                         continue;
                     }
                     for &(to, width) in out {
-                        next[to] = next[to].saturating_add(count.saturating_mul(width));
+                        next[to] = add(next[to], mul(count, width));
                     }
                 }
                 paths = next;
             }
-            return total;
+            return Some(total);
+        }
+        if let Some(total) = self.count_periodic(start, min, max, cap) {
+            return Some(total);
         }
         // With M the step matrix and t the tails, A = [[M, t], [0, 1]] has
         // A^k = [[M^k, sum_{j<k} M^j t], [0, 1]]. The count is
-        // e_start M^min sum_{j<=max-min} M^j t.
+        // e_start M^min sum_{j<=max-min} M^j t: the row e_start A^min, less
+        // its last entry, times A^(max-min+1), at the last entry. Capping every
+        // count at `cap` commutes with sums and products, so the capped powers
+        // give the capped count.
         let size = n + 1;
-        let mut a: SparseMatrix = vec![Vec::new(); size];
+        let mut a = CappedMatrix::new(size, cap);
         for (q, out) in self.succ.iter().enumerate() {
             let mut row: Vec<(usize, u128)> = Vec::new();
             for &(to, width) in out {
                 match row.iter_mut().find(|(j, _)| *j == to) {
-                    Some((_, count)) => *count = count.saturating_add(width),
-                    None => row.push((to, width)),
+                    Some((_, count)) => *count = add(*count, width),
+                    None => row.push((to, width.min(cap))),
                 }
             }
             if self.tail[q] > 0 {
-                row.push((n, self.tail[q]));
+                row.push((n, self.tail[q].min(cap)));
             }
-            a[q] = row;
+            a.set_row(q, row);
         }
-        a[n] = vec![(n, 1)];
+        a.set_row(n, vec![(n, 1)]);
         let mut work = 0u64;
-        let (Some(at_min), Some(sums)) =
-            (matrix_power(&a, min, &mut work), matrix_power(&a, max - min + 1, &mut work))
-        else {
-            return u128::MAX;
-        };
+        let mut row = vec![0u128; size];
+        row[start] = 1;
+        let mut at_min = a.row_times_power(row, min, &mut work)?;
+        at_min[n] = 0;
+        let sums = a.row_times_power(at_min, max - min + 1, &mut work)?;
+        Some(sums[n])
+    }
+}
+
+impl LengthView {
+    /// The capped counts of the paths from the start of one more step.
+    fn step_row(&self, row: &[u128], cap: u128) -> Vec<u128> {
+        let mut next = vec![0u128; row.len()];
+        for (&count, out) in row.iter().zip(&self.succ) {
+            if count == 0 {
+                continue;
+            }
+            for &(to, width) in out {
+                next[to] = next[to].saturating_add(count.saturating_mul(width)).min(cap);
+            }
+        }
+        next
+    }
+
+    /// `count_between` by stepping through the lengths while the capped
+    /// counts of the paths from the start, a sequence over a finite set,
+    /// have not yet repeated (Brent's cycle detection), or `None` when they
+    /// do not repeat within `PERIODIC_WORK_LIMIT`. Counts capped at a small
+    /// number repeat soon wherever the words grow exponentially, as in a
+    /// densely connected automaton, whose matrix powers are dense; a count
+    /// that grows only polynomially, as over two long cycles in sequence,
+    /// repeats late, and its sparse matrix powers are cheap instead.
+    fn count_periodic(&self, start: usize, min: u64, max: u64, cap: u128) -> Option<u128> {
+        let edges: u64 = self.succ.iter().map(|out| out.len() as u64 + 1).sum();
+        // At most 2^20 lengths, whose counts are kept.
+        let limit = (PERIODIC_WORK_LIMIT / edges.max(1)).min(1 << 20);
+        let mut first = vec![0u128; self.len()];
+        first[start] = 1;
+        let (mu, period) = cycle_of(&first, |row| self.step_row(row, cap), limit)?;
+        // The capped count of the words of each length below mu + period;
+        // those of a longer length repeat with the period.
+        let mut row = first;
+        let mut words: Vec<u128> = Vec::with_capacity((mu + period) as usize);
+        for _ in 0..mu + period {
+            let count = row
+                .iter()
+                .zip(&self.tail)
+                .fold(0u128, |total, (count, tail)| total.saturating_add(count.saturating_mul(*tail)).min(cap));
+            words.push(count);
+            row = self.step_row(&row, cap);
+        }
         let mut total: u128 = 0;
-        for &(q, count) in at_min[start].iter().filter(|&&(q, _)| q < n) {
-            if let Some(&(_, sum)) = sums[q].iter().find(|(j, _)| *j == n) {
-                total = total.saturating_add(count.saturating_mul(sum));
-            }
+        for length in min..max.saturating_add(1).min(mu) {
+            total = total.saturating_add(words[length as usize]).min(cap);
         }
-        total
-    }
-}
-
-/// A square matrix of counts, each row as its nonzero entries.
-type SparseMatrix = Vec<Vec<(usize, u128)>>;
-
-/// Saturating product of square matrices of counts, or `None` when the work
-/// done so far would exceed `MATRIX_WORK_LIMIT`.
-fn matrix_product(a: &SparseMatrix, b: &SparseMatrix, work: &mut u64) -> Option<SparseMatrix> {
-    let size = a.len();
-    let cost: u64 = a.iter().flatten().map(|&(k, _)| b[k].len() as u64 + 1).sum();
-    *work = work.saturating_add(cost).saturating_add(size as u64);
-    if *work > MATRIX_WORK_LIMIT {
-        return None;
-    }
-    let mut accumulator = vec![0u128; size];
-    let mut touched: Vec<usize> = Vec::new();
-    let mut out: SparseMatrix = Vec::with_capacity(size);
-    for row in a {
-        for &(k, x) in row {
-            for &(j, y) in &b[k] {
-                if accumulator[j] == 0 {
-                    touched.push(j);
+        let from = min.max(mu);
+        if from <= max {
+            for residue in 0..period {
+                // The lengths from..=max that are mu + residue modulo period.
+                let first = from + (mu + residue + period - from % period) % period;
+                if first > max || total == cap {
+                    continue;
                 }
-                accumulator[j] = accumulator[j].saturating_add(x.saturating_mul(y));
+                let occurrences = ((max - first) / period + 1) as u128;
+                let count = words[(mu + residue) as usize];
+                total = total.saturating_add(count.saturating_mul(occurrences)).min(cap);
             }
         }
-        touched.sort_unstable();
-        out.push(touched.iter().map(|&j| (j, std::mem::take(&mut accumulator[j]))).collect());
-        touched.clear();
+        Some(total)
     }
-    Some(out)
 }
 
-/// `a^exponent` with saturating counts, or `None` past the work budget.
-fn matrix_power(a: &SparseMatrix, mut exponent: u64, work: &mut u64) -> Option<SparseMatrix> {
-    let size = a.len();
-    let mut result: SparseMatrix = (0..size).map(|i| vec![(i, 1)]).collect();
-    let mut power = a.clone();
-    while exponent > 0 {
-        if exponent & 1 == 1 {
-            result = matrix_product(&result, &power, work)?;
+/// Where the sequence `first`, `step(first)`, ... repeats (Brent's cycle
+/// detection): the first index `mu` of the cycle and its length, or `None`
+/// after `limit` steps.
+fn cycle_of<T: Clone + PartialEq>(first: &T, step: impl Fn(&T) -> T, limit: u64) -> Option<(u64, u64)> {
+    let mut steps = 0u64;
+    let (mut power, mut period) = (1u64, 1u64);
+    let mut tortoise = first.clone();
+    let mut hare = step(first);
+    while tortoise != hare {
+        if power == period {
+            tortoise = hare.clone();
+            power *= 2;
+            period = 0;
         }
-        exponent >>= 1;
-        if exponent > 0 {
-            power = matrix_product(&power, &power, work)?;
+        hare = step(&hare);
+        period += 1;
+        steps += 1;
+        if steps > limit {
+            return None;
         }
     }
-    Some(result)
+    let mut tortoise = first.clone();
+    let mut hare = first.clone();
+    for _ in 0..period {
+        hare = step(&hare);
+    }
+    let mut mu = 0u64;
+    while tortoise != hare {
+        tortoise = step(&tortoise);
+        hare = step(&hare);
+        mu += 1;
+        steps += 1;
+        if steps > limit {
+            return None;
+        }
+    }
+    Some((mu, period))
+}
+
+/// The most work, in edges followed, that `count_periodic` and `reached_at`
+/// may take stepping through the lengths.
+const PERIODIC_WORK_LIMIT: u64 = 1 << 26;
+
+/// A square matrix of counts capped at `cap`: per row, the columns whose
+/// entry is `cap` as a bitset (empty when there are none), and the other
+/// nonzero entries.
+#[derive(Clone)]
+struct CappedMatrix {
+    cap: u128,
+    words: usize,
+    full: Vec<Vec<u64>>,
+    small: Vec<Vec<(usize, u128)>>,
+}
+
+/// Sets bit `j` of a bitset of `words` words that may still be empty.
+fn set_bit(bits: &mut Vec<u64>, words: usize, j: usize) {
+    if bits.is_empty() {
+        *bits = vec![0; words];
+    }
+    bits[j / 64] |= 1 << (j % 64);
+}
+
+fn has_bit(bits: &[u64], j: usize) -> bool {
+    bits.get(j / 64).is_some_and(|word| word & (1 << (j % 64)) != 0)
+}
+
+impl CappedMatrix {
+    fn new(size: usize, cap: u128) -> CappedMatrix {
+        let words = size.div_ceil(64);
+        CappedMatrix { cap, words, full: vec![Vec::new(); size], small: vec![Vec::new(); size] }
+    }
+
+    fn size(&self) -> usize {
+        self.small.len()
+    }
+
+    /// Sets row `i` from its nonzero entries, each at most `cap`, with
+    /// distinct columns.
+    fn set_row(&mut self, i: usize, entries: Vec<(usize, u128)>) {
+        self.full[i] = Vec::new();
+        self.small[i] = Vec::new();
+        for (j, x) in entries {
+            if x >= self.cap {
+                set_bit(&mut self.full[i], self.words, j);
+            } else if x > 0 {
+                self.small[i].push((j, x));
+            }
+        }
+    }
+
+    /// The capped product `self · other`, or `None` past the work budget
+    /// (which also bounds the bitset words it allocates). An entry is `cap`
+    /// when a term has one factor at `cap` and the other nonzero; otherwise
+    /// it is the capped sum of the terms of small factors.
+    fn product(&self, other: &CappedMatrix, work: &mut u64) -> Option<CappedMatrix> {
+        let size = self.size();
+        let cap = self.cap;
+        let words = self.words;
+        // Rows of `other` with the same columns at `cap` are grouped, so that
+        // a row of the product ORs each distinct bitset once: the saturated
+        // rows of a dense part repeat.
+        let mut ids: HashMap<&[u64], usize> = HashMap::new();
+        let mut distinct: Vec<&[u64]> = Vec::new();
+        let full_group: Vec<usize> = other
+            .full
+            .iter()
+            .map(|bits| {
+                *ids.entry(bits.as_slice()).or_insert_with(|| {
+                    distinct.push(bits.as_slice());
+                    distinct.len() - 1
+                })
+            })
+            .collect();
+        let mut seen = vec![usize::MAX; distinct.len()];
+        let mut out = CappedMatrix::new(size, cap);
+        let mut accumulator = vec![0u128; size];
+        let mut touched: Vec<usize> = Vec::new();
+        let mut allocated = 0usize;
+        let or = |target: &mut Vec<u64>, source: &[u64]| {
+            if source.is_empty() {
+                return;
+            }
+            if target.is_empty() {
+                *target = source.to_vec();
+            } else {
+                for (t, s) in target.iter_mut().zip(source) {
+                    *t |= *s;
+                }
+            }
+        };
+        for i in 0..size {
+            let mut full: Vec<u64> = Vec::new();
+            let mut row_work = 1u64;
+            // A factor at `cap` times a nonzero one.
+            for (word, &bits) in self.full[i].iter().enumerate() {
+                let mut bits = bits;
+                while bits != 0 {
+                    let k = word * 64 + bits.trailing_zeros() as usize;
+                    let g = full_group[k];
+                    if seen[g] != i {
+                        seen[g] = i;
+                        or(&mut full, distinct[g]);
+                        row_work += words as u64;
+                    }
+                    for &(j, _) in &other.small[k] {
+                        set_bit(&mut full, words, j);
+                    }
+                    row_work += other.small[k].len() as u64 + 1;
+                    bits &= bits - 1;
+                }
+            }
+            for &(k, x) in &self.small[i] {
+                let g = full_group[k];
+                if seen[g] != i {
+                    seen[g] = i;
+                    or(&mut full, distinct[g]);
+                    row_work += words as u64;
+                }
+                row_work += other.small[k].len() as u64;
+                for &(j, y) in &other.small[k] {
+                    if accumulator[j] == 0 {
+                        touched.push(j);
+                    }
+                    accumulator[j] = accumulator[j].saturating_add(x.saturating_mul(y)).min(cap);
+                }
+            }
+            touched.sort_unstable();
+            for &j in &touched {
+                let x = std::mem::take(&mut accumulator[j]);
+                if has_bit(&full, j) {
+                    continue;
+                }
+                if x == cap {
+                    set_bit(&mut full, words, j);
+                } else {
+                    out.small[i].push((j, x));
+                }
+            }
+            touched.clear();
+            row_work += full.len() as u64;
+            allocated += full.len();
+            *work = work.saturating_add(row_work);
+            if *work > MATRIX_WORK_LIMIT || allocated > MATRIX_BITSET_WORDS {
+                return None;
+            }
+            out.full[i] = full;
+        }
+        Some(out)
+    }
+
+    /// The capped row `row · self`.
+    fn row_times(&self, row: &[u128]) -> Vec<u128> {
+        let cap = self.cap;
+        let mut out = vec![0u128; row.len()];
+        for (k, &x) in row.iter().enumerate().filter(|(_, &x)| x > 0) {
+            for (word, &bits) in self.full[k].iter().enumerate() {
+                let mut bits = bits;
+                while bits != 0 {
+                    out[word * 64 + bits.trailing_zeros() as usize] = cap;
+                    bits &= bits - 1;
+                }
+            }
+            for &(j, y) in &self.small[k] {
+                out[j] = out[j].saturating_add(x.saturating_mul(y)).min(cap);
+            }
+        }
+        out
+    }
+
+    /// The capped row `row · self^exponent`, or `None` past the work budget.
+    fn row_times_power(&self, mut row: Vec<u128>, mut exponent: u64, work: &mut u64) -> Option<Vec<u128>> {
+        let mut power = self.clone();
+        while exponent > 0 {
+            if exponent & 1 == 1 {
+                row = power.row_times(&row);
+            }
+            exponent >>= 1;
+            if exponent > 0 {
+                power = power.product(&power, work)?;
+            }
+        }
+        Some(row)
+    }
 }
 
 impl Automaton {
@@ -2096,12 +2568,23 @@ impl Automaton {
     /// `None` when there are infinitely many. Counts saturate at `u128::MAX`,
     /// as `cardinality` does; the windows must be disjoint.
     pub fn cardinality_within(&self, windows: &[LengthWindow]) -> Option<u128> {
+        self.cardinality_within_capped(windows, u128::MAX)
+    }
+
+    /// The number of words whose string part has a length in a window, capped
+    /// at `cap`, or `None` when there are infinitely many: exact when below
+    /// `cap`, and `cap` when there are at least `cap`, which is all that
+    /// "at least `cap` values" needs. The windows must be disjoint.
+    pub fn cardinality_within_capped(&self, windows: &[LengthWindow], cap: u128) -> Option<u128> {
+        let cap = cap.max(1);
         let view = LengthView::new(self);
         let Some(start) = view.start else {
             return Some(0);
         };
         // Infinitely many tags after a string of a length in a window.
-        if windows.iter().any(|&window| view.window_reaches(window, &|q| view.tail_infinite[q])) {
+        if view.tail_infinite.iter().any(|&infinite| infinite)
+            && windows.iter().any(|&window| view.window_reaches(window, &|q| view.tail_infinite[q]))
+        {
             return None;
         }
         let cyclic = view.has_cycle();
@@ -2121,8 +2604,10 @@ impl Automaton {
                 Some(max) if cyclic => max,
                 Some(max) => max.min(longest),
             };
-            if min <= max {
-                total = total.saturating_add(view.count_between(start, min, max));
+            if min <= max && total < cap {
+                // Past the work budget, "at least `cap`" never causes a clash.
+                let count = view.count_between(start, min, max, cap - total).unwrap_or(cap);
+                total = total.saturating_add(count).min(cap);
             }
         }
         Some(total)
@@ -2132,7 +2617,7 @@ impl Automaton {
     /// when there are more, or when one would be longer than
     /// `ENUMERATION_LENGTH_LIMIT` characters.
     pub fn finite_strings_within(&self, windows: &[LengthWindow], cap: usize) -> Option<Vec<String>> {
-        let count = self.cardinality_within(windows)?;
+        let count = self.cardinality_within_capped(windows, (cap as u128).saturating_add(1))?;
         if count > cap as u128 {
             return None;
         }
@@ -2425,9 +2910,20 @@ mod tests {
         // An empty range of repetitions is the empty language.
         let (a, _) = xsd_pattern_term("a{5000,4000}").unwrap();
         assert!(a.is_empty());
-        // Small repetitions, repetitions inside a group or beside a piece of
-        // varying length, and alternations are built as before.
-        for pattern in ["a{3}", "(a{300})b", "a*b{300}", "a{300}|b", "a{300}b{300}"] {
+        // A plain group is part of the concatenation around it.
+        let (a, window) = xsd_pattern_term("x(y(?:a{3000})z)").unwrap();
+        assert_eq!(window, (3003, Some(3003)));
+        assert!(states(&a) < 20);
+        let term = a.concatenate(&empty_lang_tag());
+        assert!(term.run(&format!("xy{}z\u{1}", "a".repeat(3000))));
+        assert_eq!(term.cardinality_within(&[window]), Some(1));
+        let (a, window) = xsd_pattern_term("(a{300})b").unwrap();
+        assert_eq!(window, (301, Some(301)));
+        assert!(states(&a) < 10);
+        // Small repetitions, repetitions inside a quantified group or an
+        // alternation, beside a piece of varying length or beside a second
+        // large repetition are built as before.
+        for pattern in ["a{3}", "(a{300})*b", "(a{300}b)?", "a*b{300}", "a{300}|b", "(a{300}|c)b", "a{300}b{300}"] {
             let (a, window) = xsd_pattern_term(pattern).unwrap();
             assert_eq!(window, (0, None), "{pattern}");
             let expected = xsd_pattern_to_automaton(pattern).unwrap();
@@ -2436,6 +2932,30 @@ mod tests {
         assert_eq!(xsd_pattern_to_automaton("ab{2}c").unwrap().fixed_length(), Some(4));
         assert_eq!(xsd_pattern_to_automaton("a|bc").unwrap().fixed_length(), None);
         assert_eq!(xsd_pattern_to_automaton("[ab]c|dd").unwrap().fixed_length(), Some(2));
+    }
+
+    #[test]
+    fn large_repetitions_that_are_not_length_windows_are_a_resource_error() {
+        // Each would be built one state per copy, and exhausted memory.
+        for pattern in [
+            "(a{2147483000})*",
+            "(a{2147483000}|b)",
+            "a*b{2147483000}",
+            "a{2147483000}b{2147483000}",
+            "(ab{70000})c*",
+            "([ab]{300}){250}",
+        ] {
+            assert!(xsd_pattern_term(pattern).is_none(), "{pattern}");
+            let message = pattern_resource_error(pattern).expect(pattern);
+            assert!(message.starts_with("Resource limit"), "{message}");
+        }
+        for pattern in ["a{2147483000}", "x(a{2147483000})y", "a{30000}b*", "([ab]{300}){300}"] {
+            assert!(pattern_resource_error(pattern).is_none(), "{pattern}");
+        }
+        // Built one copy after another.
+        let copies = xsd_pattern_to_automaton("a{3,30000}").unwrap();
+        assert!(copies.run(&"a".repeat(30000)) && copies.run("aaa"));
+        assert!(!copies.run("aa") && !copies.run(&"a".repeat(30001)));
     }
 
     #[test]
@@ -2558,6 +3078,65 @@ mod tests {
         // Two choices in a long cycle: 2^25 words of length 5000.
         let choices = xsd_pattern_to_automaton("([ab]a{199})*").unwrap().concatenate(&empty_lang_tag());
         assert_eq!(choices.cardinality_within(&[(5000, Some(5000))]), Some(1 << 25));
+    }
+
+    #[test]
+    fn capped_counts_over_dense_automata_are_exact() {
+        let huge = 2_147_483_001u64; // odd
+        // Two thousand states that remember the last ten letters: the matrix
+        // powers are dense, which passed the work budget, and the count was
+        // reported as "at least u128::MAX". The dense part has even lengths
+        // only, so of an odd length there is one word, x^huge.
+        let dense = xsd_pattern_to_automaton("(xx)*x|yy(([ab]c)*ac([ab]c){9})")
+            .unwrap()
+            .concatenate(&empty_lang_tag());
+        assert!(LengthView::new(&dense).len() > 2000);
+        assert_eq!(dense.cardinality_within_capped(&[(huge, Some(huge))], 5), Some(1));
+        assert_eq!(dense.cardinality_within_capped(&[(huge - 1, Some(huge))], 5), Some(5));
+        assert_eq!(dense.cardinality_within_capped(&[(huge + 1, Some(huge + 1))], 3), Some(3));
+        // The cap stops the count, and a count below it is exact.
+        let last = xsd_pattern_to_automaton("[ab]*a[ab]{9}").unwrap().concatenate(&empty_lang_tag());
+        assert_eq!(last.cardinality_within_capped(&[(huge, Some(huge))], 1000), Some(1000));
+        assert_eq!(last.cardinality_within_capped(&[(11, Some(11))], 5000), Some(1024));
+        // Two long cycles in sequence: few words per length, and a count that
+        // grows with the length only polynomially.
+        let cycles = xsd_pattern_to_automaton("(x{500})*(y{501})*").unwrap().concatenate(&empty_lang_tag());
+        let window = [(huge - 1, Some(huge + 998))];
+        let exact = cycles.cardinality_within(&window).unwrap();
+        assert!(exact > 1000 && exact < u128::MAX);
+        assert_eq!(cycles.cardinality_within_capped(&window, exact), Some(exact));
+        assert_eq!(cycles.cardinality_within_capped(&window, exact + 1), Some(exact));
+        assert_eq!(cycles.cardinality_within_capped(&window, 7), Some(7));
+    }
+
+    #[test]
+    fn any_uri_value_automaton_accepts_the_valid_uris() {
+        use crate::datatype_value::is_valid_any_uri;
+        let uris = any_uri_value_automaton();
+        // Every string of up to four characters over an alphabet that reaches
+        // each branch of the grammar, and some longer ones.
+        let alphabet: Vec<char> = "a1:/?#@[]%F.v-+ \u{80}\u{e9}\u{3000}".chars().collect();
+        let mut strings = vec![String::new()];
+        let mut layer = vec![String::new()];
+        for _ in 0..4 {
+            layer = layer
+                .iter()
+                .flat_map(|prefix| alphabet.iter().map(move |ch| format!("{prefix}{ch}")))
+                .collect();
+            strings.extend(layer.iter().cloned());
+        }
+        strings.extend(
+            [
+                "http://example.org/a?b#c", "http://u@[::1]:80/p", "http://[::1]x/", "urn:isbn:1",
+                "mailto:a@b", "a:", "a:/b", "1a:b", "//host:8x/p", "//a@b@c/", "x#y#z", "%4g",
+                "%41%42", "http://h:/p", "/p;q?r[s]", "p[q]", "s://[v1.a]", "s://[]/", "é:x",
+                "a/b:c", "?:x", "http://a b", "\u{fffe}", "\u{10000}", "\u{2028}",
+            ]
+            .map(str::to_string),
+        );
+        for s in &strings {
+            assert_eq!(uris.run(s), is_valid_any_uri(s), "{s:?}");
+        }
     }
 
     #[test]

@@ -1203,14 +1203,14 @@ fn classify_hierarchies(
                 |_: &str| true,
             ));
         } else {
-            // Use the java-data variant to reproduce the Java bug in
-            // HierarchyDumperFSS.printDataPropertyHierarchy (line 127): non-first
-            // EquivalentDataProperties members are emitted as ">iri>" not "<iri>".
-            sections.push(hierarchy.dump_functional_syntax_java_data(
+            // Every member is written `<iri>`. This deliberately deviates from
+            // HierarchyDumperFSS.printDataPropertyHierarchy (line 127), which
+            // writes the non-first EquivalentDataProperties members as the
+            // malformed `>iri>`.
+            sections.push(hierarchy.dump_functional_syntax(
                 "EquivalentDataProperties",
                 "SubDataPropertyOf",
                 |p| format!("<{}>", p.0),
-                |p| format!(">{}>", p.0),
             ));
         }
     }

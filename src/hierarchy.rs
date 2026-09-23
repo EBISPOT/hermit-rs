@@ -487,85 +487,6 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         out
     }
 
-    /// Variant of `dump_functional_syntax` used **only** for the data-property
-    /// hierarchy, reproducing the byte-for-byte output of Java's
-    /// `HierarchyDumperFSS.printDataPropertyHierarchy` (HierarchyDumperFSS.java:112-149).
-    ///
-    /// Java has a copy-paste bug at line 127 where the non-first
-    /// `EquivalentDataProperties` members are emitted as `>iri>` (leading `>`)
-    /// instead of `<iri>` (leading `<`).  The two render closures
-    /// `render` and `render_equiv_tail` let callers supply the
-    /// well-formed and malformed forms independently without changing the
-    /// generic helper.
-    pub fn dump_functional_syntax_java_data<F, G>(
-        &self,
-        equivalent_keyword: &str,
-        sub_keyword: &str,
-        render: F,
-        render_equiv_tail: G,
-    ) -> String
-    where
-        F: Fn(&E) -> String,
-        G: Fn(&E) -> String,
-    {
-        // Sort a node's members with bottom < top < (others by rendered form).
-        let rank = |element: &E| -> u8 {
-            if *element == self.bottom_element {
-                0
-            } else if *element == self.top_element {
-                1
-            } else {
-                2
-            }
-        };
-        let sorted_members = |node: NodeRef| -> Vec<E> {
-            let mut members: Vec<E> = self.nodes[node].equivalent_elements.iter().cloned().collect();
-            members.sort_by(|a, b| {
-                rank(a).cmp(&rank(b)).then_with(|| render(a).cmp(&render(b)))
-            });
-            members
-        };
-
-        let mut lines: Vec<String> = Vec::new();
-        for &node in &self.all_nodes() {
-            let members = sorted_members(node);
-            let representative = render(&members[0]);
-            if members.len() > 1 {
-                // Java bug (HierarchyDumperFSS.java:127): non-first members use
-                // ">iri>" (leading ">") instead of "<iri>" (leading "<").
-                let tail: String = members[1..]
-                    .iter()
-                    .map(|m| format!(" {}", render_equiv_tail(m)))
-                    .collect();
-                lines.push(format!("{}( {}{} )", equivalent_keyword, representative, tail));
-            }
-            // Edges out of the top node are omitted.
-            if node != self.top {
-                for &child in &self.nodes[node].children {
-                    // Edges into the bottom node are omitted.
-                    if child != self.bottom {
-                        let child_representative = render(&sorted_members(child)[0]);
-                        lines.push(format!(
-                            "{}( {} {} )",
-                            sub_keyword, child_representative, representative
-                        ));
-                    }
-                }
-            }
-        }
-        lines.sort();
-        // HierarchyDumperFSS.java: each axiom line is \n-terminated (println),
-        // and m_out.println() at lines 73/110/149 adds a trailing blank line even
-        // for an empty section.
-        let mut out = String::new();
-        for line in &lines {
-            out.push_str(line);
-            out.push('\n');
-        }
-        out.push('\n'); // trailing blank line (Java's final m_out.println())
-        out
-    }
-
     /// `Hierarchy.emptyHierarchy`: a single node containing top, bottom and all
     /// elements (used when the ontology is inconsistent).
     pub fn empty_hierarchy(elements: &[E], top_element: E, bottom_element: E) -> Hierarchy<E> {
@@ -1236,13 +1157,12 @@ EquivalentClasses( owl:Nothing owl:Thing A B )";
             hierarchy.dump_functional_syntax("EquivalentClasses", "SubClassOf", render),
             "EquivalentClasses( owl:Nothing owl:Thing A B )\n\n"
         );
-        let dump = hierarchy.dump_functional_syntax_java_data(
+        let dump = hierarchy.dump_functional_syntax(
             "EquivalentDataProperties",
             "SubDataPropertyOf",
             |e: &&str| format!("<{e}>"),
-            |e: &&str| format!(">{e}>"),
         );
-        assert_eq!(dump, "EquivalentDataProperties( <bottom> >top> >A> >B> )\n\n");
+        assert_eq!(dump, "EquivalentDataProperties( <bottom> <top> <A> <B> )\n\n");
 
         // The role classifiers transform the hierarchy of their proxy concepts;
         // the transformed top and bottom elements are the built-in properties.
@@ -1352,10 +1272,10 @@ EquivalentObjectProperties( owl:bottomObjectProperty owl:topObjectProperty <r> O
     }
 
     #[test]
-    fn dump_functional_syntax_java_data_malformed_equiv_tail() {
-        // Byte-pinned: Java's HierarchyDumperFSS.printDataPropertyHierarchy has a
-        // bug at line 127 where non-first EquivalentDataProperties members are
-        // emitted as ">iri>" (leading '>') instead of "<iri>".
+    fn data_property_dump_writes_every_equivalent_member_as_an_iri() {
+        // Java's HierarchyDumperFSS.printDataPropertyHierarchy (line 127)
+        // writes the non-first EquivalentDataProperties members as ">iri>";
+        // the dump deliberately writes every member as "<iri>".
         // d1 ⊑ d2 is a sub-property; d3 and d4 are equivalent.
         let mut subsumers: HashMap<&str, HashSet<&str>> = HashMap::new();
         subsumers.insert("top",    ["top"].into_iter().collect());
@@ -1366,19 +1286,13 @@ EquivalentObjectProperties( owl:bottomObjectProperty owl:topObjectProperty <r> O
         subsumers.insert("d4",     ["d4", "d3", "top"].into_iter().collect());
         let hierarchy = build_hierarchy("top", "bottom", subsumers);
 
-        let dump = hierarchy.dump_functional_syntax_java_data(
+        let dump = hierarchy.dump_functional_syntax(
             "EquivalentDataProperties",
             "SubDataPropertyOf",
             |e: &&str| format!("<{e}>"),
-            |e: &&str| format!(">{}>", e),
         );
-        // Non-first equivalent member uses ">iri>" (Java bug reproduction).
-        assert!(dump.contains("EquivalentDataProperties( <d3> >d4> )"), "got: {dump}");
-        // Sub-property edges use the normal "<iri>" form.
-        assert!(dump.contains("SubDataPropertyOf( <d1> <d2> )"), "got: {dump}");
-        // Byte-pinned expected content (ignoring trailing whitespace).
         let expected = "\
-EquivalentDataProperties( <d3> >d4> )
+EquivalentDataProperties( <d3> <d4> )
 SubDataPropertyOf( <d1> <d2> )";
         assert_eq!(dump.trim(), expected, "got:\n{dump}");
     }

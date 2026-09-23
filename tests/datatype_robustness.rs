@@ -13,7 +13,13 @@
 //! * dateTime values beyond ±9999 or finer than milliseconds are valid XSD 1.1
 //!   values. They were rejected; their instants are now held exactly.
 //! * A large bounded repetition in a pattern, such as `a{2147483000}`, built
-//!   one automaton state per copy; it is now a length window.
+//!   one automaton state per copy; it is now a length window, also inside
+//!   groups that are neither quantified nor hold an alternation. Where it
+//!   cannot be one, a pattern whose automaton would pass
+//!   `MAX_PATTERN_STATES` states is rejected with a resource error.
+//! * A string count over a long window and a large, densely connected
+//!   automaton, and an anyURI count of a space too large to list, were upper
+//!   bounds; they are now exact, capped at one more than the data nodes.
 //! * `"Infinity"` is not an XSD 1.1 spelling of xsd:double or xsd:float (Part 2
 //!   §3.3.4.2, §3.3.5.2); `INF` is. HermiT accepts Java's spelling.
 use hermit_rs::reasoner::Reasoner;
@@ -81,6 +87,18 @@ fn long_windows_over_large_automata_are_counted_exactly() {
 }
 
 #[test]
+fn long_windows_over_dense_automata_are_counted_exactly() {
+    // Over two thousand states that remember the last ten letters, the
+    // matrix powers are dense and passed the work budget, so the count was
+    // "at least u128::MAX". The dense part has even lengths only; of this odd
+    // length there is one string, x^2147483001.
+    let range = "DatatypeRestriction(xsd:string xsd:pattern \"(xx)*x|yy(([ab]c)*ac([ab]c){9})\" xsd:length \"2147483001\"^^xsd:integer)";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(1));
+    assert!(!values(2));
+}
+
+#[test]
 fn large_bounded_repetitions_are_reasoned_about_symbolically() {
     // a{2147483000} holds one string. Its automaton had a state per copy and
     // exhausted memory.
@@ -110,6 +128,23 @@ fn large_bounded_repetitions_are_reasoned_about_symbolically() {
     let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {two}) :a)")).unwrap();
     assert!(values(2));
     assert!(!values(3));
+}
+
+#[test]
+fn large_repetitions_elsewhere_are_windows_or_a_resource_error() {
+    // Inside plain groups the repetition is still a length window: one string.
+    let range = "DatatypeRestriction(xsd:string xsd:pattern \"x(y(a{2147483000})z)\")";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(1));
+    assert!(!values(2));
+    // In a quantified group, beside a piece of varying length or beside a
+    // second large repetition it would be built one state per copy, which
+    // exhausted memory: the ontology is rejected instead.
+    for pattern in ["(a{2147483000})*", "a*b{2147483000}", "a{2147483000}b{2147483000}"] {
+        let range = format!("DatatypeRestriction(xsd:string xsd:pattern \"{pattern}\")");
+        let result = consistent(&format!("ClassAssertion(DataSomeValuesFrom(:dp {range}) :a)"));
+        assert!(result.as_ref().is_err_and(|e| e.starts_with("Resource limit")), "{pattern}: {result:?}");
+    }
 }
 
 #[test]
@@ -248,6 +283,17 @@ fn short_uris_are_not_only_ascii() {
     assert_eq!(consistent(&format!("ClassAssertion(DataMinCardinality(100 :dp {range}) :a)")), Ok(true));
     let empty = "DatatypeRestriction(xsd:anyURI xsd:maxLength \"0\"^^xsd:integer)";
     assert_eq!(consistent(&format!("ClassAssertion(DataMinCardinality(2 :dp {empty}) :a)")), Ok(false));
+}
+
+#[test]
+fn uris_too_many_to_list_are_counted_exactly() {
+    // anyURI[pattern "%3."] matches a million strings, too many to list, of
+    // which 22 are URIs: "%3" and a hex digit. The strings were counted, an
+    // upper bound, so 23 distinct values fitted.
+    let range = "DatatypeRestriction(xsd:anyURI xsd:pattern \"%3.\")";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(22));
+    assert!(!values(23));
 }
 
 #[test]

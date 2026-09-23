@@ -363,12 +363,34 @@ Three leftovers of those fixes followed (no issue); the first deviates from Java
   the window is reasoned about over the automaton's cycles as the length
   facets are. Emptiness, membership and counts stay exact.
 
-Still open: a large repetition inside a group, beside a piece of varying
-length or next to another large repetition (`(a{2147483000})?`, `a*b{100000}`)
-still builds one state per copy. A string count over a large, densely
-connected automaton that exceeds the budget of 2^29 multiplications is
-reported as `u128::MAX`, and an anyURI space too large to list is counted by
-its words, an upper bound; both are sound but can miss a clash.
+The remaining leftovers of these fixes (no issue):
+
+- Exact "at least k values". The assignment only asks whether a node has
+  more values than its degree or its clique, so string and anyURI counts are
+  capped at one more than the number of data nodes: exact below the cap, "at
+  least" at it. Capping commutes with sums and products. A long window is
+  counted by stepping through the lengths until the capped counts of the
+  paths repeat (Brent's cycle detection), which is soon wherever the words
+  grow exponentially; otherwise by capped matrix powers, whose entries at the
+  cap are bitsets. Of odd length 2147483001,
+  `(xx)*x|yy(([ab]c)*ac([ab]c){9})`, over 2000 dense states, holds one string;
+  the count had saturated, and two values fitted. An anyURI space is counted
+  over `any_uri_value_automaton`, which accepts exactly the strings
+  `is_valid_any_uri` accepts, so `anyURI[pattern "%3."]`, 22 URIs among a
+  million words, no longer takes 23 values. Only a count whose small entries
+  stay dense over many states past a budget of 2^31 steps is still reported
+  as the cap, which is sound.
+- Large repetitions elsewhere. A group that is neither quantified nor holds
+  an alternation is part of the concatenation around it, so
+  `x(y(a{2147483000})z)` is a length window. A large repetition in a
+  quantified group or an alternation, beside a piece of varying length or
+  beside a second large repetition (`(a{2147483000})?`, `a*b{2147483000}`) is
+  built one state per copy, now in linear time; a pattern whose automaton
+  would pass 65536 states is rejected by the clausifier with a
+  `Resource limit` error instead of exhausting memory.
+- The CLI `-D` dump wrote the non-first members of `EquivalentDataProperties`
+  as `>iri>`, reproducing `HierarchyDumperFSS.java:127`; every member is now
+  written `<iri>`, deliberately deviating from Java.
 
 Issue #31 was a gap in the disjointness of datatypes. rdf:XMLLiteral is
 disjoint from every other datatype of the OWL 2 datatype map: OWL 2 Structural
