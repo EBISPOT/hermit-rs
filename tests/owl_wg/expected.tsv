@@ -84,6 +84,8 @@ PASS	Consistency	TestCase-3AWebOnt-2Dcardinality-2D004
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D201
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D205
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D207
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D208
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D901
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D902
 PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D908
@@ -152,6 +154,7 @@ PASS	NegativeEntailment	New-2DFeature-2DKeys-2D007
 PASS	NegativeEntailment	New-2DFeature-2DObjectPropertyChain-2DBJP-2D004
 PASS	NegativeEntailment	TestCase-3AWebOnt-2DI4.6-2D004
 PASS	NegativeEntailment	TestCase-3AWebOnt-2DI5.8-2D007
+PASS	NegativeEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209
 PASS	NegativeEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D902
 PASS	NegativeEntailment	TestCase-3AWebOnt-2DequivalentClass-2D005
 PASS	PositiveEntailment	Chain2trans
@@ -197,6 +200,7 @@ PASS	PositiveEntailment	TestCase-3AWebOnt-2Dcardinality-2D004
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D201
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D205
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D207
+PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D208
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D901
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DdifferentFrom-2D001
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DdisjointWith-2D001
@@ -355,7 +359,3 @@ PASS	PositiveEntailment	TestCase-3AWebOnt-2DoneOf-2D004
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DsomeValuesFrom-2D003
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D003
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D004
-SKIP: timeout	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D208
-SKIP: timeout	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209
-SKIP: timeout	NegativeEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209
-SKIP: timeout	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D208

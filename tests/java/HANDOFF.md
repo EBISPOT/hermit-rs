@@ -143,12 +143,14 @@ empty. Two of those passes use documented corrections of the Java expectation
 
 ## OWL WG conformance
 
-The separate suite has 350 passes and 9 explicit skips across 359 scoped cases.
+The separate suite has 354 passes and 5 explicit skips across 359 scoped cases.
 These three issues cover the RDF parsing skips and both checks for each of
-the two timed-out reasoning cases. They are separate from the 63 Java failures.
+the two formerly timed-out reasoning cases. They are separate from the 63 Java failures.
 
 - [#52: Expand RDF parser coverage for 143 skipped OWL WG cases](https://github.com/EBISPOT/hermit-rs/issues/52)
   (**partly resolved**: 138 now pass; five parse skips remain, listed in
   [RESULTS.md](RESULTS.md))
 - [#53: Resolve the OWL WG description-logic 208 reasoning timeout](https://github.com/EBISPOT/hermit-rs/issues/53)
+  (**resolved**: lazy unfolding of acyclic definitorial TBoxes in consistency checks)
 - [#54: Resolve the OWL WG description-logic 209 reasoning timeout](https://github.com/EBISPOT/hermit-rs/issues/54)
+  (**resolved** with #53)

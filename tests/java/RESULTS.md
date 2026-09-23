@@ -46,9 +46,13 @@ assertion, or an unexpected pass fails CI; an unexpected pass requires removing
 the stale exception. `HERMIT_JAVA_STRICT=1` disables exceptions. The default test
 runner's accepted outcomes must not be read as the strict conformance pass count.
 
-The separate OWL WG runner checks all 359 scoped cases: **350 pass, 9 skip**.
-Of the skips, five have unconsumed logical RDF triples and four exceed the
-15-second deadline (both checks for each of description-logic tests 208 and 209).
+The separate OWL WG runner checks all 359 scoped cases: **354 pass, 5 skip**.
+The skips all have unconsumed logical RDF triples. Both checks for each of
+description-logic tests 208 and 209 (the DL98 k_poly ABox, on which Java HermiT
+also times out) used to exceed the 15-second deadline. Their premise consists
+only of acyclic class definitions and assertions, so consistency checks now use
+an equisatisfiable lazy unfolding of the definitions, a deliberate deviation from
+Java that answers each check in well under a second (#53, #54).
 The RDF reader now parses blank-node (anonymous) individuals, the OWL 1 DL
 compatibility patterns (Tables 5, 6, 14 and 18 of the OWL 2 mapping to RDF) and
 unqualified cardinalities on data properties, and the harness resolves entity
