@@ -1145,7 +1145,8 @@ fn run_task(
 /// `SubObjectPropertyOf`, `EquivalentDataProperties`/`SubDataPropertyOf`.
 ///
 /// `pretty_print` selects the prettier `print_functional_syntax` printer (the
-/// `HierarchyPrinterFSS` path) for the class hierarchy.
+/// `HierarchyPrinterFSS` path) and wraps its sections into one ontology
+/// document (`pretty_print_document`).
 fn classify_hierarchies(
     ontology: &SetOntology<ArcStr>,
     classes: bool,
@@ -1213,10 +1214,40 @@ fn classify_hierarchies(
             ));
         }
     }
+    if pretty_print {
+        return Ok(pretty_print_document(ontology, &sections));
+    }
     // Each section already ends with \n\n (axioms + trailing blank line from
     // HierarchyDumperFSS.java:73/110/149), so concatenate verbatim; do NOT
     // filter or join — Java emits a blank line even for an empty section.
     Ok(sections.concat())
+}
+
+/// Wraps the `--prettyPrint` sections into one OWL functional-syntax ontology
+/// document, as `HierarchyPrinterFSS.startPrinting`/`endPrinting` do: a
+/// `Prefix(...)` header, `Ontology(` with the input ontology's IRI (and version
+/// IRI) when it has one, the non-empty sections separated by blank lines, and
+/// the closing `)`. The axioms use full IRIs, so only `owl:` is declared.
+fn pretty_print_document(ontology: &SetOntology<ArcStr>, sections: &[String]) -> String {
+    let mut ontology_iri = String::new();
+    for annotated in ontology.iter() {
+        if let Component::OntologyID(id) = &annotated.component {
+            if let Some(iri) = &id.iri {
+                ontology_iri = format!("<{iri}>");
+                if let Some(version) = &id.viri {
+                    ontology_iri.push_str(&format!(" <{version}>"));
+                }
+            }
+        }
+    }
+    let mut out = String::from("Prefix(owl:=<http://www.w3.org/2002/07/owl#>)\n\n");
+    out.push_str(&format!("Ontology({ontology_iri}\n\n"));
+    for section in sections.iter().filter(|s| !s.is_empty()) {
+        out.push_str(section);
+        out.push_str("\n\n");
+    }
+    out.push_str(")\n");
+    out
 }
 
 /// Runs the front-end clausification pipeline (normalize -> built-in property
