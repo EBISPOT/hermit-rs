@@ -656,14 +656,6 @@ fn value_in_range(value: &DataValue, range: &LiteralDataRange) -> Option<bool> {
     }
 }
 
-/// A lower or upper numeric bound from a facet.
-struct Bound {
-    /// The bound is kept as an exact rational (`num/den`, `den > 0`) so the
-    /// emptiness test compares exactly rather than via lossy f64.
-    value: (BigInt, BigInt),
-    inclusive: bool,
-}
-
 /// Exact ordering of two rationals `a = an/ad`, `b = bn/bd` (positive
 /// denominators): returns `Ordering` via cross-multiplication.
 fn cmp_exact(a: &(BigInt, BigInt), b: &(BigInt, BigInt)) -> std::cmp::Ordering {
@@ -1328,9 +1320,10 @@ impl Tableau {
 /// explicit list. Mirrors Java's `enumerateValueSpaceSubset()` (DatatypeChecker.java:505),
 /// which turns a value-space subset into explicit data values for the assignment
 /// search. Returns `Some(values)` (possibly empty ⇒ empty value space ⇒ clash) for
-/// length-bounded strings and finite dateTime value spaces, including distinct
-/// timezone offsets and end-of-day values. Returns `None` for other families or
-/// intervals that cannot be enumerated, so the caller stays sound.
+/// length-bounded strings, finite dateTime value spaces, including distinct
+/// timezone offsets and end-of-day values, and numeric value spaces of at most
+/// `cap` values. Returns `None` for other families or intervals that cannot be
+/// enumerated, so the caller stays sound.
 fn materialize_finite_value_space<D>(
     ranges: &[(LiteralDataRange, D)],
     cap: usize,
@@ -1353,6 +1346,24 @@ fn materialize_finite_value_space<D>(
     // excluded values (see `datetime_value_space`).
     if restrictions.iter().all(|r| is_datetime_datatype(r.datatype_uri())) {
         return Some(datetime_value_space(ranges)?.values()?.take(cap).collect());
+    }
+
+    // A finite numeric value space, less the excluded values (see
+    // `real_value_space` and `float_value_space`). The assignment search takes
+    // the list as every value of the node, so a space of more than `cap` values
+    // is not listed: a partial list could leave out the value that fits.
+    if restrictions.iter().all(|r| NumRange::base_of(r.datatype_uri()).is_some()) {
+        let space = real_value_space(ranges)?;
+        if space.count()? > cap as u128 {
+            return None;
+        }
+        return space.values().map(Iterator::collect);
+    }
+    for kind in [FloatKind::Float, FloatKind::Double] {
+        if restrictions.iter().all(|r| FloatKind::of(r.datatype_uri()) == Some(kind)) {
+            let space = float_value_space(ranges, kind)?;
+            return (space.count() <= cap as u128).then(|| space.values().collect());
+        }
     }
 
     // Length-bounded xsd:string: distinct strings of the allowed lengths over a
@@ -2051,17 +2062,13 @@ struct NumInterval {
 fn nearest_integer_in_bound(value: &(BigInt, BigInt), lower: bool, inclusive: bool) -> BigInt {
     let (num, den) = value;
     if den.is_one() {
-        // Integer-valued bound.
+        // Integer-valued bound. (Java's INTEGER/UPPER/exclusive arm subtracts 11,
+        // not 1, from a bound equal to Integer.MIN_VALUE, which drops the ten
+        // integers from -2147483658 to -2147483649 that the facet admits.)
         if inclusive {
             num.clone()
         } else if lower {
             num + 1
-        } else if *num == BigInt::from(i32::MIN) {
-            // Java's `Numbers.getNearestIntegerInBound` INTEGER/UPPER/exclusive arm
-            // subtracts 11 (not 1) when the bound equals Integer.MIN_VALUE
-            // (`((long)value)-11`). A bound equal to -2147483648 always has Java
-            // NumberType INTEGER, so this is the only value that triggers it.
-            num - 11
         } else {
             num - 1
         }
@@ -2445,50 +2452,130 @@ enum NumIntervalResult {
     Undecided,
 }
 
-/// Builds the numeric value space for a node from its positive numeric datatype
-/// restrictions and applies its negated numeric datatype restrictions, mirroring
-/// the sequence of `conjoinWithDR` / `conjoinWithDRNegation` calls HermiT makes.
-/// Returns `None` when the node carries no numeric restriction or any numeric
-/// facet/datatype is undecided (so the caller falls back to its other logic and
-/// never reports a false clash). The starting value space is `owl:real` itself
-/// (the whole REAL line), matching HermiT seeding from the most general subset.
-fn build_numeric_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<NumValueSpace> {
-    // Collect positive and negated numeric datatype restrictions.
-    let mut positives: Vec<&DatatypeRestriction> = Vec::new();
-    let mut negatives: Vec<&DatatypeRestriction> = Vec::new();
-    let mut saw_non_numeric_constraint = false;
-    for (r, _) in ranges {
-        match r {
-            LiteralDataRange::DatatypeRestriction(dr) => {
-                if NumRange::base_of(dr.datatype_uri()).is_some() {
-                    positives.push(dr);
-                } else {
-                    saw_non_numeric_constraint = true;
-                }
+// ===========================================================================
+// owl:real value space. The emptiness check, `node_value_space` and the values
+// enumerated for the distinct-value assignment all read `real_value_space`, so
+// they agree.
+// ===========================================================================
+
+/// The owl:real value space of a conjunction of data ranges: disjoint intervals
+/// of an `OWLRealValueSpaceSubset`, less the excluded values inside them.
+/// owl:real, owl:rational, xsd:decimal and the integer datatypes share it: their
+/// value spaces nest (OWL 2 Structural Specification §4.1), so `"6"^^xsd:integer`
+/// and `"6.0"^^xsd:decimal` are one value.
+struct RealValueSpace {
+    /// The remaining intervals, pairwise disjoint.
+    space: NumValueSpace,
+    /// The distinct excluded values that lie in the intervals.
+    excluded: Vec<DataValue>,
+}
+
+impl RealValueSpace {
+    /// The number of values, or `None` when there are infinitely many
+    /// (`NumberInterval.subtractSizeFrom`): an interval holding two numbers of a
+    /// dense range (decimal, rational, real) holds infinitely many, and so does an
+    /// integer interval without a lower or an upper bound. Each excluded value is
+    /// in the space, so each removes one value.
+    fn count(&self) -> Option<u128> {
+        Some(self.space.exact_cardinality()?.saturating_sub(self.excluded.len() as u128))
+    }
+
+    /// The values of the space, or `None` when it is infinite. A finite interval
+    /// is a single number or a run of integers (`NumberInterval.enumerateNumbers`).
+    fn values(&self) -> Option<impl Iterator<Item = DataValue> + '_> {
+        self.count()?;
+        Some(
+            self.space
+                .intervals
+                .iter()
+                .flat_map(|interval| {
+                    let (NumBound::Finite(num, den), NumBound::Finite(last, _)) =
+                        (&interval.lower, &interval.upper)
+                    else {
+                        unreachable!("a finite interval has finite bounds")
+                    };
+                    let single = interval.lower.compare(&interval.upper).is_eq();
+                    // The constructor makes the bounds of an integer interval
+                    // inclusive integers.
+                    std::iter::successors(Some(num.clone()), move |n| {
+                        (!single && n < last).then(|| n + 1)
+                    })
+                    .map(move |n| make_rational(n, den.clone()))
+                })
+                .filter(|value| !self.excluded.iter().any(|e| values_equal(e, value))),
+        )
+    }
+
+    /// Whether no value remains.
+    fn is_empty(&self) -> bool {
+        self.count() == Some(0)
+    }
+
+    /// The node value space: its exact cardinality, with the values when there
+    /// are at most `MAX_ENUMERATED_VALUES` of them.
+    fn node_value_space(&self) -> NodeValueSpace {
+        let Some(count) = self.count() else {
+            return NodeValueSpace::Infinite;
+        };
+        let values = if count <= MAX_ENUMERATED_VALUES as u128 {
+            self.values().map(Iterator::collect)
+        } else {
+            None
+        };
+        NodeValueSpace::Finite { count, values }
+    }
+}
+
+/// The owl:real value space of a conjunction of data ranges, mirroring
+/// `DVariable.prepareAsValueSpaceSubset` over an `OWLRealValueSpaceSubset`: the
+/// intervals of the positive owl:real restrictions (`conjoinWithDR`), less the
+/// interval of each negated owl:real restriction (`conjoinWithDRNegation`), less
+/// the excluded values (members of negated `DataOneOf` ranges) that lie in what
+/// remains (`m_forbiddenDataValues`). `None` when there is no positive owl:real
+/// restriction or when a facet cannot be read.
+///
+/// Any other positive range is left to the callers; it can only shrink the
+/// space. A negated restriction of another datatype removes nothing, since
+/// xsd:float, xsd:double and the non-numeric value spaces are disjoint from
+/// owl:real (OWL 2 Structural Specification §4.2). HermiT skips it, and skips
+/// internal datatypes.
+fn real_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<RealValueSpace> {
+    let mut positive: Vec<&DatatypeRestriction> = Vec::new();
+    let mut negative: Vec<&DatatypeRestriction> = Vec::new();
+    let mut forbidden: Vec<DataValue> = Vec::new();
+    for (range, _) in ranges {
+        match range {
+            LiteralDataRange::DatatypeRestriction(dr)
+                if NumRange::base_of(dr.datatype_uri()).is_some() =>
+            {
+                positive.push(dr);
             }
+            LiteralDataRange::DatatypeRestriction(_)
+            | LiteralDataRange::ConstantEnumeration(_)
+            | LiteralDataRange::InternalDatatype(_) => {}
             LiteralDataRange::AtomicNegationDataRange(n) => match n.get_negated_data_range() {
                 crate::model::AtomicDataRange::DatatypeRestriction(dr)
                     if NumRange::base_of(dr.datatype_uri()).is_some() =>
                 {
-                    negatives.push(dr);
+                    negative.push(dr);
                 }
-                _ => saw_non_numeric_constraint = true,
+                crate::model::AtomicDataRange::ConstantEnumeration(e) => {
+                    for i in 0..e.number_of_constants() {
+                        if let Some(value @ (DataValue::Integer(_) | DataValue::Decimal { .. })) =
+                            parse_value(e.constant(i))
+                        {
+                            forbidden.push(value);
+                        }
+                    }
+                }
+                _ => {}
             },
-            _ => saw_non_numeric_constraint = true,
         }
     }
-    if positives.is_empty() {
+    if positive.is_empty() {
         return None;
     }
-    // Other (non-numeric) constraints are handled elsewhere; here we only build
-    // the numeric value space from the numeric restrictions. If any other range
-    // is present we still build the numeric space (its emptiness is a sufficient
-    // condition for the whole conjunction's emptiness), but we must not claim
-    // the numeric space is the WHOLE node space for cardinality purposes — the
-    // caller (build for cardinality) checks numeric-only nodes.
-    let _ = saw_non_numeric_constraint;
-
-    // Start from the whole owl:real line.
+    // Intersect the positive restrictions with the whole owl:real line.
     let mut space = NumValueSpace {
         intervals: vec![NumInterval {
             base_range: NumRange::Real,
@@ -2499,114 +2586,33 @@ fn build_numeric_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<NumV
             upper_excl: ExclusiveFlag::INCLUSIVE,
         }],
     };
-    for dr in &positives {
+    for dr in positive {
         match num_interval_for(dr) {
             NumIntervalResult::Interval(i) => space = space.conjoin_with_interval(&i),
-            NumIntervalResult::Empty => return Some(NumValueSpace { intervals: Vec::new() }),
+            NumIntervalResult::Empty => space.intervals.clear(),
             NumIntervalResult::Undecided => return None,
         }
     }
-    for dr in &negatives {
+    // Subtract each negated restriction: keep the numbers below and above its
+    // interval, and those inside it that are not in its datatype.
+    for dr in negative {
         match num_interval_for(dr) {
             NumIntervalResult::Interval(i) => space = space.conjoin_with_negation(&i),
-            // A negated empty interval removes nothing (¬∅ = everything).
+            // The complement of an empty range is everything.
             NumIntervalResult::Empty => {}
             NumIntervalResult::Undecided => return None,
         }
     }
-    Some(space)
-}
-
-/// The exact finite cardinality of a node's numeric value space, when *every*
-/// range on the node is numeric (a positive numeric DR or a negated numeric DR)
-/// and the resulting value space is finite. `None` when a non-numeric range is
-/// present, a facet/datatype is undecided, or the space is infinite — the caller
-/// then falls back to its other (sound) handling. This is HermiT's exact
-/// cardinality over `OWLRealValueSpaceSubset`: a huge bounded interval
-/// minus a negated sub-interval has the precise leftover count.
-fn numeric_node_cardinality<D>(ranges: &[(LiteralDataRange, D)]) -> Option<u128> {
-    let all_numeric = ranges.iter().all(|(r, _)| match r {
-        LiteralDataRange::DatatypeRestriction(dr) => NumRange::base_of(dr.datatype_uri()).is_some(),
-        LiteralDataRange::AtomicNegationDataRange(n) => matches!(
-            n.get_negated_data_range(),
-            crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                if NumRange::base_of(dr.datatype_uri()).is_some()
-        ),
-        _ => false,
-    });
-    if !all_numeric {
-        return None;
-    }
-    build_numeric_value_space(ranges)?.exact_cardinality()
-}
-
-
-/// FD-5: counts the xsd:float values whose order key lies in `[lower_key, upper_key]`
-/// (the interval) that are removed by a value-removing range on the node. Mirrors
-/// the way Java accounts for exclusions in NoNaNFloatSubset.hasCardinalityAtLeast
-/// (it inflates the requested cardinality by m_forbiddenDataValues.size()) together
-/// with FloatInterval.subtractIntervalSizeFrom for negated sub-intervals: the exact
-/// leftover cardinality is (interval size) minus (excluded values inside it).
-fn count_excluded_floats_in_range<D>(
-    ranges: &[(LiteralDataRange, D)],
-    lower_key: u32,
-    upper_key: u32,
-) -> u128 {
-    let in_iv = |k: u32| k >= lower_key && k <= upper_key;
-    let mut removed_points: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
-    let mut neg_windows: Vec<(u32, u32)> = Vec::new();
-    for (r, _) in ranges {
-        if let LiteralDataRange::AtomicNegationDataRange(n) = r {
-            match n.get_negated_data_range() {
-                crate::model::AtomicDataRange::ConstantEnumeration(e) => {
-                    for i in 0..e.number_of_constants() {
-                        if let Some(DataValue::Float(bits)) = parse_value(e.constant(i)) {
-                            let f = f32::from_bits(bits);
-                            if !f.is_nan() {
-                                let k = f32_order_key(f);
-                                if in_iv(k) {
-                                    removed_points.insert(k);
-                                }
-                            }
-                        }
-                    }
-                }
-                crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                    if is_xsd_float(dr.datatype_uri()) =>
-                {
-                    if let Some((nlo, nhi)) = float_restriction_key_window(&dr) {
-                        let lo = nlo.max(lower_key);
-                        let hi = nhi.min(upper_key);
-                        if lo <= hi {
-                            neg_windows.push((lo, hi));
-                        }
-                    }
-                }
-                _ => {}
-            }
+    // The excluded values that lie in the remaining intervals, as
+    // DVariable.m_forbiddenDataValues keeps them.
+    let mut excluded: Vec<DataValue> = Vec::new();
+    for value in forbidden {
+        let inside = as_exact(&value).is_some_and(|number| space.contains(&number));
+        if inside && !excluded.iter().any(|e| values_equal(e, &value)) {
+            excluded.push(value);
         }
     }
-    neg_windows.sort();
-    let mut merged: Vec<(u32, u32)> = Vec::new();
-    for (lo, hi) in neg_windows {
-        if let Some(last) = merged.last_mut() {
-            if lo <= last.1.saturating_add(1) {
-                last.1 = last.1.max(hi);
-                continue;
-            }
-        }
-        merged.push((lo, hi));
-    }
-    let mut removed: u128 = 0;
-    for (lo, hi) in &merged {
-        removed = removed.saturating_add((*hi - *lo) as u128 + 1);
-    }
-    for k in removed_points {
-        if !merged.iter().any(|(lo, hi)| k >= *lo && k <= *hi) {
-            removed = removed.saturating_add(1);
-        }
-    }
-    removed
+    Some(RealValueSpace { space, excluded })
 }
 
 /// FD-5: the order-key window `[lo, hi]` of a (positive) xsd:float datatype
@@ -2631,7 +2637,7 @@ fn float_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u32, u32)> 
         // flow through f32_order_key (which keys it as 0xffc00000) reproduces this:
         // a NaN min* bound pushes lower_key above +INF (empty interval), while a
         // NaN max* bound leaves upper_key at +INF (the min() keeps +INF), exactly
-        // matching Java. (Double's mask is correct, so the double window above does
+        // matching Java. (Double's mask is correct, so the double window below does
         // drop a NaN bound.)
         let bound = normalize_zero_for_facet_f32(bound, facet);
         let key = f32_order_key(bound);
@@ -2646,69 +2652,8 @@ fn float_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u32, u32)> 
     Some((lower_key, upper_key))
 }
 
-/// FD-5: the xsd:double analogue of `count_excluded_floats_in_range`.
-fn count_excluded_doubles_in_range<D>(
-    ranges: &[(LiteralDataRange, D)],
-    lower_key: u64,
-    upper_key: u64,
-) -> u128 {
-    let in_iv = |k: u64| k >= lower_key && k <= upper_key;
-    let mut removed_points: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
-    let mut neg_windows: Vec<(u64, u64)> = Vec::new();
-    for (r, _) in ranges {
-        if let LiteralDataRange::AtomicNegationDataRange(n) = r {
-            match n.get_negated_data_range() {
-                crate::model::AtomicDataRange::ConstantEnumeration(e) => {
-                    for i in 0..e.number_of_constants() {
-                        if let Some(DataValue::Double(bits)) = parse_value(e.constant(i)) {
-                            let f = f64::from_bits(bits);
-                            if !f.is_nan() {
-                                let k = f64_order_key(f);
-                                if in_iv(k) {
-                                    removed_points.insert(k);
-                                }
-                            }
-                        }
-                    }
-                }
-                crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                    if is_xsd_double(dr.datatype_uri()) =>
-                {
-                    if let Some((nlo, nhi)) = double_restriction_key_window(&dr) {
-                        let lo = nlo.max(lower_key);
-                        let hi = nhi.min(upper_key);
-                        if lo <= hi {
-                            neg_windows.push((lo, hi));
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    neg_windows.sort();
-    let mut merged: Vec<(u64, u64)> = Vec::new();
-    for (lo, hi) in neg_windows {
-        if let Some(last) = merged.last_mut() {
-            if lo <= last.1.saturating_add(1) {
-                last.1 = last.1.max(hi);
-                continue;
-            }
-        }
-        merged.push((lo, hi));
-    }
-    let mut removed: u128 = 0;
-    for (lo, hi) in &merged {
-        removed = removed.saturating_add((*hi - *lo) as u128 + 1);
-    }
-    for k in removed_points {
-        if !merged.iter().any(|(lo, hi)| k >= *lo && k <= *hi) {
-            removed = removed.saturating_add(1);
-        }
-    }
-    removed
-}
-
+/// The xsd:double analogue of `float_restriction_key_window`
+/// (DoubleDatatypeHandler.getIntervalFor), which drops a NaN facet bound.
 fn double_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u64, u64)> {
     let mut lower_key = f64_order_key(f64::NEG_INFINITY);
     let mut upper_key = f64_order_key(f64::INFINITY);
@@ -2735,139 +2680,250 @@ fn double_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u64, u64)>
     Some((lower_key, upper_key))
 }
 
-/// Whether the entire xsd:double value space's NaN survives the node's ranges,
-/// faithful to HermiT `DVariable.prepareAsValueSpaceSubset`. The subset starts
-/// as `EntireDoubleSubset` (which DOES contain NaN, contributing the +1 to the
-/// cardinality). It only loses its NaN when it becomes a `NoNaNDoubleSubset`,
-/// which happens exactly when:
-///   - a positive xsd:double DR with min/max facets is conjoined
-///     (`conjoinWithDR` with `getNumberOfFacetRestrictions()!=0` builds a
-///     `NoNaNDoubleSubset`; a facet-free positive DR is a no-op), OR
-///   - a negated xsd:double DR with a non-empty interval is conjoined
-///     (`conjoinWithDRNegation`; a vacuous/empty-interval negated DR
-///     `getIntervalFor()==null` is a no-op).
-/// Negated *enumerations* are NOT conjoined into the subset — they are kept as
-/// `m_forbiddenDataValues` (concrete, non-NaN doubles) and subtracted from the
-/// cardinality separately, so they do NOT remove the NaN. Hence the entire space
-/// keeps its NaN over facet-free positive DRs, vacuously-negated DRs, and
-/// negated enumerations alike.
-fn entire_double_space_keeps_nan<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
-    for (r, _) in ranges {
-        match r {
-            LiteralDataRange::DatatypeRestriction(dr) if is_xsd_double(dr.datatype_uri()) => {
-                // A positive double DR with any min/max facet shrinks the entire
-                // space to a NoNaN subset (NaN removed). A facet-free DR is a no-op.
-                if dr.number_of_facet_restrictions() != 0 {
-                    return false;
-                }
-            }
-            LiteralDataRange::AtomicNegationDataRange(n) => {
-                if let crate::model::AtomicDataRange::DatatypeRestriction(dr) =
-                    n.get_negated_data_range()
-                {
-                    if is_xsd_double(dr.datatype_uri()) {
-                        // `conjoinWithDRNegation`: a negated DR with a non-empty
-                        // interval (getIntervalFor!=null) produces a NoNaN subset.
-                        // An empty interval (lo>hi) is a no-op and keeps NaN.
-                        match double_restriction_key_window(&dr) {
-                            // Non-empty interval => NaN removed.
-                            Some((lo, hi)) if lo <= hi => return false,
-                            // Empty interval (vacuous negation) => no-op, NaN kept.
-                            Some(_) => {}
-                            // Unparseable/unsupported: be conservative and treat as
-                            // a real (non-empty) negation that removes NaN.
-                            None => return false,
-                        }
-                    }
-                }
-                // A negated enumeration (or a negation of a non-double DR) does not
-                // turn the subset into NoNaN: NaN is kept.
-            }
-            // Any other range kind on the entire double space is unexpected here;
-            // be conservative and drop the NaN.
-            _ => return false,
-        }
-    }
-    true
+// ===========================================================================
+// xsd:float / xsd:double value spaces (port of FloatDatatypeHandler,
+// DoubleDatatypeHandler and their Entire/NoNaN subsets, less DVariable's
+// forbidden values). The emptiness check, `node_value_space` and the values
+// enumerated for the distinct-value assignment all read `float_value_space`, so
+// they agree.
+// ===========================================================================
+
+/// xsd:float or xsd:double. Each has a value space of its own, disjoint from the
+/// other and from owl:real (OWL 2 Structural Specification §4.2).
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum FloatKind {
+    Float,
+    Double,
 }
 
-/// xsd:float analogue of `entire_double_space_keeps_nan` (faithful to the float
-/// equivalents: EntireFloatSubset / NoNaNFloatSubset / FloatDatatypeHandler).
-fn entire_float_space_keeps_nan<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
-    for (r, _) in ranges {
-        match r {
-            LiteralDataRange::DatatypeRestriction(dr) if is_xsd_float(dr.datatype_uri()) => {
-                if dr.number_of_facet_restrictions() != 0 {
-                    return false;
-                }
-            }
-            LiteralDataRange::AtomicNegationDataRange(n) => {
-                if let crate::model::AtomicDataRange::DatatypeRestriction(dr) =
-                    n.get_negated_data_range()
-                {
-                    if is_xsd_float(dr.datatype_uri()) {
-                        match float_restriction_key_window(&dr) {
-                            Some((lo, hi)) if lo <= hi => return false,
-                            Some(_) => {}
-                            None => return false,
-                        }
-                    }
-                }
-            }
-            _ => return false,
+impl FloatKind {
+    fn of(uri: &str) -> Option<FloatKind> {
+        if is_xsd_float(uri) {
+            Some(FloatKind::Float)
+        } else if is_xsd_double(uri) {
+            Some(FloatKind::Double)
+        } else {
+            None
         }
     }
-    true
+
+    /// The order keys of -INF and +INF, between which lie the keys of all the
+    /// values except NaN.
+    fn keys(self) -> (u64, u64) {
+        match self {
+            FloatKind::Float => (
+                u64::from(f32_order_key(f32::NEG_INFINITY)),
+                u64::from(f32_order_key(f32::INFINITY)),
+            ),
+            FloatKind::Double => (f64_order_key(f64::NEG_INFINITY), f64_order_key(f64::INFINITY)),
+        }
+    }
+
+    /// The order keys of the values a restriction's ordering facets admit;
+    /// `lo > hi` when there are none.
+    fn window(self, dr: &DatatypeRestriction) -> Option<(u64, u64)> {
+        match self {
+            FloatKind::Float => {
+                float_restriction_key_window(dr).map(|(lo, hi)| (u64::from(lo), u64::from(hi)))
+            }
+            FloatKind::Double => double_restriction_key_window(dr),
+        }
+    }
+
+    /// The order key of a value of this datatype: `Some(None)` for NaN, and
+    /// `None` for a value of another datatype.
+    fn key(self, value: &DataValue) -> Option<Option<u64>> {
+        match (self, value) {
+            (FloatKind::Float, DataValue::Float(bits)) => {
+                let f = f32::from_bits(*bits);
+                Some((!f.is_nan()).then(|| u64::from(f32_order_key(f))))
+            }
+            (FloatKind::Double, DataValue::Double(bits)) => {
+                let f = f64::from_bits(*bits);
+                Some((!f.is_nan()).then(|| f64_order_key(f)))
+            }
+            _ => None,
+        }
+    }
+
+    /// The value with the given order key.
+    fn value(self, key: u64) -> DataValue {
+        match self {
+            FloatKind::Float => DataValue::Float(f32_from_order_key(key as u32).to_bits()),
+            FloatKind::Double => DataValue::Double(f64_from_order_key(key).to_bits()),
+        }
+    }
+
+    fn nan(self) -> DataValue {
+        match self {
+            FloatKind::Float => DataValue::Float(f32::NAN.to_bits()),
+            FloatKind::Double => DataValue::Double(f64::NAN.to_bits()),
+        }
+    }
 }
 
-/// Counts the distinct integers in `[lo, hi]` that are removed by some
-/// value-removing range on the node (a negated enumeration whose members are
-/// concrete excluded points). Returns `None` when a removing range cannot be
-/// resolved to a finite set of integer points (e.g. an unparseable enumeration
-/// member, or a negated *interval* that could remove a sub-range rather than
-/// finitely many points — those are handled by `numeric_node_cardinality`). Used
-/// for the huge-interval-with-exclusions cardinality when the exclusions are
-/// finite point-sets rather than numeric intervals.
-fn count_excluded_integers_in_range<D>(
+/// The xsd:float or xsd:double value space of a conjunction of data ranges:
+/// runs of consecutive values other than NaN, whether NaN remains, and the
+/// excluded values. `+0` and `-0` are distinct values with adjacent keys.
+struct FloatValueSpace {
+    kind: FloatKind,
+    /// The remaining runs, as disjoint windows `[lo, hi]` of order keys.
+    windows: Vec<(u64, u64)>,
+    /// Whether NaN remains.
+    nan: bool,
+    /// The distinct excluded values that lie in the space.
+    excluded: Vec<DataValue>,
+}
+
+impl FloatValueSpace {
+    fn contains(&self, value: &DataValue) -> bool {
+        match self.kind.key(value) {
+            Some(Some(key)) => self.windows.iter().any(|&(lo, hi)| lo <= key && key <= hi),
+            Some(None) => self.nan,
+            None => false,
+        }
+    }
+
+    /// The number of values (`FloatInterval.subtractIntervalSizeFrom`, plus one
+    /// for NaN in `EntireFloatSubset`). Each excluded value is in the space, so
+    /// each removes one value.
+    fn count(&self) -> u128 {
+        let runs: u128 = self.windows.iter().map(|&(lo, hi)| u128::from(hi - lo) + 1).sum();
+        runs + u128::from(self.nan) - self.excluded.len() as u128
+    }
+
+    /// Whether no value remains.
+    fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
+
+    /// The values of the space (`enumerateDataValues`).
+    fn values(&self) -> impl Iterator<Item = DataValue> + '_ {
+        let kind = self.kind;
+        self.nan
+            .then(|| kind.nan())
+            .into_iter()
+            .chain(
+                self.windows
+                    .iter()
+                    .flat_map(move |&(lo, hi)| (lo..=hi).map(move |key| kind.value(key))),
+            )
+            .filter(|value| !self.excluded.iter().any(|e| values_equal(e, value)))
+    }
+
+    /// The node value space: its exact cardinality, with the values when there
+    /// are at most `MAX_ENUMERATED_VALUES` of them.
+    fn node_value_space(&self) -> NodeValueSpace {
+        let count = self.count();
+        let values = (count <= MAX_ENUMERATED_VALUES as u128).then(|| self.values().collect());
+        NodeValueSpace::Finite { count, values }
+    }
+}
+
+/// The xsd:float or xsd:double value space of a conjunction of data ranges,
+/// mirroring `DVariable.prepareAsValueSpaceSubset`: the values of the positive
+/// restrictions of that datatype (`conjoinWithDR`), less the values of each
+/// negated restriction of that datatype (`conjoinWithDRNegation`), less the
+/// excluded values (members of negated `DataOneOf` ranges) that lie in what
+/// remains (`m_forbiddenDataValues`). `None` when there is no positive
+/// restriction of that datatype or when a facet cannot be read.
+///
+/// A restriction without facets holds every value, NaN included. NaN is
+/// incomparable with every value, so a restriction with ordering facets never
+/// holds it (XSD 1.1 Part 2 §3.3.4.1 and §3.3.5.1), and the complement of such a
+/// restriction keeps it (OWL 2 Direct Semantics, Table 3). HermiT drops NaN when
+/// it subtracts a restriction with facets from the whole value space
+/// (`conjoinWithDRNegation` builds a `NoNaNFloatSubset`); this keeps it, as the
+/// membership test `value_in_range` does. A NaN facet bound keeps the reading
+/// of `float_restriction_key_window` and `double_restriction_key_window`.
+///
+/// Any other positive range is left to the callers; it can only shrink the
+/// space. A negated restriction of another datatype removes nothing, since the
+/// value spaces are disjoint.
+fn float_value_space<D>(
     ranges: &[(LiteralDataRange, D)],
-    lo: &BigInt,
-    hi: &BigInt,
-) -> Option<u128> {
-    let mut removed: Vec<BigInt> = Vec::new();
-    for (r, _) in ranges {
-        match r {
-            // A positive integer datatype restriction defines the interval; it
-            // removes nothing here (its bounds are already in [lo, hi]).
-            LiteralDataRange::DatatypeRestriction(dr) if is_integer_datatype(dr.datatype_uri()) => {}
-            // A negated enumeration removes its (finitely many) integer members
-            // that fall inside the interval.
+    kind: FloatKind,
+) -> Option<FloatValueSpace> {
+    let mut windows = vec![kind.keys()];
+    let mut nan = true;
+    let mut positive = false;
+    let mut forbidden: Vec<DataValue> = Vec::new();
+    for (range, _) in ranges {
+        match range {
+            LiteralDataRange::DatatypeRestriction(dr)
+                if FloatKind::of(dr.datatype_uri()) == Some(kind) =>
+            {
+                positive = true;
+                if dr.number_of_facet_restrictions() == 0 {
+                    continue;
+                }
+                let (lo, hi) = kind.window(dr)?;
+                windows = windows
+                    .into_iter()
+                    .filter_map(|(a, b)| {
+                        let (a, b) = (a.max(lo), b.min(hi));
+                        (a <= b).then_some((a, b))
+                    })
+                    .collect();
+                nan = false;
+            }
             LiteralDataRange::AtomicNegationDataRange(n) => {
-                match n.get_negated_data_range() {
-                    crate::model::AtomicDataRange::ConstantEnumeration(e) => {
-                        for i in 0..e.number_of_constants() {
-                            match parse_value(e.constant(i)) {
-                                Some(DataValue::Integer(v)) => {
-                                    if &v >= lo && &v <= hi && !removed.contains(&v) {
-                                        removed.push(v);
-                                    }
-                                }
-                                // A non-integer (or unparseable) member removes
-                                // nothing from the integer line — but an
-                                // unparseable one is undecidable, so bail.
-                                Some(_) => {}
-                                None => return None,
+                if let crate::model::AtomicDataRange::ConstantEnumeration(e) =
+                    n.get_negated_data_range()
+                {
+                    for i in 0..e.number_of_constants() {
+                        if let Some(value) = parse_value(e.constant(i)) {
+                            if kind.key(&value).is_some() {
+                                forbidden.push(value);
                             }
                         }
                     }
-                    // A negated datatype / interval is not a finite point set.
-                    _ => return None,
                 }
             }
-            // Any other removing range we cannot resolve precisely.
-            _ => return None,
+            _ => {}
         }
     }
-    Some(removed.len() as u128)
+    if !positive {
+        return None;
+    }
+    // Subtract each negated restriction of this datatype, keeping the values
+    // below and above its window.
+    for (range, _) in ranges {
+        let LiteralDataRange::AtomicNegationDataRange(n) = range else {
+            continue;
+        };
+        let crate::model::AtomicDataRange::DatatypeRestriction(dr) = n.get_negated_data_range()
+        else {
+            continue;
+        };
+        if FloatKind::of(dr.datatype_uri()) != Some(kind) {
+            continue;
+        }
+        if dr.number_of_facet_restrictions() == 0 {
+            windows.clear();
+            nan = false;
+            continue;
+        }
+        let (lo, hi) = kind.window(dr)?;
+        if lo > hi {
+            continue; // the complement of an empty range is everything
+        }
+        windows = windows
+            .into_iter()
+            .flat_map(|(a, b)| {
+                let below = (a < lo).then(|| (a, b.min(lo - 1)));
+                let above = (b > hi).then(|| (a.max(hi + 1), b));
+                below.into_iter().chain(above)
+            })
+            .collect();
+    }
+    let mut space = FloatValueSpace { kind, windows, nan, excluded: Vec::new() };
+    for value in forbidden {
+        if space.contains(&value) && !space.excluded.iter().any(|e| values_equal(e, &value)) {
+            space.excluded.push(value);
+        }
+    }
+    Some(space)
 }
 
 /// Whether the conjunction is provably empty because a positive datatype's
@@ -2884,60 +2940,16 @@ fn count_excluded_integers_in_range<D>(
 /// subset of the negated datatype's base range. The non-numeric kinds
 /// (string/datetime/binary/…) are decided by the facet-free value-space-class
 /// subset test below; the numeric (owl:real) lattice is decided exactly — over
-/// facets too — by `build_numeric_value_space` (so e.g.
+/// facets and excluded values too — by `real_value_space`, which
+/// `conjunction_is_empty` and `node_value_space` read (so e.g.
 /// `integer[≥0] ⊓ ¬integer[≥-5]` is detected empty even though both sides carry
 /// facets and the positive side is infinite).
 fn negation_subsumes<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
-    // Numeric lattice: build the exact value space and test for emptiness. This
-    // covers facet-restricted negation subsumption over the infinite reals.
-    let has_numeric_negation = ranges.iter().any(|(r, _)| match r {
-        LiteralDataRange::AtomicNegationDataRange(n) => matches!(
-            n.get_negated_data_range(),
-            crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                if NumRange::base_of(dr.datatype_uri()).is_some()
-        ),
-        _ => false,
-    });
-    if has_numeric_negation {
-        // Only decide via the numeric lattice when *every value-constraining*
-        // range is numeric (a positive numeric DR or a negated numeric DR). The
-        // value-non-constraining helper ranges that the live `∃p` witness path
-        // adds — `rdfs:Literal` (the universal top) and the
-        // `internal:defdata#`/`internal:defined` `InternalDatatype` placeholders
-        // (whose real meaning is already carried by the inclusion-derived
-        // positive/negated ranges) — are IGNORED here: they constrain nothing,
-        // so they must not disable the numeric subsumption test. A genuinely
-        // non-numeric range (e.g. a string DR) still scopes us out, mirroring
-        // Java's per-handler structure. `build_numeric_value_space` itself only
-        // looks at the numeric ranges, so the helper ranges are transparent to
-        // it.
-        let all_numeric = ranges.iter().all(|(r, _)| {
-            is_value_non_constraining_helper(r)
-                || match r {
-                    LiteralDataRange::DatatypeRestriction(dr) => {
-                        NumRange::base_of(dr.datatype_uri()).is_some()
-                    }
-                    LiteralDataRange::AtomicNegationDataRange(n) => matches!(
-                        n.get_negated_data_range(),
-                        crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                            if NumRange::base_of(dr.datatype_uri()).is_some()
-                    ),
-                    _ => false,
-                }
-        });
-        if all_numeric {
-            if let Some(space) = build_numeric_value_space(ranges) {
-                if space.intervals.is_empty() {
-                    return true;
-                }
-            }
-        }
-    }
     // String / rdf:PlainLiteral length lattice: covers the faceted-NEGATED case
     // outside the numeric lattice (e.g. `string[minLength 3] ⊓ ¬string[minLength
-    // 1]` empty). Like the numeric branch, this only fires when a negated
-    // length-handled string range is present; `length_value_space_is_empty`
-    // itself scopes out (returns false) when any range is not a length range.
+    // 1]` empty). This only fires when a negated length-handled string range is
+    // present; `length_value_space_is_empty` itself scopes out (returns false)
+    // when any range is not a length range.
     let has_length_negation = ranges.iter().any(|(r, _)| match r {
         LiteralDataRange::AtomicNegationDataRange(n) => matches!(
             n.get_negated_data_range(),
@@ -2972,9 +2984,10 @@ fn negation_subsumes<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     if has_pattern_or_langrange && pattern_langrange_value_space_is_empty(ranges) {
         return true;
     }
-    // A faceted negated dateTime restriction is subtracted by
-    // `datetime_value_space`, which the dateTime emptiness check and
-    // `node_value_space` both read.
+    // A faceted negated owl:real, xsd:float, xsd:double or dateTime restriction
+    // is subtracted by `real_value_space`, `float_value_space` or
+    // `datetime_value_space`, which the emptiness check and `node_value_space`
+    // both read.
     base_datatype_negation_subsumes(ranges)
 }
 
@@ -4108,20 +4121,9 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     // A value must lie in every restriction's base datatype; numeric, string and
     // boolean kinds are mutually exclusive.
     let mut kinds: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
-    let mut lower: Option<Bound> = None;
-    let mut upper: Option<Bound> = None;
-    // Whether the numeric value space is restricted to the integers. The
-    // intersection of an integer base with any other numeric range stays
-    // integer-valued, so any integer-based restriction makes the whole
-    // conjunction integer-based (OWLRealDatatypeHandler.getIntervalFor builds an
-    // INTEGER NumberInterval, whose isIntervalEmpty rounds the bounds inward).
-    let mut integer_based = false;
     for (range, _) in ranges {
         if let LiteralDataRange::DatatypeRestriction(r) = range {
             let uri = r.datatype_uri();
-            if is_integer_datatype(uri) {
-                integer_based = true;
-            }
             let kind = if is_integer_datatype(uri)
                 || is_decimal_datatype(uri)
                 || is_rational_datatype(uri)
@@ -4152,56 +4154,24 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
                 continue; // unknown datatype -> cannot decide -> ignore
             };
             kinds.insert(kind);
-            // Seed the datatype's implicit value-space bounds (e.g.
-            // xsd:nonNegativeInteger is [0, +INF), xsd:unsignedByte is [0, 255])
-            // before refining with the explicit facets, matching
-            // OWLRealDatatypeHandler.getIntervalFor (which starts from the base
-            // interval). Without this, an empty conjunction such as
-            // `nonNegativeInteger ⊓ maxInclusive -1` is not detected.
-            if let Some((implicit_min, implicit_max)) = integer_datatype_bounds(uri) {
-                if let Some(min) = implicit_min {
-                    let value = (BigInt::from(min), BigInt::one());
-                    if lower
-                        .as_ref()
-                        .is_none_or(|b| cmp_exact(&value, &b.value).is_gt())
-                    {
-                        lower = Some(Bound { value, inclusive: true });
-                    }
-                }
-                if let Some(max) = implicit_max {
-                    let value = (BigInt::from(max), BigInt::one());
-                    if upper
-                        .as_ref()
-                        .is_none_or(|b| cmp_exact(&value, &b.value).is_lt())
-                    {
-                        upper = Some(Bound { value, inclusive: true });
-                    }
-                }
-            }
-            for i in 0..r.number_of_facet_restrictions() {
-                accumulate_numeric_bound(r.facet_uri(i), r.facet_value(i), &mut lower, &mut upper);
-            }
         }
     }
     if kinds.len() >= 2 {
         return true; // incompatible base datatypes
     }
-    if let (Some(lo), Some(hi)) = (&lower, &upper) {
-        if integer_based {
-            // NumberInterval.isIntervalEmpty for an INTEGER base range rounds the
-            // bounds to the nearest contained integer and tests lower > upper, so
-            // intervals empty over the integers but not the reals (e.g.
-            // `integer[minExclusive 2, maxExclusive 3]`) are detected.
-            let lo_int = nearest_integer_in_bound(&lo.value, true, lo.inclusive);
-            let hi_int = nearest_integer_in_bound(&hi.value, false, hi.inclusive);
-            if lo_int > hi_int {
-                return true; // empty integer interval
-            }
-        } else {
-            let ord = cmp_exact(&lo.value, &hi.value);
-            if ord.is_gt() || (ord.is_eq() && (!lo.inclusive || !hi.inclusive)) {
-                return true; // empty numeric interval
-            }
+    // The owl:real, xsd:float and xsd:double value spaces `node_value_space`
+    // counts: an empty interval, a negated restriction or an excluded value can
+    // empty them.
+    if kinds.contains("numeric")
+        && real_value_space(ranges).is_some_and(|space| space.is_empty())
+    {
+        return true;
+    }
+    for (name, kind) in [("float", FloatKind::Float), ("double", FloatKind::Double)] {
+        if kinds.contains(name)
+            && float_value_space(ranges, kind).is_some_and(|space| space.is_empty())
+        {
+            return true;
         }
     }
     // xsd:dateTime / xsd:dateTimeStamp: the value space `node_value_space`
@@ -4553,54 +4523,6 @@ fn datetime_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<DateTimeV
     Some(DateTimeValueSpace { intervals, excluded })
 }
 
-fn accumulate_numeric_bound(
-    facet_uri: &str,
-    facet_value: &Constant,
-    lower: &mut Option<Bound>,
-    upper: &mut Option<Bound>,
-) {
-    let Some(facet) = facet_uri.strip_prefix(XSD) else {
-        return;
-    };
-    // Keep the bound as an exact rational so the emptiness test is exact.
-    let Some(bound_value) = parse_value(facet_value).and_then(|v| as_exact(&v)) else {
-        return;
-    };
-    match facet {
-        "minInclusive" | "minExclusive" => {
-            let inclusive = facet == "minInclusive";
-            match lower {
-                Some(existing) => {
-                    let ord = cmp_exact(&bound_value, &existing.value);
-                    if ord.is_gt() {
-                        *lower = Some(Bound { value: bound_value, inclusive });
-                    } else if ord.is_eq() {
-                        // Equal bounds: keep the more restrictive bound type
-                        // (exclusive wins), as OWLRealDatatypeHandler.getIntervalFor does.
-                        existing.inclusive = existing.inclusive && inclusive;
-                    }
-                }
-                None => *lower = Some(Bound { value: bound_value, inclusive }),
-            }
-        }
-        "maxInclusive" | "maxExclusive" => {
-            let inclusive = facet == "maxInclusive";
-            match upper {
-                Some(existing) => {
-                    let ord = cmp_exact(&bound_value, &existing.value);
-                    if ord.is_lt() {
-                        *upper = Some(Bound { value: bound_value, inclusive });
-                    } else if ord.is_eq() {
-                        existing.inclusive = existing.inclusive && inclusive;
-                    }
-                }
-                None => *upper = Some(Bound { value: bound_value, inclusive }),
-            }
-        }
-        _ => {}
-    }
-}
-
 /// The cardinality of a node's (conjoined) value space: either infinite/
 /// unbounded, or an exact finite count.
 #[derive(Clone, Copy, PartialEq)]
@@ -4685,16 +4607,6 @@ fn node_value_space<D>(
     let excluded = |candidate: &DataValue| {
         ranges.iter().any(|(r, _)| value_in_range(candidate, r) == Some(false))
     };
-    let has_exclusions = || {
-        ranges
-            .iter()
-            .any(|(r, _)| matches!(r, LiteralDataRange::AtomicNegationDataRange(_)))
-            || ranges
-                .iter()
-                .filter(|(r, _)| matches!(r, LiteralDataRange::DatatypeRestriction(_)))
-                .count()
-                > 1
-    };
 
     // An enumeration bounds the candidates directly; its cardinality is the
     // number of distinct value-space points that survive every other range.
@@ -4743,312 +4655,23 @@ fn node_value_space<D>(
         return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
     }
 
-    // Integers: a bounded interval has an *exact* finite cardinality (its
-    // width), computed with BigInt. When the width fits the materialization
-    // cap we also enumerate the values; otherwise we still report the exact count
-    // so the cardinality decision is complete. (A huge interval combined with
-    // value-removing exclusions is conservatively reported as infinite — which is
-    // sound, since such an interval still has astronomically many values, far
-    // more than any tableau component requires.)
-    if restrictions.iter().all(|r| is_integer_datatype(r.datatype_uri())) {
-        let mut lower: Option<BigInt> = None;
-        let mut upper: Option<BigInt> = None;
-        let tighten_lower = |v: BigInt, lower: &mut Option<BigInt>| {
-            *lower = Some(match lower.take() {
-                Some(c) => c.max(v),
-                None => v,
-            });
-        };
-        let tighten_upper = |v: BigInt, upper: &mut Option<BigInt>| {
-            *upper = Some(match upper.take() {
-                Some(c) => c.min(v),
-                None => v,
-            });
-        };
-        let mut undecided_bound = false;
-        for r in &restrictions {
-            if let Some((implicit_min, implicit_max)) = integer_datatype_bounds(r.datatype_uri()) {
-                if let Some(m) = implicit_min {
-                    tighten_lower(BigInt::from(m), &mut lower);
-                }
-                if let Some(m) = implicit_max {
-                    tighten_upper(BigInt::from(m), &mut upper);
-                }
-            }
-            for i in 0..r.number_of_facet_restrictions() {
-                let Some(facet) = r.facet_uri(i).strip_prefix(XSD) else {
-                    continue;
-                };
-                if !matches!(
-                    facet,
-                    "minInclusive" | "minExclusive" | "maxInclusive" | "maxExclusive"
-                ) {
-                    continue;
-                }
-                // Java's NumberInterval constructor rounds a non-integer bound to
-                // the nearest integer inside the bound (getNearestIntegerInBound)
-                // for an INTEGER base range. A minInclusive 2.5 becomes effective
-                // min 3, a maxInclusive 2.5 becomes effective max 2, etc. Parse the
-                // bound as an exact rational and round inward.
-                let Some(bound) = parse_value(r.facet_value(i)).as_ref().and_then(as_exact) else {
-                    // A facet value that is not an exact numeric (e.g. a string,
-                    // or an unparseable literal) cannot be handled here.
-                    undecided_bound = true;
-                    continue;
-                };
-                let (lower_dir, inclusive) = match facet {
-                    "minInclusive" => (true, true),
-                    "minExclusive" => (true, false),
-                    "maxInclusive" => (false, true),
-                    "maxExclusive" => (false, false),
-                    _ => unreachable!(),
-                };
-                let b = nearest_integer_in_bound(&bound, lower_dir, inclusive);
-                if lower_dir {
-                    tighten_lower(b, &mut lower);
-                } else {
-                    tighten_upper(b, &mut upper);
-                }
-            }
-        }
-        if undecided_bound {
-            return NodeValueSpace::Infinite;
-        }
-        if let (Some(lo), Some(hi)) = (lower, upper) {
-            if hi < lo {
-                return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
-            }
-            let width = &hi - &lo + BigInt::one();
-            if width <= BigInt::from(MAX_ENUMERATED_VALUES) {
-                let mut out: Vec<DataValue> = Vec::new();
-                let mut current = lo;
-                while current <= hi {
-                    let candidate = DataValue::Integer(current.clone());
-                    if !excluded(&candidate) {
-                        out.push(candidate);
-                    }
-                    current += 1;
-                }
-                return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
-            }
-            // Too wide to enumerate. If nothing can remove values from it, report
-            // the exact width (clamped to u128).
-            if !has_exclusions() {
-                let count = u128::try_from(&width).unwrap_or(u128::MAX);
-                return NodeValueSpace::Finite { count, values: None };
-            }
-            // A huge interval that ALSO carries value-removing exclusions
-            // still has an *exact* finite cardinality. HermiT computes it via
-            // NumberInterval/OWLRealValueSpaceSubset; we mirror that here.
-            // (a) If every range is numeric, the owl:real lattice gives the exact
-            //     cardinality directly (a negated sub-interval is subtracted as a
-            //     finite count of integers).
-            if let Some(count) = numeric_node_cardinality(ranges) {
-                return NodeValueSpace::Finite { count, values: None };
-            }
-            // (b) Otherwise the exclusions are negated enumerations (finite sets
-            //     of points). Count the distinct excluded integers that fall
-            //     inside [lo, hi] and subtract: cardinality = width − removed.
-            if let Some(removed) = count_excluded_integers_in_range(ranges, &lo, &hi) {
-                let width_u = u128::try_from(&width).unwrap_or(u128::MAX);
-                return NodeValueSpace::Finite {
-                    count: width_u.saturating_sub(removed),
-                    values: None,
-                };
-            }
-            // Undecidable exclusion (e.g. an unparseable member): fall back to the
-            // sound over-approximation (still astronomically large).
-            let count = u128::try_from(&width).unwrap_or(u128::MAX);
-            return NodeValueSpace::Finite { count, values: None };
-        }
-        return NodeValueSpace::Infinite;
+    // owl:real, owl:rational, xsd:decimal and the integer datatypes: the
+    // intervals left after the negated restrictions are subtracted, less the
+    // excluded values. Counted exactly and enumerated when small. An interval of
+    // a dense range that holds two numbers, or an integer interval without a
+    // lower or an upper bound, is infinite (see `real_value_space`).
+    if restrictions.iter().all(|r| NumRange::base_of(r.datatype_uri()).is_some()) {
+        return real_value_space(ranges)
+            .map_or(NodeValueSpace::Infinite, |space| space.node_value_space());
     }
 
-    // Numeric value spaces that are not purely integer (xsd:decimal, owl:rational,
-    // owl:real, or a mix that includes integer): the space is dense, hence
-    // infinite, UNLESS the conjunction pins it to finitely many points -- e.g. a
-    // singleton interval `decimal[minInclusive 1, maxInclusive 1]` (cardinality 1)
-    // or an integer-line sub-range carved out of a real restriction. HermiT
-    // computes the exact cardinality over OWLRealValueSpaceSubset/NumberInterval;
-    // mirror that via `numeric_node_cardinality` (None for a dense/unbounded
-    // space, which stays Infinite).
-    if restrictions
-        .iter()
-        .all(|r| NumRange::base_of(r.datatype_uri()).is_some())
-    {
-        return match numeric_node_cardinality(ranges) {
-            Some(count) => NodeValueSpace::Finite { count, values: None },
-            None => NodeValueSpace::Infinite,
-        };
-    }
-
-    // xsd:float: the value space is finite and discrete; a facet-bounded
-    // interval has an exact representable count.
-    // Java: EntireFloatSubset.hasCardinalityAtLeast uses subtractIntervalSizeFrom(-INF,+INF,n)
-    // and checks leftover<=1 (+1 for NaN), so the entire space is FINITE, not infinite.
-    if restrictions.iter().all(|r| is_xsd_float(r.datatype_uri())) {
-        let mut lower_key = f32_order_key(f32::NEG_INFINITY);
-        let mut upper_key = f32_order_key(f32::INFINITY);
-        let mut has_facets = false;
-        for r in &restrictions {
-            for i in 0..r.number_of_facet_restrictions() {
-                let Some(facet) = r.facet_uri(i).strip_prefix(XSD) else {
-                    continue;
-                };
-                if !matches!(
-                    facet,
-                    "minInclusive" | "minExclusive" | "maxInclusive" | "maxExclusive"
-                ) {
-                    continue;
-                }
-                has_facets = true;
-                let Some(DataValue::Float(bits)) = parse_value(r.facet_value(i)) else {
-                    return NodeValueSpace::Infinite;
-                };
-                let bound = f32::from_bits(bits);
-                // Faithful to Java's bugged FloatInterval.isNaN (mantissa mask
-                // 0x003fffff, not 0x007fffff): the canonical NaN bound 0x7fc00000
-                // is NOT recognised as NaN, so getIntervalFor treats it as an
-                // ordinary positive value above +INF (order key 0xffc00000). A NaN
-                // min* bound therefore drives lower_key above upper_key (empty
-                // interval, cardinality 0), while a NaN max* bound leaves upper_key
-                // at +INF (the min() keeps +INF). We must NOT skip it (that would be
-                // the xsd:double behaviour, whose isNaN mask is correct).
-                // Java normalises the bound's zero sign per facet first (so e.g.
-                // minInclusive 0.0 admits -0.0). The order key then distinguishes
-                // +0.0/-0.0 by their bits and the ±1 step yields the exclusive
-                // next/previousFloat (previousFloat(+0.0)==-0.0, nextFloat(-0.0)==+0.0).
-                let bound = normalize_zero_for_facet_f32(bound, facet);
-                let key = f32_order_key(bound);
-                match facet {
-                    "minInclusive" => lower_key = lower_key.max(key),
-                    "minExclusive" => lower_key = lower_key.max(key.saturating_add(1)),
-                    "maxInclusive" => upper_key = upper_key.min(key),
-                    "maxExclusive" => upper_key = upper_key.min(key.saturating_sub(1)),
-                    _ => {}
-                }
-            }
+    // xsd:float / xsd:double: finite value spaces, NaN included, counted exactly
+    // and enumerated when small (see `float_value_space`).
+    for kind in [FloatKind::Float, FloatKind::Double] {
+        if restrictions.iter().all(|r| FloatKind::of(r.datatype_uri()) == Some(kind)) {
+            return float_value_space(ranges, kind)
+                .map_or(NodeValueSpace::Infinite, |space| space.node_value_space());
         }
-        // No !any_bound guard: with no facets lower/upper stay at -INF/+INF and the
-        // width below gives the correct finite count (~2^32 non-NaN values), matching
-        // Java's EntireFloatSubset which is also finite.
-        if upper_key < lower_key {
-            return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
-        }
-        let width = (upper_key - lower_key) as u64 + 1;
-        if width <= MAX_ENUMERATED_VALUES as u64 {
-            let out: Vec<DataValue> = (lower_key..=upper_key)
-                .map(|k| DataValue::Float(f32_from_order_key(k).to_bits()))
-                .filter(|c| !excluded(c))
-                .collect();
-            return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
-        }
-        // The entire xsd:float value space includes one NaN, so the +1 is present
-        // exactly when the value-space subset is still EntireFloatSubset — i.e. when
-        // no positive facet and no non-vacuous negated-interval DR has shrunk it to a
-        // NoNaN subset. Negated *enumerations* (forbidden values) do NOT remove the
-        // NaN; they are subtracted separately (DVariable.m_forbiddenDataValues),
-        // matching Java's hasCardinalityAtLeast(number+forbidden.size()).
-        let nan = if entire_float_space_keeps_nan(ranges) { 1u128 } else { 0u128 };
-        if has_exclusions() {
-            // FD-5: a huge-but-finite float interval that also has excluded values
-            // still has an EXACT finite cardinality. Java
-            // (NoNaNFloatSubset.hasCardinalityAtLeast inflates the requested number
-            // by m_forbiddenDataValues.size(), and DVariable.hasCardinalityAtLeast
-            // adds the forbidden-value count) => effective cardinality =
-            // (interval size via FloatInterval.subtractIntervalSizeFrom) minus the
-            // number of excluded values that lie inside the interval, plus the NaN
-            // if the subset is still entire (only forbidden enumeration points, no
-            // real facet/negated-interval shrink).
-            let removed = count_excluded_floats_in_range(ranges, lower_key, upper_key);
-            return NodeValueSpace::Finite {
-                count: (width as u128).saturating_sub(removed) + nan,
-                values: None,
-            };
-        }
-        let _ = has_facets;
-        return NodeValueSpace::Finite { count: width as u128 + nan, values: None };
-    }
-
-    // xsd:double: finite discrete value space, exact representable count.
-    // Java: EntireDoubleSubset.hasCardinalityAtLeast uses subtractIntervalSizeFrom(-INF,+INF,n)
-    // and checks leftover<=1 (+1 for NaN), so the entire space is FINITE, not infinite.
-    // Mirrors Java DoubleInterval / DoubleValueSpaceSubset.hasCardinalityAtLeast.
-    if restrictions.iter().all(|r| is_xsd_double(r.datatype_uri())) {
-        let mut lower_key = f64_order_key(f64::NEG_INFINITY);
-        let mut upper_key = f64_order_key(f64::INFINITY);
-        let mut has_facets = false;
-        for r in &restrictions {
-            for i in 0..r.number_of_facet_restrictions() {
-                let Some(facet) = r.facet_uri(i).strip_prefix(XSD) else {
-                    continue;
-                };
-                if !matches!(
-                    facet,
-                    "minInclusive" | "minExclusive" | "maxInclusive" | "maxExclusive"
-                ) {
-                    continue;
-                }
-                has_facets = true;
-                let Some(DataValue::Double(bits)) = parse_value(r.facet_value(i)) else {
-                    return NodeValueSpace::Infinite;
-                };
-                let bound = f64::from_bits(bits);
-                // Java: DoubleInterval.isSmallerEqual returns false when either operand is NaN,
-                // so the bound-tightening assignment is skipped — the NaN facet is ignored and
-                // the interval stays at its current ±INF defaults.
-                if bound.is_nan() {
-                    continue;
-                }
-                // Java normalises the bound's zero sign per facet first (so e.g.
-                // minInclusive 0.0 admits -0.0). The order key then distinguishes
-                // +0.0/-0.0 by their bits and the ±1 step yields the exclusive
-                // next/previousDouble (previousDouble(+0.0)==-0.0, nextDouble(-0.0)==+0.0).
-                let bound = normalize_zero_for_facet_f64(bound, facet);
-                let key = f64_order_key(bound);
-                match facet {
-                    "minInclusive" => lower_key = lower_key.max(key),
-                    "minExclusive" => lower_key = lower_key.max(key.saturating_add(1)),
-                    "maxInclusive" => upper_key = upper_key.min(key),
-                    "maxExclusive" => upper_key = upper_key.min(key.saturating_sub(1)),
-                    _ => {}
-                }
-            }
-        }
-        // No !any_bound guard: with no facets lower/upper stay at -INF/+INF and the
-        // width below gives the correct finite count (~2^64 non-NaN values), matching
-        // Java's EntireDoubleSubset which is also finite.
-        if upper_key < lower_key {
-            return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
-        }
-        let width = (upper_key - lower_key) as u128 + 1;
-        if width <= MAX_ENUMERATED_VALUES as u128 {
-            let out: Vec<DataValue> = (lower_key..=upper_key)
-                .map(|k| DataValue::Double(f64_from_order_key(k).to_bits()))
-                .filter(|c| !excluded(c))
-                .collect();
-            return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
-        }
-        // The entire xsd:double value space includes one NaN; the +1 survives
-        // exactly when the value-space subset is still EntireDoubleSubset (no
-        // positive facet and no non-vacuous negated-interval DR has shrunk it to a
-        // NoNaN subset). Negated *enumerations* (forbidden values) do NOT remove the
-        // NaN; they are subtracted separately (DVariable.m_forbiddenDataValues),
-        // matching Java's hasCardinalityAtLeast(number+forbidden.size()).
-        let nan = if entire_double_space_keeps_nan(ranges) { 1u128 } else { 0u128 };
-        if has_exclusions() {
-            // FD-5: see the float arm above. Java
-            // NoNaNDoubleSubset.hasCardinalityAtLeast / DoubleInterval.subtractIntervalSizeFrom:
-            // exact cardinality = (interval size) - (excluded values inside the
-            // interval), plus the NaN if the subset is still entire.
-            let removed = count_excluded_doubles_in_range(ranges, lower_key, upper_key);
-            return NodeValueSpace::Finite {
-                count: width.saturating_sub(removed) + nan,
-                values: None,
-            };
-        }
-        let _ = has_facets;
-        return NodeValueSpace::Finite { count: width + nan, values: None };
     }
 
     // Strings whose pattern facet denotes a small finite language.
@@ -8343,6 +7966,293 @@ mod tests {
         LiteralDataRange::AtomicNegationDataRange(
             crate::model::AtomicNegationDataRange::create(AtomicDataRange::ConstantEnumeration(e)),
         )
+    }
+
+    /// The URI of `xsd:name`, or of `owl:name` when written with that prefix.
+    fn numeric_uri(name: &str) -> String {
+        match name.strip_prefix("owl:") {
+            Some(name) => format!("{OWL}{name}"),
+            None => format!("{XSD}{name}"),
+        }
+    }
+    /// A numeric datatype restriction, as a range of a fresh node.
+    fn numeric_range(datatype: &str, facets: &[(&str, Constant)]) -> (LiteralDataRange, ()) {
+        (LiteralDataRange::DatatypeRestriction(numeric_restriction(datatype, facets)), ())
+    }
+    /// The complement of a numeric datatype restriction.
+    fn numeric_complement(datatype: &str, facets: &[(&str, Constant)]) -> (LiteralDataRange, ()) {
+        (numeric_restriction(datatype, facets).get_negation(), ())
+    }
+    fn numeric_restriction(
+        datatype: &str,
+        facets: &[(&str, Constant)],
+    ) -> crate::model::DatatypeRestriction {
+        crate::model::DatatypeRestriction::create(
+            numeric_uri(datatype),
+            facets.iter().map(|(facet, _)| format!("{XSD}{facet}")).collect(),
+            facets.iter().map(|(_, value)| *value).collect(),
+        )
+    }
+    /// The complement of an enumeration of `(lexical form, datatype)` literals.
+    fn numeric_exclusions(members: &[(&str, &str)]) -> (LiteralDataRange, ()) {
+        let members = members
+            .iter()
+            .map(|(lexical, datatype)| Constant::create(*lexical, numeric_uri(datatype)))
+            .collect();
+        (crate::model::ConstantEnumeration::create(members).get_negation(), ())
+    }
+    /// A closed interval, as a pair of facets.
+    fn numeric_between(from: Constant, to: Constant) -> Vec<(&'static str, Constant)> {
+        vec![("minInclusive", from), ("maxInclusive", to)]
+    }
+    /// The count of a fresh node's value space, `None` when it is infinite,
+    /// checked against the enumerated values and the emptiness test.
+    fn numeric_count(ranges: &[(LiteralDataRange, ())]) -> Option<u128> {
+        match node_value_space(None, ranges) {
+            NodeValueSpace::Finite { count, values } => {
+                assert_eq!(conjunction_is_empty(ranges), count == 0);
+                if let Some(values) = values {
+                    assert_eq!(values.len() as u128, count);
+                    assert_eq!(materialize_finite_value_space(ranges, values.len()), Some(values));
+                }
+                Some(count)
+            }
+            NodeValueSpace::Infinite => {
+                assert!(!conjunction_is_empty(ranges));
+                assert_eq!(materialize_finite_value_space(ranges, usize::MAX), None);
+                None
+            }
+        }
+    }
+    /// The values of a fresh node's finite value space, checked as `numeric_count`
+    /// checks them.
+    fn numeric_values(ranges: &[(LiteralDataRange, ())]) -> Vec<DataValue> {
+        numeric_count(ranges);
+        let NodeValueSpace::Finite { values: Some(values), .. } = node_value_space(None, ranges)
+        else {
+            panic!("expected an enumerated finite value space");
+        };
+        values
+    }
+
+    #[test]
+    fn real_value_spaces_subtract_negated_ranges_and_excluded_values() {
+        // Issues #15 and #16: owl:real, owl:rational, xsd:decimal and the integer
+        // datatypes share one value space, and their values nest (OWL 2
+        // Structural Specification §4.1), so "6"^^xsd:integer and
+        // "6.0"^^xsd:decimal are one value. A negated restriction removes its
+        // values (DataComplementOf is the complement within the data domain, OWL 2
+        // Direct Semantics, Table 3), and an excluded value removes itself.
+        // Emptiness, cardinality and the enumerated values all see both.
+        let (range, not, excluding, between) =
+            (numeric_range, numeric_complement, numeric_exclusions, numeric_between);
+        let (count, values) = (numeric_count, numeric_values);
+        let rational = |lexical: &str| Constant::create(lexical, format!("{OWL}rational"));
+        let int = |n: i64| DataValue::Integer(BigInt::from(n));
+
+        // The issue ranges: the xsd:int values from 1.2 to 7.2 that are not
+        // integers from 2.2 to 5.2, which are 2, 6 and 7.
+        let issue = [
+            range("int", &[]),
+            not("integer", &between(decimal("2.2"), decimal("5.2"))),
+            range("decimal", &between(decimal("1.2"), decimal("7.2"))),
+        ];
+        assert_eq!(values(&issue), [int(2), int(6), int(7)]);
+        // Issue #16 excludes exactly those values. Each spelling of a value is one
+        // exclusion, and a value outside the space or of another datatype removes
+        // nothing.
+        let mut none = issue.to_vec();
+        none.push(excluding(&[("2", "integer"), ("6.0", "decimal"), ("7.0", "decimal")]));
+        assert_eq!(count(&none), Some(0));
+        let mut two = issue.to_vec();
+        two.push(excluding(&[
+            ("6", "integer"),
+            ("6.0", "decimal"),
+            ("12/2", "owl:rational"),
+            ("4", "integer"),
+            ("7.0", "float"),
+            ("7", "string"),
+        ]));
+        assert_eq!(values(&two), [int(2), int(7)]);
+        // Without xsd:int the decimals between the integers remain, infinitely many.
+        assert_eq!(count(&issue[1..]), None);
+
+        // A dense range can hold a single number, which an excluded value of any
+        // of these datatypes removes. 1/3 is rational but not decimal, and owl:real
+        // holds irrational numbers, but not at a rational bound.
+        let two_and_a_half = range("decimal", &between(decimal("2.5"), decimal("2.5")));
+        assert_eq!(
+            values(std::slice::from_ref(&two_and_a_half)),
+            [DataValue::Decimal { num: BigInt::from(5), den: BigInt::from(2) }]
+        );
+        assert_eq!(count(&[two_and_a_half, excluding(&[("5/2", "owl:rational")])]), Some(0));
+        let third = between(rational("1/3"), rational("1/3"));
+        assert_eq!(count(&[range("owl:rational", &third)]), Some(1));
+        assert_eq!(count(&[range("decimal", &third)]), Some(0));
+        assert_eq!(count(&[range("owl:real", &[]), not("owl:rational", &[])]), None);
+        let real_one = range("owl:real", &between(integer("1"), integer("1")));
+        assert_eq!(count(&[real_one, not("owl:rational", &[])]), Some(0));
+
+        // A negated range keeps what lies outside it and what lies inside it but
+        // outside its datatype.
+        let (zero_to_three, one_to_two) =
+            (between(integer("0"), integer("3")), between(integer("1"), integer("2")));
+        assert_eq!(
+            values(&[range("integer", &zero_to_three), not("decimal", &one_to_two)]),
+            [int(0), int(3)]
+        );
+        assert_eq!(count(&[range("decimal", &one_to_two), not("integer", &[])]), None);
+        // Negated ranges can leave finite windows of an unbounded datatype.
+        let natural = range("integer", &[("minInclusive", integer("0"))]);
+        assert_eq!(count(&[natural, not("integer", &[("minInclusive", integer("10"))])]), Some(10));
+        let one_and_two = [
+            range("integer", &[]),
+            not("integer", &[("maxInclusive", integer("0"))]),
+            not("integer", &[("minInclusive", integer("3"))]),
+        ];
+        assert_eq!(values(&one_and_two), [int(1), int(2)]);
+        let around_zero = between(integer("-100"), integer("100"));
+        assert_eq!(count(&[range("byte", &[]), not("integer", &around_zero)]), Some(55));
+
+        // A wide window is counted without being listed; a negated range or an
+        // excluded value still counts exactly.
+        let wide = range("integer", &between(integer("0"), integer("1000000")));
+        assert_eq!(count(std::slice::from_ref(&wide)), Some(1_000_001));
+        let wide_excluded =
+            excluding(&[("0", "integer"), ("1000000.0", "decimal"), ("5", "unsignedByte")]);
+        assert_eq!(count(&[wide.clone(), wide_excluded]), Some(999_998));
+        let narrowed = [
+            wide,
+            not("integer", &between(integer("3"), integer("1000000"))),
+            excluding(&[("1", "integer")]),
+        ];
+        assert_eq!(values(&narrowed), [int(0), int(2)]);
+
+        // An exclusive upper bound of -2147483648 admits -2147483649, as the
+        // membership test does. (HermiT's Numbers.getNearestIntegerInBound
+        // subtracts 11 from that bound instead of 1.)
+        let below_min_int = [
+            range("integer", &[("maxExclusive", integer("-2147483648"))]),
+            range("integer", &[("minInclusive", integer("-2147483650"))]),
+        ];
+        assert_eq!(values(&below_min_int), [int(-2147483650), int(-2147483649)]);
+        let member = parse_value(&integer("-2147483649")).unwrap();
+        assert!(below_min_int.iter().all(|(r, _)| value_in_range(&member, r) == Some(true)));
+
+        // Cardinality and assignment agree: three distinct nodes fit in {2, 6, 7}
+        // but four do not. A node distinct from the constants 2, 6.0 and 7.0 has no
+        // value left, as in issue #15, but one distinct from 2 and 6.0 has 7.
+        let space = || node_value_space(None, &issue);
+        let constant = |lexical: &str, datatype: &str| {
+            let value = parse_value(&Constant::create(lexical, numeric_uri(datatype)));
+            node_value_space::<()>(value.as_ref(), &[])
+        };
+        let three = [space(), space(), space()];
+        assert!(!component_is_unsatisfiable(
+            &three.iter().collect::<Vec<_>>(),
+            &clique(3),
+            &no_specifics(3),
+            &[],
+        ));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &space(), &space(), &space()],
+            &clique(4),
+            &no_specifics(4),
+            &[],
+        ));
+        let star = |n: usize| -> Vec<Vec<usize>> {
+            (0..n).map(|i| if i == 0 { (1..n).collect() } else { vec![0] }).collect()
+        };
+        let two = constant("2", "integer");
+        let (six, seven) = (constant("6.0", "decimal"), constant("7.0", "decimal"));
+        let all_taken = [&space(), &two, &six, &seven];
+        assert!(component_is_unsatisfiable(&all_taken, &star(4), &no_specifics(4), &[]));
+        let seven_free = [&space(), &two, &six];
+        assert!(!component_is_unsatisfiable(&seven_free, &star(3), &no_specifics(3), &[]));
+        // Two single numbers of a dense range are two values, so two distinct
+        // nodes, one confined to each, fit.
+        let point = |n: &str| {
+            node_value_space(None, &[range("decimal", &between(decimal(n), decimal(n)))])
+        };
+        let (one, two) = (point("1.0"), point("2.0"));
+        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[]));
+        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[]));
+    }
+
+    #[test]
+    fn float_value_spaces_subtract_negated_ranges_and_excluded_values() {
+        // xsd:float and xsd:double have value spaces of their own, disjoint from
+        // each other and from owl:real (OWL 2 Structural Specification §4.2). +0
+        // and -0 are two values that the ordering facets treat as equal. NaN is
+        // incomparable, so a restriction with ordering facets never holds it (XSD
+        // 1.1 Part 2 §3.3.4.1 and §3.3.5.1), and the complement of one always
+        // does (OWL 2 Direct Semantics, Table 3). Emptiness, cardinality and the
+        // enumerated values agree.
+        let (range, not) = (numeric_range, numeric_complement);
+        let (count, values) = (numeric_count, numeric_values);
+        let float = |lexical: &str| Constant::create(lexical, format!("{XSD}float"));
+        let double = |lexical: &str| Constant::create(lexical, format!("{XSD}double"));
+        let excluding = |members: Vec<Constant>| {
+            (crate::model::ConstantEnumeration::create(members).get_negation(), ())
+        };
+        let f = |x: f32| DataValue::Float(x.to_bits());
+
+        // The whole value spaces: every bit pattern that is not NaN, and NaN.
+        assert_eq!(count(&[range("float", &[])]), Some((1 << 32) - (1 << 24) + 2 + 1));
+        assert_eq!(count(&[range("double", &[])]), Some((1 << 64) - (1 << 53) + 2 + 1));
+
+        // [0, 0] holds both zeros, which are two values.
+        let zeros = [range("float", &[("minInclusive", float("0")), ("maxInclusive", float("0"))])];
+        assert_eq!(values(&zeros), [f(-0.0), f(0.0)]);
+        let mut negative_zero = zeros.to_vec();
+        negative_zero.push(excluding(vec![float("0.0"), float("+0")]));
+        assert_eq!(values(&negative_zero), [f(-0.0)]);
+        negative_zero.push(excluding(vec![float("-0")]));
+        assert_eq!(count(&negative_zero), Some(0));
+
+        // A negated range with facets never removes NaN, so only NaN is left
+        // outside [-INF, +INF]; the negated datatype itself removes NaN too.
+        // (HermiT's conjoinWithDRNegation drops NaN here.)
+        let nan_only = [range("float", &[]), not("float", &[("minInclusive", float("-INF"))])];
+        assert_eq!(values(&nan_only), [f(f32::NAN)]);
+        let mut nothing = nan_only.to_vec();
+        nothing.push(excluding(vec![float("NaN")]));
+        assert_eq!(count(&nothing), Some(0));
+        assert_eq!(count(&[range("float", &[]), not("float", &[])]), Some(0));
+        let double_nan = [range("double", &[]), not("double", &[("maxInclusive", double("INF"))])];
+        assert_eq!(values(&double_nan), [DataValue::Double(f64::NAN.to_bits())]);
+
+        // A positive range with facets holds no NaN. Cut to one value, it is listed
+        // even though its window is wide; infinities are values too.
+        let only = |x: &str| {
+            [range("float", &[("minInclusive", float(x))]), not("float", &[("minExclusive", float(x))])]
+        };
+        let one = only("1");
+        assert_eq!(values(&one), [f(1.0)]);
+        let infinity = [range("float", &[("minInclusive", float("INF"))])];
+        assert_eq!(values(&infinity), [f(f32::INFINITY)]);
+        assert_eq!(count(&[infinity[0].clone(), excluding(vec![float("INF")])]), Some(0));
+        // A wide window less a negated range and excluded values: 0.5 and -0 are
+        // in [-0, 1), and 2 is not.
+        let below_one = [
+            range("double", &[("minInclusive", double("0"))]),
+            not("double", &[("minInclusive", double("1"))]),
+            excluding(vec![double("0.5"), double("-0"), double("2")]),
+        ];
+        assert_eq!(count(&below_one), Some(u128::from(f64_order_key(1.0) - f64_order_key(-0.0)) - 2));
+
+        // A value or a negated range of another datatype removes nothing.
+        let mut still_one = one.to_vec();
+        still_one.push(excluding(vec![double("1"), integer("1"), decimal("1.0")]));
+        still_one.push(not("double", &[]));
+        still_one.push(not("integer", &[]));
+        assert_eq!(values(&still_one), [f(1.0)]);
+
+        // Cardinality and assignment agree: two distinct nodes, one confined to 1
+        // and the other to 2, fit; two confined to 1 do not.
+        let (one, two) = (node_value_space(None, &one), node_value_space(None, &only("2")));
+        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[]));
+        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[]));
     }
 
     #[test]
