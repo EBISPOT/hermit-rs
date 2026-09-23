@@ -73,6 +73,13 @@ role. And `isFunctional`/`isInverseFunctional` test `owl:Thing <= max 1 P`,
 which rejects a non-simple `P` (a transitive property or
 `owl:topObjectProperty`) that Java's role atoms answer.
 
+Inequalities between two constant data nodes are compared by value
+(**resolved**, no issue). They were never checked, because the inequality
+components start only from non-constant nodes, so
+`DataPropertyAssertion(:dp :a "1"^^xsd:int)` with
+`NegativeDataPropertyAssertion(:dp :a "01"^^xsd:int)` was consistent. See
+`tests/constant_data_inequality.rs`.
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
