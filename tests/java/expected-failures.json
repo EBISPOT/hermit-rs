@@ -1,6 +1,1 @@
-{
-  "structural.NormalizationTest.testKeys2": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.NormalizationTest.testKeys2\" operation 0: \"normalize\"\nassertion `left == right` failed"
-  }
-}
+{}

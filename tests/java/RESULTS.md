@@ -11,31 +11,34 @@ properties, the issue #19 fix for the direct types of individuals, the issue
 #21 fix for the declarations in printed hierarchies, the issue #28
 core-blocking fix, which also resolved #29 and #30, the issue #32/#33
 blocking-validator fixture repair, the issue #34 description-graph rule
-fix, and the semantic clause comparison for issues #35 to #50. All 598
+fix, the semantic clause comparison for issues #35 to #50, and the issue #51
+key-normalization fix and expectation correction. All 598
 declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 921 | 1 | 2 |
+| Query/structural replay | 922 | 0 | 2 |
 | Native internal tests | 53 | 0 | 0 |
-| Total, excluding OWL WG | 974 | 1 | 2 |
+| Total, excluding OWL WG | 975 | 0 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The remaining failure
-is an assertion that also fails in the pinned Java checkout: the
-`NormalizationTest.testKeys2` structural control (#51). The original Java
-aggregate suites exclude this class. The original controls and Java failure
-messages are retained, rather than rewritten to match Rust's output.
+Every executable imported case passes in strict mode, and
+`expected-failures.json` is empty. Two passes use a documented correction
+instead of the recorded Java expectation (see below); the two empty upstream
+overrides have no assertions to run. The original controls and Java failure
+messages are retained as provenance, rather than rewritten to match Rust's
+output.
 
-One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
+Two passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
 `xsd:anyURI[minLength 1]` to be empty, but under XSD 1.1 and the OWL 2 Direct
 Semantics it contains exactly the empty URI (issue #9). Java misses it because
 dk.brics `getFiniteStrings` omits the empty word of a non-singleton automaton.
 The trace keeps Java's `false`; [corrections.json](corrections.json) records the
 corrected `true`, its evidence and independent membership and cardinality
-regressions.
+regressions. `structural.NormalizationTest.testKeys2` is the second; see issue
+#51 below.
 
 Every case still executes in the default gate. `expected-failures.json` identifies
 each discrepancy and its failing assertion. A new failure, a changed failing
@@ -468,6 +471,29 @@ clauses with empty heads, and keeps the `atMost 2` clause unchanged.
 `testNominals3` turns the successor into a predecessor, and `testNominals4` gives
 `Chianti` the `hasSugar` value `Dry`. The upstream traces are unchanged. Nothing deviates from Java's
 clausification.
+
+Issue #51 was a wrong structural control and a key-normalization defect that
+Rust inherited from Java. `testKeys2` normalizes
+`HasKey(ObjectIntersectionOf(:A :B) (:r) (:dp))`. A key has separate object and
+data property lists (OWL 2 Structural Specification §9.5) and identifies named
+instances of its class that agree on every listed property (OWL 2 Direct
+Semantics §2.3.5). Both Java controls expect an empty data-property list, and
+one has an unbalanced parenthesis. Java and Rust both keep `:dp`, so the pinned
+Java checkout fails the test. The controls also encode Java's replacement of
+the complex class: a fresh `K` with `K <= A and B`, keyed on `K`. The key clause
+tests `K` in its body, and nothing forces an individual into `K`, so the key
+never applied. Two named, distinct `A and B` instances sharing their `:r` and
+`:dp` values were found consistent. The key class must contain the original
+class instead. Normalization now defines `D <= not(A and B)` and keys the
+simple complement of `D`, a form `clausifyKey` already handles as a negated
+concept name. Here that is `owl:Thing <= def:0 or not A or not B` with
+`HasKey(def:0 (:r) (:dp))`. This deliberately deviates from Java's
+normalization. The trace keeps both Java controls;
+[corrections.json](corrections.json) records the corrected expectation and its
+evidence. `tests/issue51_key_normalization.rs` checks that normalization keeps
+`:dp` and that `A and B <= def:0`. It also checks that the example ontology is
+inconsistent, and that it becomes consistent when the `:dp` values differ.
+Every other imported key case still passes.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

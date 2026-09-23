@@ -78,16 +78,22 @@ Nineteen failing assertions also failed in the pinned Java checkout. These requi
 investigation of obsolete controls or fixtures, not blindly changing Rust to
 match them. The two `BlockingValidatorTest` fixtures are repaired (#32, #33;
 see `corrected/` and [RESULTS.md](RESULTS.md)). Issues #35 to #50 are
-resolved by a semantic clause comparison (see [RESULTS.md](RESULTS.md)); one
-structural control remains (#51). Original Java error traces are retained in the case fixtures and
-`upstream-failures.json`.
+resolved by a semantic clause comparison (see [RESULTS.md](RESULTS.md)). The
+last structural control, `NormalizationTest.testKeys2` (#51), drops a data
+property from the key. Its corrected expectation is in
+[corrections.json](corrections.json). The same fix makes keys on complex classes
+apply, which is a deliberate deviation from Java. Original Java error traces are
+retained in the case fixtures and `upstream-failures.json`.
 
 ## Imported Java failures
 
 43 issues cover all 63 failing executable cases. Duplicate inherited failures
 are grouped; every issue lists its exact cases, reproduction command, findings,
 and acceptance criteria. At the release baseline, 912 imported cases pass and
-two overrides are empty in the original Java source.
+two overrides are empty in the original Java source. All 43 are now resolved.
+In strict mode, all 975 executable cases pass and `expected-failures.json` is
+empty. Two of those passes use documented corrections of the Java expectation
+(#9 and #51).
 
 | Issue | Work | Cases |
 | --- | --- | ---: |
@@ -133,7 +139,7 @@ two overrides are empty in the original Java source.
 | [#48](https://github.com/EBISPOT/hermit-rs/issues/48) | Restore the nominal clausification control: testNominals2 (**resolved** with #45) | 1 |
 | [#49](https://github.com/EBISPOT/hermit-rs/issues/49) | Restore the nominal clausification control: testNominals3 (**resolved** with #45) | 1 |
 | [#50](https://github.com/EBISPOT/hermit-rs/issues/50) | Restore the nominal clausification control: testNominals4 (**resolved** with #45) | 1 |
-| [#51](https://github.com/EBISPOT/hermit-rs/issues/51) | Correct the upstream key-normalization expectation that drops a data property | 1 |
+| [#51](https://github.com/EBISPOT/hermit-rs/issues/51) | Correct the upstream key-normalization expectation that drops a data property (**resolved**; see [corrections.json](corrections.json)) | 1 |
 
 ## OWL WG conformance
 

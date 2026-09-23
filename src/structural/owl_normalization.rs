@@ -810,14 +810,22 @@ impl OWLNormalization {
                 }
                 let mut description = self.positive(&ax.ce);
                 if !Self::is_simple(&description) {
-                    let (definition, already_exists) = self.get_definition_for(&description, false);
+                    // The key class occurs in the key clause's body, so its
+                    // replacement K must satisfy CE ⊑ K (OWL 2 Direct Semantics
+                    // §2.3.5 applies the key to every named instance of CE).
+                    // Java defines D with D ⊑ CE and keys D, which nothing
+                    // forces, so the key never fires. Instead define D ⊑ ¬CE
+                    // and key the simple complement ¬D ⊒ CE, which
+                    // clausifyKey supports (deliberate deviation, issue #51).
+                    let complement = self.negative(&ax.ce);
+                    let (definition, already_exists) = self.get_definition_for(&complement, false);
                     if !already_exists {
                         let neg = self.negative(&definition);
                         state
                             .class_expression_inclusions
-                            .push(vec![neg, description.clone()]);
+                            .push(vec![neg, complement]);
                     }
-                    description = definition;
+                    description = self.negative(&definition);
                 }
                 self.axioms.has_keys.push(HasKeyAxiom {
                     class_expression: description,

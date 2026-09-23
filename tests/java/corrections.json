@@ -20,5 +20,31 @@
       "issue9_empty_uri::the_empty_uri_is_a_value_of_the_range",
       "issue9_empty_uri::the_range_has_no_other_value"
     ]
+  },
+  "structural.NormalizationTest.testKeys2": {
+    "issue": "https://github.com/EBISPOT/hermit-rs/issues/51",
+    "operation": 0,
+    "op": "normalize",
+    "java": [
+      "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#A> ObjectComplementOf(<internal:def#0>)))",
+      "SubClassOf(owl:Thing ObjectUnionOf(<file:/c/test.owl#B> ObjectComplementOf(<internal:def#0>)))",
+      "HasKey(<internal:def#0> (<file:/c/test.owl#r> ) ())"
+    ],
+    "corrected": [
+      "SubClassOf(owl:Thing ObjectUnionOf(<internal:def#0> ObjectComplementOf(<file:/c/test.owl#A>) ObjectComplementOf(<file:/c/test.owl#B>)))",
+      "HasKey(<internal:def#0> (<file:/c/test.owl#r> ) (<file:/c/test.owl#dp> ))"
+    ],
+    "justification": [
+      "OWL 2 Structural Specification §9.5: HasKey(CE (OPE1 ... OPEm) (DPE1 ... DPEn)) has a separate object property list and data property list. The input HasKey(ObjectIntersectionOf(:A :B) (:r) (:dp)) has the data property :dp, and normalization must preserve the axiom's meaning, so the normalized key keeps (:dp). The pinned controls expect an empty data-property list. The sibling testKeys1 control keeps it: HasKey(:C (:r) (:dp)) normalizes to HasKey(<C> (<r> ) (<dp> )).",
+      "OWL 2 Direct Semantics §2.3.5 (Table 7): HasKey(CE (OPE...) (DPE...)) requires, for all named x and y that are instances of CE and share a value for every OPEi and every DPEj, that x = y. Dropping :dp makes the key identify individuals that agree only on :r, which the axiom does not entail.",
+      "The same condition applies the key to every named instance of CE, so a normalized key HasKey(K ...) with a fresh class K is equivalent only if CE ⊑ K. The pinned controls expect owl:Thing ⊑ :A ⊔ ¬K and owl:Thing ⊑ :B ⊔ ¬K, that is K ⊑ A ⊓ B, which is Java's normalization. Nothing forces an individual into K, so that key never applies: with :x and :y named instances of A ⊓ B sharing :r and :dp values and DifferentIndividuals(:x :y), the ontology is inconsistent under §2.3.5, but the faithful port of Java's normalization found it consistent. The corrected normal form is owl:Thing ⊑ K ⊔ ¬:A ⊔ ¬:B (A ⊓ B ⊑ K) with HasKey(K (:r) (:dp)); K ⊑ A ⊓ B is not needed, because the key clause tests K only in its body.",
+      "The trace's upstream_alternative control also has an unbalanced closing parenthesis in its second axiom, so it can match no normalization output; it is preserved unchanged as provenance.",
+      "Java cause: OWLNormalization.AxiomVisitor.visit(OWLHasKeyAxiom) passes axiom.getPropertyExpressions() through, so Java keeps :dp and fails both controls (the recorded Java failure at NormalizationTest.java:184). It replaces a complex key class CE by getDefinitionFor(positive(CE)) with the inclusion ¬K ⊔ CE, the direction used for a class in a positive position, although OWLClausification.clausifyKey places the key class in the clause body. The port instead defines K' ⊑ ¬CE and keys the simple complement ¬K' (which clausifyKey supports as a negated concept name); here K' is itself a negated definition, so the key class is <internal:def#0>."
+    ],
+    "regressions": [
+      "issue51_key_normalization::normalized_key_keeps_its_data_property_and_contains_its_class",
+      "issue51_key_normalization::key_requires_agreement_on_the_data_property",
+      "issue51_key_normalization::key_applies_to_instances_of_the_complex_class"
+    ]
   }
 }
