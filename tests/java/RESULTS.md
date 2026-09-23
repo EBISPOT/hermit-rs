@@ -100,9 +100,9 @@ pattern bounded only by a length window or a complemented length restriction
 counted as infinite, and its excluded values were never subtracted. Excluded
 anyURI values are now removed from the automaton; literals of other datatypes
 remove nothing. The string automaton lacks U+FFFE and U+FFFF, which anyURI
-values may contain (it lacked the supplementary-plane characters too before issue
-#17), so it is no longer used when the patterns admit one; the enumerating
-fallback counts those values instead. The regressions cover the remaining values,
+values may contain, so anyURI restrictions now use an automaton over the XML
+characters and those two, and keep the words that are URIs (see the string
+datatype corrections below). The regressions cover the remaining values,
 cardinality and distinct-value assignment.
 
 Issue #12 was a similar gap in binary data. The binary value space took its
@@ -260,10 +260,27 @@ automaton by intersecting the windows' automata, not uniting them, so conjoining
 a pattern with a subset that has a window of strings and one of tagged pairs,
 such as that of `rdf:PlainLiteral[minLength 1]`, leaves nothing.
 
-String lengths still count UTF-16 code units, as HermiT's do, while XSD 1.1
-counts characters (Part 2 §4.3.1), so a supplementary character has length 2.
-The count of a length window follows HermiT and XSD, one value per sequence of
-characters. Correcting the lengths is left to a separate change.
+Three string datatype corrections followed (no issue); two deviate from Java,
+and no imported case depends on any of them. String lengths count characters,
+as XSD 1.1 does (Part 2 §4.3.1), not UTF-16 code units as HermiT does, so
+`"𐀀"` (U+10000) has length 1 in xsd:string, rdf:PlainLiteral and xsd:anyURI.
+The facet test, the length windows and the automata agree, and so do the count
+of a length window, one value per sequence of characters, and its words.
+Patterns have their XSD meaning (Part 2 §G.4.2): `.` is `[^\n\r]` over every
+character, so it matches the anyURI values U+FFFE and U+FFFF; `\d` is `\p{Nd}`;
+`\w` is every character but `\p{P}`, `\p{Z}` and `\p{C}`, so `+` is a word
+character and `_` is not; `^` and `$` are normal characters. HermiT passes XSD
+patterns to dk.brics `RegExp`, which reads `\d` and `\w` as the letters, and
+Rust matched literals with the `regex` crate and enumerated anyURI patterns with
+a separate approximate parser; the pattern automaton now decides every case.
+And a length window is kept apart from the automaton and reasoned about over
+its cycles, instead of an automaton with one state per length: emptiness asks
+which states are reached after the window's lower bound of steps (by repeated
+squaring) and how far they are from acceptance, and a count sums matrix powers.
+`xsd:string[pattern "a*", minLength 2147483000]` exhausted memory, as in
+HermiT; it now takes milliseconds. A negated restriction splits the words by
+whether their length lies in its windows. `tests/string_datatype_edge_cases.rs`
+checks all three.
 
 Issue #31 was a gap in the disjointness of datatypes. rdf:XMLLiteral is
 disjoint from every other datatype of the OWL 2 datatype map: OWL 2 Structural

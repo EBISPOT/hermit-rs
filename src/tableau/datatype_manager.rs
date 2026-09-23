@@ -23,12 +23,12 @@
 // `"256"^^xsd:unsignedByte`). The per-datatype value-space handlers are ported:
 // the owl:real lattice, the dateTime interval lattice, the rdf:PlainLiteral
 // length windows and string automata, the binary/anyURI cardinality reasoning,
-// the finite-pattern analyzer, and the inequality-graph decision procedure for
-// the conjunction of data ranges on a node. The only residual approximations
-// are: rdf:XMLLiteral canonicalization (C14N is approximate), xsd:anyURI
-// validation (a java.net.URI gate only, not the brics URI automaton), and
-// string lengths, which count UTF-16 code units as HermiT's do, where XSD
-// counts characters. A `value_space_size` upper bound
+// and the inequality-graph decision procedure for the conjunction of data
+// ranges on a node. String lengths count characters, as XSD does, where HermiT
+// counts UTF-16 code units. The only residual approximations are:
+// rdf:XMLLiteral canonicalization (C14N is approximate) and xsd:anyURI
+// validation (a java.net.URI gate only, not the brics URI automaton). A
+// `value_space_size` upper bound
 // additionally catches unsatisfiable cardinalities over small datatypes (e.g.
 // `≥3 r.boolean`).
 #![allow(dead_code)]
@@ -341,13 +341,15 @@ fn value_satisfies_facet(value: &DataValue, facet_uri: &str, facet_value: &Const
         }
         "length" | "minLength" | "maxLength" => {
             let len = match value {
-                // HermiT counts UTF-16 code units (Java String.length()),
-                // not Unicode code points (astral-plane chars count as 2).
-                DataValue::Text(s) => s.encode_utf16().count(),
+                // The length of a string is its number of characters (code
+                // points; XSD 1.1 Part 2 §4.3.1), so a supplementary character
+                // counts 1. HermiT counts UTF-16 code units (Java
+                // String.length()), 2 for it.
+                DataValue::Text(s) => s.chars().count(),
                 // The length facet counts only the string part of a
                 // language-tagged plain literal (RDFPlainLiteralLengthInterval
                 // uses the string length, not the @lang tag).
-                DataValue::LangString { string, .. } => string.encode_utf16().count(),
+                DataValue::LangString { string, .. } => string.chars().count(),
                 DataValue::Typed { length, .. } => *length,
                 _ => return true,
             };
@@ -373,15 +375,31 @@ fn value_satisfies_facet(value: &DataValue, facet_uri: &str, facet_value: &Const
                 _ => return true,
             };
             // XSD regular expressions match the whole literal (implicitly
-            // anchored). The XSD dialect is close enough to the `regex` crate's
-            // for the common facets; an unparseable pattern is not judged.
-            match regex::Regex::new(&format!("^(?:{})$", facet_value.lexical_form())) {
-                Ok(re) => re.is_match(s),
-                Err(_) => true,
-            }
+            // anchored), with the XSD meaning of `.` and the class escapes, so
+            // the pattern automaton decides; an untranslatable pattern is not
+            // judged.
+            pattern_matches(facet_value.lexical_form(), s).unwrap_or(true)
         }
         _ => true,
     }
+}
+
+/// Whether the XSD pattern matches the whole string, or `None` when the pattern
+/// cannot be translated. The automata are cached per pattern.
+fn pattern_matches(pattern: &str, s: &str) -> Option<bool> {
+    use crate::string_automaton::{xsd_pattern_to_automaton, Automaton};
+    thread_local! {
+        static PATTERNS: std::cell::RefCell<std::collections::HashMap<String, Option<Automaton>>> =
+            std::cell::RefCell::new(std::collections::HashMap::new());
+    }
+    PATTERNS.with(|patterns| {
+        patterns
+            .borrow_mut()
+            .entry(pattern.to_string())
+            .or_insert_with(|| xsd_pattern_to_automaton(pattern))
+            .as_ref()
+            .map(|automaton| automaton.run(s))
+    })
 }
 
 /// rdf:langRange: whether the value has a language tag that matches the range
@@ -3058,7 +3076,7 @@ impl LengthInterval {
     }
     /// `RDFPlainLiteralLengthInterval.contains`: whether `value` is a string
     /// (ABSENT) or a tagged pair (PRESENT) of this interval's mode whose string
-    /// has a length in the window. The length counts UTF-16 code units, as
+    /// has a length in the window. The length counts characters, as
     /// `value_satisfies_facet` does.
     fn contains(&self, value: &DataValue) -> bool {
         let (mode, string, datatype) = match value {
@@ -3068,21 +3086,25 @@ impl LengthInterval {
             }
             _ => return false,
         };
-        let length = string.encode_utf16().count() as u64;
+        let length = string.chars().count() as u64;
         mode == self.mode
             && self.min_length <= length
             && self.max_length.is_none_or(|max| length <= max)
             && value_in_datatype(value, &datatype)
     }
     /// The words of this interval in the string automata
-    /// (`RDFPlainLiteralPatternValueSpaceSubset.toAutomaton`).
-    fn automaton(&self) -> crate::string_automaton::Automaton {
-        use crate::string_automaton::{length_automaton, LangMode};
-        let mode = match self.mode {
-            LangTagMode::Present => LangMode::Present,
-            LangTagMode::Absent => LangMode::Absent,
+    /// (`RDFPlainLiteralPatternValueSpaceSubset.toAutomaton`), with the length
+    /// window kept apart from the automaton.
+    fn term(&self) -> StringTerm {
+        use crate::string_automaton as sa;
+        let tag = match self.mode {
+            LangTagMode::Present => sa::nonempty_lang_tag(),
+            LangTagMode::Absent => sa::empty_lang_tag(),
         };
-        length_automaton(self.min_length as usize, self.max_length.map(|max| max as usize), mode)
+        StringTerm {
+            automaton: sa::any_string().concatenate(&tag),
+            windows: vec![(self.min_length, self.max_length)],
+        }
     }
 }
 
@@ -3372,17 +3394,20 @@ fn binary_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<NodeValueSp
 /// Build the combined-alphabet automaton HermiT's `RDFPlainLiteralDatatypeHandler.
 /// getAutomatonFor(DatatypeRestriction)` builds for a single string /
 /// rdf:PlainLiteral datatype restriction (base datatype automaton, intersected
-/// with each pattern / langRange / length facet). The combined alphabet is
-/// `string-chars · SEPARATOR · langtag-chars`.
+/// with each pattern / langRange facet), with the length facets kept apart as
+/// a window of string-part lengths. The combined alphabet is
+/// `string-chars · SEPARATOR · langtag-chars`. HermiT intersects a length
+/// automaton with one state per length, which exhausts memory for a window
+/// near 2^31; the window is reasoned about symbolically instead (see
+/// `string_automaton::LengthWindow`).
 ///
 /// Returns:
-///   * `Some(Some(a))` — the restriction's automaton (possibly accepting an
-///     infinite language);
-///   * `Some(None)`    — the restriction is MODELLED but its automaton is empty
-///     (Java returns `null` / EMPTY_SUBSET): this still contributes emptiness;
+///   * `Some(Some(t))` — the restriction's words (possibly infinitely many);
+///   * `Some(None)`    — the restriction is MODELLED but has no word (Java
+///     returns `null` / EMPTY_SUBSET): this still contributes emptiness;
 ///   * `None`          — the datatype / a facet is not modelled exactly ⇒ the
 ///     caller must scope out (never a false clash).
-fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<crate::string_automaton::Automaton>> {
+fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<StringTerm>> {
     use crate::string_automaton as sa;
     let uri = dr.datatype_uri();
     let is_plain = uri == format!("{RDF}PlainLiteral");
@@ -3392,8 +3417,8 @@ fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<c
     } else {
         sa::datatype_automaton(local?, false)?
     };
-    let mut min_length: usize = 0;
-    let mut max_length: Option<usize> = None;
+    let mut min_length: u64 = 0;
+    let mut max_length: Option<u64> = None;
     for i in 0..dr.number_of_facet_restrictions() {
         let facet = dr.facet_uri(i);
         let lexical = dr.facet_value(i).lexical_form();
@@ -3406,15 +3431,15 @@ fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<c
         } else if let Some(f) = facet.strip_prefix(XSD) {
             match f {
                 "minLength" => {
-                    let v: usize = lexical.trim().parse().ok()?;
+                    let v: u64 = lexical.trim().parse().ok()?;
                     min_length = min_length.max(v);
                 }
                 "maxLength" => {
-                    let v: usize = lexical.trim().parse().ok()?;
+                    let v: u64 = lexical.trim().parse().ok()?;
                     max_length = Some(max_length.map_or(v, |m| m.min(v)));
                 }
                 "length" => {
-                    let v: usize = lexical.trim().parse().ok()?;
+                    let v: u64 = lexical.trim().parse().ok()?;
                     min_length = min_length.max(v);
                     max_length = Some(max_length.map_or(v, |m| m.min(v)));
                 }
@@ -3424,31 +3449,68 @@ fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<c
             return None;
         }
     }
-    if let Some(max) = max_length {
-        if min_length > max {
-            return Some(None);
+    if max_length.is_some_and(|max| min_length > max) {
+        return Some(None);
+    }
+    let term = StringTerm { automaton, windows: vec![(min_length, max_length)] };
+    Some((!term.is_empty()).then_some(term))
+}
+
+/// The words of an automaton whose string part has a length in one of the
+/// windows.
+#[derive(Clone)]
+struct StringTerm {
+    automaton: crate::string_automaton::Automaton,
+    windows: Vec<crate::string_automaton::LengthWindow>,
+}
+
+impl StringTerm {
+    fn is_empty(&self) -> bool {
+        self.automaton.is_empty_within(&self.windows)
+    }
+
+    fn intersect(&self, other: &StringTerm) -> StringTerm {
+        StringTerm {
+            automaton: self.automaton.intersection(&other.automaton),
+            windows: crate::string_automaton::window_intersection(&self.windows, &other.windows),
         }
     }
-    if min_length != 0 || max_length.is_some() {
-        let len_aut = sa::length_automaton(min_length, max_length, sa::LangMode::Any);
-        automaton = automaton.intersection(&len_aut);
+
+    /// The words of `self` outside `other`, as two disjoint terms: those of a
+    /// length in `other`'s windows that `other`'s automaton rejects, and those
+    /// of another length.
+    fn minus(&self, other: &StringTerm) -> [StringTerm; 2] {
+        use crate::string_automaton::{window_difference, window_intersection};
+        [
+            StringTerm {
+                automaton: self.automaton.minus(&other.automaton),
+                windows: window_intersection(&self.windows, &other.windows),
+            },
+            StringTerm {
+                automaton: self.automaton.clone(),
+                windows: window_difference(&self.windows, &other.windows),
+            },
+        ]
     }
-    if automaton.is_empty() {
-        Some(None)
-    } else {
-        Some(Some(automaton))
+
+    fn contains(&self, word: &str) -> bool {
+        let length = crate::string_automaton::string_part_length(word);
+        self.windows.iter().any(|&(min, max)| min <= length && max.is_none_or(|max| length <= max))
+            && self.automaton.run(word)
     }
 }
 
 /// A conjunction of string restrictions, as HermiT keeps it: length windows
 /// (`RDFPlainLiteralLengthValueSpaceSubset`) while every restriction is an
-/// xsd:string or rdf:PlainLiteral restriction with length facets only, and an
-/// automaton (`RDFPlainLiteralPatternValueSpaceSubset`) once a pattern, a
-/// langRange or another string datatype occurs. No window at all is the empty
-/// subset; an automaton is never empty.
+/// xsd:string or rdf:PlainLiteral restriction with length facets only, and
+/// words of automata (`RDFPlainLiteralPatternValueSpaceSubset`) once a
+/// pattern, a langRange or another string datatype occurs. The words are a
+/// union of disjoint terms, each an automaton with its length windows, so
+/// that no length window is ever materialised. No window at all is the empty
+/// subset; a term is never empty.
 enum StringSubset {
     Lengths(Vec<LengthInterval>),
-    Automaton(crate::string_automaton::Automaton),
+    Terms(Vec<StringTerm>),
 }
 
 impl StringSubset {
@@ -3457,15 +3519,17 @@ impl StringSubset {
     fn of(dr: &DatatypeRestriction) -> Option<StringSubset> {
         Some(match length_intervals_for(dr) {
             Some((present, absent)) => StringSubset::Lengths(present.into_iter().chain(absent).collect()),
-            None => StringSubset::of_automaton(automaton_for_string_restriction(dr)?),
+            None => StringSubset::of_terms(automaton_for_string_restriction(dr)?.into_iter().collect()),
         })
     }
 
-    /// The subset of the words of an automaton; `None` is no word.
-    fn of_automaton(automaton: Option<crate::string_automaton::Automaton>) -> StringSubset {
-        match automaton {
-            Some(automaton) if !automaton.is_empty() => StringSubset::Automaton(automaton),
-            _ => StringSubset::Lengths(Vec::new()),
+    /// The subset of the words of some disjoint terms.
+    fn of_terms(terms: Vec<StringTerm>) -> StringSubset {
+        let terms: Vec<StringTerm> = terms.into_iter().filter(|term| !term.is_empty()).collect();
+        if terms.is_empty() {
+            StringSubset::Lengths(Vec::new())
+        } else {
+            StringSubset::Terms(terms)
         }
     }
 
@@ -3483,8 +3547,10 @@ impl StringSubset {
         if self.is_empty() {
             return Some(self);
         }
-        let other = automaton_for_string_restriction(dr)?;
-        Some(StringSubset::of_automaton(other.map(|other| self.automaton().intersection(&other))))
+        let Some(other) = automaton_for_string_restriction(dr)? else {
+            return Some(StringSubset::Lengths(Vec::new()));
+        };
+        Some(StringSubset::of_terms(self.terms().iter().map(|term| term.intersect(&other)).collect()))
     }
 
     /// `conjoinWithDRNegation`, or `None` when the restriction's automaton
@@ -3498,22 +3564,22 @@ impl StringSubset {
             return Some(self);
         }
         Some(match automaton_for_string_restriction(dr)? {
-            Some(other) => StringSubset::of_automaton(Some(self.automaton().minus(&other))),
+            Some(other) => {
+                StringSubset::of_terms(self.terms().iter().flat_map(|term| term.minus(&other)).collect())
+            }
             // The complement of an empty restriction is everything.
             None => self,
         })
     }
 
-    /// The words of the subset (`getAutomatonFor`). The windows' words are
-    /// united. HermiT's `toAutomaton` intersects them instead, which empties a
-    /// subset that has both a window of strings and one of tagged pairs.
-    fn automaton(&self) -> crate::string_automaton::Automaton {
+    /// The words of the subset (`getAutomatonFor`), as disjoint terms. The
+    /// windows' words are united. HermiT's `toAutomaton` intersects them
+    /// instead, which empties a subset that has both a window of strings and
+    /// one of tagged pairs.
+    fn terms(&self) -> Vec<StringTerm> {
         match self {
-            StringSubset::Automaton(automaton) => automaton.clone(),
-            StringSubset::Lengths(windows) => windows.iter().fold(
-                crate::string_automaton::Automaton::empty_language(),
-                |words, window| words.union(&window.automaton()),
-            ),
+            StringSubset::Terms(terms) => terms.clone(),
+            StringSubset::Lengths(windows) => windows.iter().map(LengthInterval::term).collect(),
         }
     }
 
@@ -3521,8 +3587,8 @@ impl StringSubset {
     fn contains(&self, value: &DataValue) -> bool {
         match self {
             StringSubset::Lengths(windows) => windows.iter().any(|window| window.contains(value)),
-            StringSubset::Automaton(automaton) => {
-                string_word(value).is_some_and(|word| automaton.run(&word))
+            StringSubset::Terms(terms) => {
+                string_word(value).is_some_and(|word| terms.iter().any(|term| term.contains(&word)))
             }
         }
     }
@@ -3537,8 +3603,20 @@ impl StringSubset {
             StringSubset::Lengths(windows) => windows
                 .iter()
                 .try_fold(0u128, |total, window| Some(total.saturating_add(window.size_of()?))),
-            StringSubset::Automaton(automaton) => automaton.cardinality(),
+            StringSubset::Terms(terms) => terms.iter().try_fold(0u128, |total, term| {
+                Some(total.saturating_add(term.automaton.cardinality_within(&term.windows)?))
+            }),
         }
+    }
+
+    /// The words of the subset, when there are at most `cap` of them and none
+    /// is too long to materialise.
+    fn words(&self, cap: usize) -> Option<Vec<String>> {
+        let mut words = Vec::new();
+        for term in self.terms() {
+            words.extend(term.automaton.finite_strings_within(&term.windows, cap)?);
+        }
+        (words.len() <= cap).then_some(words)
     }
 }
 
@@ -3597,19 +3675,14 @@ impl PlainLiteralValueSpace {
 
     /// The values, when there are at most `cap` of them (`enumerateDataValues`,
     /// less the excluded values). A window of strings is counted one value per
-    /// sequence of characters (`LengthInterval::size_of`), while its words in
-    /// the automata have a length in UTF-16 code units, so those words are not
-    /// its values once the window reaches a string of one character; such a
-    /// window is not listed.
+    /// sequence of characters (`LengthInterval::size_of`), as its words in the
+    /// automata are, since both measure lengths in characters.
     fn values(&self, cap: usize) -> Option<Vec<DataValue>> {
         let count = self.count()?;
         if count > cap as u128 {
             return None;
         }
-        let words = self
-            .subset
-            .automaton()
-            .finite_strings(cap.saturating_add(self.excluded.len()))?;
+        let words = self.subset.words(cap.saturating_add(self.excluded.len()))?;
         let values: Vec<DataValue> = words
             .iter()
             .map(|word| string_value(word))
@@ -3644,12 +3717,22 @@ impl PlainLiteralValueSpace {
 /// the value spaces are disjoint, and neither does a literal of another
 /// datatype. HermiT skips them, and skips internal datatypes.
 fn plain_literal_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<PlainLiteralValueSpace> {
+    string_value_space(ranges, is_string_datatype)
+}
+
+/// The value space of a conjunction of string-like ranges whose restrictions
+/// have a datatype `is_string_like` accepts; see `plain_literal_value_space`.
+/// xsd:anyURI goes through here too, over `any_uri_string_automaton`.
+fn string_value_space<D>(
+    ranges: &[(LiteralDataRange, D)],
+    is_string_like: fn(&str) -> bool,
+) -> Option<PlainLiteralValueSpace> {
     let mut positive: Vec<&DatatypeRestriction> = Vec::new();
     let mut negative: Vec<&DatatypeRestriction> = Vec::new();
     let mut forbidden: Vec<DataValue> = Vec::new();
     for (range, _) in ranges {
         match range {
-            LiteralDataRange::DatatypeRestriction(dr) if is_string_datatype(dr.datatype_uri()) => {
+            LiteralDataRange::DatatypeRestriction(dr) if is_string_like(dr.datatype_uri()) => {
                 positive.push(dr);
             }
             LiteralDataRange::DatatypeRestriction(_)
@@ -3657,7 +3740,7 @@ fn plain_literal_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<Plai
             | LiteralDataRange::InternalDatatype(_) => {}
             LiteralDataRange::AtomicNegationDataRange(n) => match n.get_negated_data_range() {
                 crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                    if is_string_datatype(dr.datatype_uri()) =>
+                    if is_string_like(dr.datatype_uri()) =>
                 {
                     negative.push(dr);
                 }
@@ -4377,23 +4460,17 @@ fn node_value_space<D>(
                 _ => return None,
             };
             if !is_anyuri_datatype(dr.datatype_uri()) { return None; }
-            let string = DatatypeRestriction::create(format!("{XSD}string"),
-                (0..dr.number_of_facet_restrictions()).map(|i|dr.facet_uri(i).to_string()).collect(),
-                (0..dr.number_of_facet_restrictions()).map(|i|dr.facet_value(i).clone()).collect());
-            Some((if negated {string.get_negation()} else {LiteralDataRange::DatatypeRestriction(string)}, ()))
+            Some((if negated { dr.get_negation() } else { LiteralDataRange::DatatypeRestriction(*dr) }, ()))
         }).collect();
+        // The words over the characters an anyURI may contain
+        // (`any_uri_string_automaton`); the valid URIs among them are the values.
         if let Some(mapped) = string_ranges {
-            if let Some(NodeValueSpace::Finite { values: Some(values), .. }) = plain_literal_value_space(&mapped).map(|space| space.node_value_space()) {
-                // The string automata lack some characters an anyURI may contain.
-                // When the patterns admit one, the automata miss values, so the
-                // enumeration below decides instead.
-                if !anyuri_patterns_exceed_string_alphabet(&restrictions) {
-                    let values: Vec<_> = values.into_iter().filter_map(|v| match v {
-                        DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.encode_utf16().count(),canonical:s}),
-                        _ => None,
-                    }).collect();
-                    return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
-                }
+            if let Some(NodeValueSpace::Finite { values: Some(values), .. }) = string_value_space(&mapped, is_anyuri_datatype).map(|space| space.node_value_space()) {
+                let values: Vec<_> = values.into_iter().filter_map(|v| match v {
+                    DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.chars().count(),canonical:s}),
+                    _ => None,
+                }).collect();
+                return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
             }
         }
         let mut min_len: u64 = 0;
@@ -4419,65 +4496,11 @@ fn node_value_space<D>(
                 }
             }
         }
-        // URI-2 (FIX B): an anyURI restriction carrying pattern facet(s). Java's
-        // getAutomatonFor intersects URI ⊓ pattern ⊓ length and counts via
-        // getFiniteStrings, so a pattern that bounds the language to finite yields a
-        // FINITE value space even with no maxLength. We route it through the same
-        // finite-pattern enumerator used for xsd:string patterns, intersected with
-        // the URI alphabet (is_valid_any_uri) and the length window.
+        // A pattern whose words are too many to enumerate, or infinitely many:
+        // the automata above cannot tell how many of them are URIs, so the
+        // value space is taken as infinite, which never causes a clash.
         if !patterns.is_empty() {
-            // Find a pattern whose language is finite; that one bounds the
-            // intersection (URI ∩ pattern_i ∩ ... ⊆ pattern_i). If none is finite,
-            // the conjunction language is unbounded ⇒ infinite value space.
-            let mut universe: Option<Vec<String>> = None;
-            for p in &patterns {
-                if let Some(words) = enumerate_finite_pattern(p, MAX_ENUMERATED_VALUES) {
-                    universe = Some(words);
-                    break;
-                } else if finite_pattern_lang(p, MAX_ENUMERATED_VALUES).is_none() {
-                    // genuinely infinite or unmodeled pattern: keep looking, but if
-                    // ALL patterns are like this we cannot bound the language.
-                    continue;
-                } else {
-                    // Finite but too large to materialize: cardinality exact but the
-                    // intersection with URI/length still needs the explicit words to
-                    // filter; treat as infinite-for-our-purposes (conservative,
-                    // never a false clash — we simply do not claim finiteness).
-                    return NodeValueSpace::Infinite;
-                }
-            }
-            let Some(universe) = universe else { return NodeValueSpace::Infinite; };
-            // Compile the OTHER patterns (the ones we did not enumerate) as anchored
-            // regexes so we keep only words matching every pattern facet (the
-            // automaton intersection). An uncompilable pattern ⇒ scope out.
-            let mut others: Vec<regex::Regex> = Vec::new();
-            // We re-match every pattern (cheap, and correct even for the chosen one).
-            for p in &patterns {
-                match regex::Regex::new(&format!("^(?:{})$", p)) {
-                    Ok(re) => others.push(re),
-                    Err(_) => return NodeValueSpace::Infinite,
-                }
-            }
-            let mut out: Vec<DataValue> = Vec::new();
-            for w in universe {
-                let len16 = w.encode_utf16().count() as u64;
-                // length window (xsd:minLength/maxLength/length).
-                if len16 < min_len { continue; }
-                if let Some(max) = max_len { if len16 > max { continue; } }
-                // URI alphabet: must be a valid anyURI lexical form.
-                if !is_valid_any_uri(&w) { continue; }
-                // Every pattern facet must match (automaton intersection).
-                if !others.iter().all(|re| re.is_match(&w)) { continue; }
-                let candidate = DataValue::Typed {
-                    kind: "anyURI",
-                    canonical: w.clone(),
-                    length: len16 as usize,
-                };
-                if !excluded(&candidate) && !out.iter().any(|v| values_equal(v, &candidate)) {
-                    out.push(candidate);
-                }
-            }
-            return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
+            return NodeValueSpace::Infinite;
         }
         if let Some(max) = max_len {
             if min_len > max { return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) }; }
@@ -4523,37 +4546,6 @@ fn node_value_space<D>(
     }
 
     NodeValueSpace::Infinite
-}
-
-/// Whether the pattern facets of these positive anyURI restrictions jointly admit
-/// a character that `is_valid_any_uri` accepts but the string automata cannot
-/// represent: U+FFFE or U+FFFF. The string automata have the XML characters
-/// (`string_automaton::xml_char_ranges`), which exclude these two, so a value
-/// space built from them would miss the values containing them. (`.` is
-/// modelled over the XML characters too, so this check cannot see it.)
-fn anyuri_patterns_exceed_string_alphabet(restrictions: &[&DatatypeRestriction]) -> bool {
-    use crate::string_automaton::{xsd_pattern_to_automaton, Automaton};
-    let mut patterns: Option<Automaton> = None;
-    for r in restrictions {
-        for i in 0..r.number_of_facet_restrictions() {
-            if r.facet_uri(i) != format!("{XSD}pattern") {
-                continue;
-            }
-            let Some(pattern) = xsd_pattern_to_automaton(r.facet_value(i).lexical_form()) else {
-                return true;
-            };
-            patterns = Some(match patterns {
-                Some(conjunction) => conjunction.intersection(&pattern),
-                None => pattern,
-            });
-        }
-    }
-    let Some(patterns) = patterns else {
-        return false;
-    };
-    let any = Automaton::char_range(0, 0x10_FFFF).repeat();
-    let beyond = Automaton::ranges(&[(0xFFFE, 0xFFFF)]);
-    !patterns.intersection(&any.concatenate(&beyond).concatenate(&any)).is_empty()
 }
 
 /// URI-1: the single-character ASCII alphabet that `is_valid_any_uri` admits for a
@@ -4640,476 +4632,25 @@ fn f64_from_order_key(key: u64) -> f64 {
     }
 }
 
-/// STR-3: a finite regular language, the way dk.brics `Automaton.getFiniteStrings(n)`
-/// reports one — an EXACT cardinality plus, when that cardinality is at most `cap`,
-/// the materialized set of words. A pattern denotes a `Lang` iff its language is
-/// finite (every unbounded quantifier `*`/`+`/`{m,}` is over the empty/epsilon
-/// language); an infinite language is reported as `None`. Mirrors
-/// RDFPlainLiteralPatternValueSpaceSubset.hasCardinalityAtLeast, which decides
-/// finiteness/cardinality for ANY regular expression.
-#[derive(Clone)]
-struct Lang {
-    count: u128,
-    /// `Some` iff `count <= cap`: the explicit words. `None` means finite but too
-    /// large to materialize (cardinality is still exact).
-    words: Option<Vec<String>>,
-}
-
-impl Lang {
-    /// The empty language (no words). Cardinality 0.
-    fn empty() -> Lang {
-        Lang { count: 0, words: Some(Vec::new()) }
-    }
-    /// The language `{ "" }` (just epsilon).
-    fn epsilon() -> Lang {
-        Lang { count: 1, words: Some(vec![String::new()]) }
-    }
-    /// A finite language given by an explicit, already-deduplicated word list.
-    fn from_words(words: Vec<String>, cap: usize) -> Lang {
-        let count = words.len() as u128;
-        if count > cap as u128 {
-            Lang { count, words: None }
-        } else {
-            Lang { count, words: Some(words) }
-        }
-    }
-    /// A language over single characters. `members` is the distinct char set; when
-    /// it fits under `cap` the words are materialized, otherwise only the (exact)
-    /// count is kept.
-    fn from_char_set(members: Vec<char>, cap: usize) -> Lang {
-        Lang::from_words(members.into_iter().map(|c| c.to_string()).collect(), cap)
-    }
-    /// A single-character language of exactly `count` distinct chars, where the
-    /// char set is too large to materialize (e.g. `.` over the XML alphabet). The
-    /// cardinality is exact; words stay `None`.
-    fn char_set_count(count: u128) -> Lang {
-        Lang { count, words: None }
-    }
-    /// Concatenation (language product). The cardinality multiplies; words are the
-    /// cross-product, materialized only while under `cap`.
-    fn concat(self, other: Lang, cap: usize) -> Lang {
-        let count = self.count.saturating_mul(other.count);
-        if count == 0 {
-            return Lang::empty();
-        }
-        match (self.words, other.words) {
-            (Some(a), Some(b)) if count <= cap as u128 => {
-                let mut out = Vec::with_capacity(a.len() * b.len());
-                for x in &a {
-                    for y in &b {
-                        out.push(format!("{x}{y}"));
-                    }
-                }
-                Lang { count, words: Some(out) }
-            }
-            _ => Lang { count, words: None },
-        }
-    }
-    /// Union. Cardinality is the size of the de-duplicated union; words materialized
-    /// while under `cap`.
-    fn union(self, other: Lang, cap: usize) -> Lang {
-        let total = self.count;
-        match (self.words, other.words) {
-            (Some(mut a), Some(b)) => {
-                for w in b {
-                    if !a.contains(&w) {
-                        a.push(w);
-                    }
-                }
-                Lang::from_words(a, cap)
-            }
-            // At least one side is unmaterialized: we cannot dedup exactly, so use
-            // the sum as the cardinality. (Both operands of a `|` come from disjoint
-            // syntactic alternatives whose languages are almost always disjoint;
-            // even if they overlap, an over-count only makes the downstream
-            // pigeonhole test more conservative — never a false clash.)
-            (_, _) => Lang { count: total.saturating_add(other.count), words: None },
-        }
-    }
-}
-
-/// STR-3: enumerates the finite language of an XSD pattern up to `cap` words,
-/// returning the explicit set when finite-and-small. `None` means the language is
-/// infinite (an unbounded quantifier over a non-trivial sub-language) or syntax we
-/// do not model. Matches dk.brics `RegExp.toAutomaton().getFiniteStrings(n)` as
-/// used by RDFPlainLiteralPatternValueSpaceSubset: any regular expression whose
-/// language is finite is enumerated; only genuinely infinite ones are rejected.
-fn enumerate_finite_pattern(pattern: &str, cap: usize) -> Option<Vec<String>> {
-    finite_pattern_lang(pattern, cap).and_then(|l| l.words)
-}
-
-/// STR-3: like `enumerate_finite_pattern` but returns the full `Lang` (exact
-/// cardinality even when too large to materialize). `None` ⇒ infinite/unmodeled.
-fn finite_pattern_lang(pattern: &str, cap: usize) -> Option<Lang> {
-    let chars: Vec<char> = pattern.chars().collect();
-    let (lang, position) = lang_alternation(&chars, 0, cap)?;
-    if position != chars.len() {
-        return None;
-    }
-    Some(lang)
-}
-
-fn lang_alternation(chars: &[char], mut position: usize, cap: usize) -> Option<(Lang, usize)> {
-    let (first, next) = lang_concat(chars, position, cap)?;
-    let mut acc = first;
-    position = next;
-    while chars.get(position) == Some(&'|') {
-        let (branch, next) = lang_concat(chars, position + 1, cap)?;
-        acc = acc.union(branch, cap);
-        position = next;
-    }
-    Some((acc, position))
-}
-
-fn lang_concat(chars: &[char], mut position: usize, cap: usize) -> Option<(Lang, usize)> {
-    let mut acc = Lang::epsilon();
-    while let Some(&c) = chars.get(position) {
-        if c == '|' || c == ')' {
-            break;
-        }
-        let (atom, next) = lang_atom(chars, position, cap)?;
-        let (piece, next) = lang_quantifier(atom, chars, next, cap)?;
-        acc = acc.concat(piece, cap);
-        position = next;
-    }
-    Some((acc, position))
-}
-
-/// Parses a single atom (group, char class, escape, `.`, or literal) into its
-/// `Lang`. STR-3 adds `.`, `\d \D \w \W \s \S`, and negated classes `[^...]`.
-fn lang_atom(chars: &[char], position: usize, cap: usize) -> Option<(Lang, usize)> {
-    let c = *chars.get(position)?;
-    match c {
-        '(' => {
-            // Skip a non-capturing group prefix `(?:`.
-            let body_start = if chars.get(position + 1) == Some(&'?')
-                && chars.get(position + 2) == Some(&':')
-            {
-                position + 3
-            } else {
-                position + 1
-            };
-            let (inner, next) = lang_alternation(chars, body_start, cap)?;
-            if chars.get(next) != Some(&')') {
-                return None;
-            }
-            Some((inner, next + 1))
-        }
-        '[' => parse_char_class(chars, position, cap),
-        // `.` matches the whole XML character set: huge but finite. Keep only its
-        // exact count (it never fits under `cap`).
-        '.' => Some((Lang::char_set_count(xml_char_count()), position + 1)),
-        '\\' => {
-            let escaped = *chars.get(position + 1)?;
-            if let Some(members) = class_escape_members(escaped, cap) {
-                Some((Lang::from_char_set(members, cap), position + 2))
-            } else if escaped.is_ascii_alphanumeric() {
-                // An alphanumeric escape that is not a recognized class escape is
-                // not something we model.
-                None
-            } else {
-                // Punctuation escape: a literal character.
-                Some((Lang::from_words(vec![escaped.to_string()], cap), position + 2))
-            }
-        }
-        '*' | '+' | '{' | '}' | ']' | '^' | '$' => None,
-        literal => Some((Lang::from_words(vec![literal.to_string()], cap), position + 1)),
-    }
-}
-
-/// STR-3: the character members of a single-letter class escape, or `None` if the
-/// letter is not a class escape. `\d`=[0-9], `\w`=[A-Za-z0-9_], `\s`=whitespace,
-/// and the uppercase variants are the complement within the XML character set.
-fn class_escape_members(escaped: char, cap: usize) -> Option<Vec<char>> {
-    let digits: Vec<char> = ('0'..='9').collect();
-    let word: Vec<char> = ('A'..='Z').chain('a'..='z').chain('0'..='9').chain(['_']).collect();
-    let space: Vec<char> = vec![' ', '\t', '\n', '\r'];
-    match escaped {
-        'd' => Some(digits),
-        'w' => Some(word),
-        's' => Some(space),
-        'D' => Some(complement_chars(&digits, cap)),
-        'W' => Some(complement_chars(&word, cap)),
-        'S' => Some(complement_chars(&space, cap)),
-        _ => None,
-    }
-}
-
-/// STR-3: the size of the XML character set that dk.brics `.` matches, per
-/// RDFPlainLiteralPatternValueSpaceSubset.anyCharAutomaton
-/// (`[	\n - -퟿-�]`). Huge but finite, so a
-/// bounded-length pattern over `.` is finite with this exact cardinality.
-fn xml_char_count() -> u128 {
-    XML_CHAR_RANGES.iter().map(|(a, b)| (b - a + 1) as u128).sum()
-}
-
-const XML_CHAR_RANGES: &[(u32, u32)] = &[
-    (0x09, 0x09),
-    (0x0A, 0x0A),
-    (0x20, 0x7F),
-    (0xA0, 0xD7FF),
-    (0xE000, 0xFFFD),
-];
-
-/// The complement of `included` within the XML character set (used for `\D \W \S`
-/// and negated classes). The count is exact; the char list is materialized in full
-/// (the caller's `Lang::from_char_set` keeps only the count when it exceeds `cap`).
-fn complement_chars(included: &[char], _cap: usize) -> Vec<char> {
-    let excl: std::collections::BTreeSet<u32> = included.iter().map(|&c| c as u32).collect();
-    let mut out = Vec::new();
-    for (a, b) in XML_CHAR_RANGES {
-        for code in *a..=*b {
-            if !excl.contains(&code) {
-                if let Some(ch) = char::from_u32(code) {
-                    out.push(ch);
-                }
-            }
-        }
-    }
-    out
-}
-
-/// Parses a `[...]` character class into its `Lang`. Handles `[abc]`, `[a-c]`,
-/// punctuation/class escapes inside the class, and the negated class `[^...]`
-/// (STR-3: complement within the XML character set). `position` indexes `[`; the
-/// returned position is just past `]`.
-fn parse_char_class(chars: &[char], position: usize, cap: usize) -> Option<(Lang, usize)> {
-    let mut i = position + 1;
-    let negated = chars.get(i) == Some(&'^');
-    if negated {
-        i += 1;
-    }
-    let mut members: Vec<char> = Vec::new();
-    let mut seen: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
-    let push = |ch: char, members: &mut Vec<char>, seen: &mut std::collections::BTreeSet<u32>| {
-        if seen.insert(ch as u32) {
-            members.push(ch);
-        }
-    };
-    while let Some(&c) = chars.get(i) {
-        if c == ']' {
-            if members.is_empty() && !negated {
-                return None;
-            }
-            let lang = if negated {
-                Lang::from_char_set(complement_chars(&members, cap), cap)
-            } else {
-                Lang::from_char_set(members, cap)
-            };
-            return Some((lang, i + 1));
-        }
-        // A class member: a class escape, a punctuation escape, a range, or literal.
-        if c == '\\' {
-            let escaped = *chars.get(i + 1)?;
-            if let Some(class_members) = class_escape_members(escaped, cap) {
-                for ch in class_members {
-                    push(ch, &mut members, &mut seen);
-                }
-                i += 2;
-                continue;
-            }
-            if escaped.is_ascii_alphanumeric() {
-                return None; // unrecognized alphanumeric escape
-            }
-            // Punctuation escape: a single literal char, possibly a range start.
-            let next = i + 2;
-            if chars.get(next) == Some(&'-') && chars.get(next + 1).is_some_and(|&c2| c2 != ']') {
-                let end = *chars.get(next + 1)?;
-                if (escaped as u32) > (end as u32) {
-                    return None;
-                }
-                for code in (escaped as u32)..=(end as u32) {
-                    if let Some(rc) = char::from_u32(code) {
-                        push(rc, &mut members, &mut seen);
-                    }
-                }
-                i = next + 2;
-            } else {
-                push(escaped, &mut members, &mut seen);
-                i = next;
-            }
-            continue;
-        }
-        let ch = c;
-        let next = i + 1;
-        if chars.get(next) == Some(&'-') && chars.get(next + 1).is_some_and(|&c2| c2 != ']') {
-            let end = *chars.get(next + 1)?;
-            if (ch as u32) > (end as u32) {
-                return None;
-            }
-            for code in (ch as u32)..=(end as u32) {
-                if let Some(rc) = char::from_u32(code) {
-                    push(rc, &mut members, &mut seen);
-                }
-            }
-            i = next + 2;
-        } else {
-            push(ch, &mut members, &mut seen);
-            i = next;
-        }
-    }
-    None // unterminated class
-}
-
-/// Applies a trailing quantifier to the preceding atom's `Lang`. `?` is `{0,1}`;
-/// `{m}`/`{m,n}` are exact/bounded; `*`, `+`, `{m,}` are unbounded — finite ONLY
-/// when the repeated language is empty or just epsilon (then the result is epsilon),
-/// otherwise the language is infinite (`None`). With no quantifier the atom stands
-/// as-is. STR-3 / RDFPlainLiteralPatternValueSpaceSubset: matches getFiniteStrings,
-/// which is finite iff every unbounded star/plus is over a trivial sub-language.
-fn lang_quantifier(
-    atom: Lang,
-    chars: &[char],
-    next: usize,
-    cap: usize,
-) -> Option<(Lang, usize)> {
-    // An unbounded repetition is finite only over the empty / epsilon language.
-    let unbounded = |atom: &Lang| -> bool {
-        atom.count == 0
-            || (atom.count == 1
-                && atom.words.as_ref().is_some_and(|w| w.len() == 1 && w[0].is_empty()))
-    };
-    let (min, max, after) = match chars.get(next) {
-        Some('?') => (0usize, Some(1usize), next + 1),
-        Some('*') => {
-            if unbounded(&atom) {
-                return Some((Lang::epsilon(), next + 1));
-            }
-            return None;
-        }
-        Some('+') => {
-            if unbounded(&atom) {
-                // (empty)+ = empty; (epsilon)+ = epsilon.
-                return Some((atom, next + 1));
-            }
-            return None;
-        }
-        Some('{') => {
-            let mut j = next + 1;
-            let mut min_digits = String::new();
-            while let Some(&d) = chars.get(j) {
-                if d.is_ascii_digit() {
-                    min_digits.push(d);
-                    j += 1;
-                } else {
-                    break;
-                }
-            }
-            if min_digits.is_empty() {
-                return None;
-            }
-            let min: usize = min_digits.parse().ok()?;
-            match chars.get(j) {
-                Some('}') => (min, Some(min), j + 1),
-                Some(',') => {
-                    j += 1;
-                    let mut max_digits = String::new();
-                    while let Some(&d) = chars.get(j) {
-                        if d.is_ascii_digit() {
-                            max_digits.push(d);
-                            j += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    if chars.get(j) != Some(&'}') {
-                        return None;
-                    }
-                    if max_digits.is_empty() {
-                        // {m,} ⇒ unbounded: finite only over a trivial language.
-                        if unbounded(&atom) {
-                            let result = if atom.count == 0 && min >= 1 {
-                                Lang::empty()
-                            } else {
-                                Lang::epsilon()
-                            };
-                            return Some((result, j + 1));
-                        }
-                        return None;
-                    }
-                    (min, Some(max_digits.parse().ok()?), j + 1)
-                }
-                _ => return None,
-            }
-        }
-        // No quantifier.
-        _ => return Some((atom, next)),
-    };
-    let max = max?;
-    if max < min {
-        return None;
-    }
-    // Union over k in [min, max] of the k-fold concatenation of `atom`.
-    let mut result = Lang::empty();
-    let mut kfold = Lang::epsilon();
-    for k in 0..=max {
-        if k >= min {
-            result = result.union(kfold.clone(), cap);
-        }
-        if k == max {
-            break;
-        }
-        kfold = kfold.concat(atom.clone(), cap);
-    }
-    Some((result, after))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn finite_pattern(pattern: &str) -> Option<std::collections::BTreeSet<String>> {
-        enumerate_finite_pattern(pattern, 1024)
-            .map(|words| words.into_iter().collect())
-    }
     fn set(words: &[&str]) -> std::collections::BTreeSet<String> {
         words.iter().map(|w| w.to_string()).collect()
     }
 
     #[test]
-    fn finite_pattern_char_classes_and_repetition() {
-        // Character classes enumerate their members (incl. ranges).
-        assert_eq!(finite_pattern("[ab]"), Some(set(&["a", "b"])));
-        assert_eq!(finite_pattern("[a-c]"), Some(set(&["a", "b", "c"])));
-        // Bounded repetition is the union of the k-fold concatenations.
-        assert_eq!(finite_pattern("[ab]{2}"), Some(set(&["aa", "ab", "ba", "bb"])));
-        assert_eq!(finite_pattern("a{1,2}"), Some(set(&["a", "aa"])));
-        assert_eq!(finite_pattern("xy?"), Some(set(&["x", "xy"])));
-        assert_eq!(finite_pattern("(ab|c)"), Some(set(&["ab", "c"])));
-        // STR-3: genuinely-unbounded repetition over a non-trivial language is
-        // infinite (None), never a wrong set.
-        assert_eq!(finite_pattern("[ab]*"), None);
-        assert_eq!(finite_pattern("[ab]+"), None);
-        assert_eq!(finite_pattern("a{2,}"), None);
-        // STR-3: class escapes are now finite. `\d` = [0-9] is enumerated.
-        assert_eq!(finite_pattern("\\d"), Some(set(&["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"])));
-        // `\d{2}` = all two-digit strings (100 of them).
-        assert_eq!(finite_pattern("\\d{2}").map(|s| s.len()), Some(100));
-        // `\w` = [A-Za-z0-9_] has 63 members.
-        assert_eq!(finite_pattern("\\w").map(|s| s.len()), Some(63));
-        // STR-3: a star over the empty/epsilon language IS finite (epsilon).
-        assert_eq!(finite_pattern("()*"), Some(set(&[""])));
-        // STR-3: `[^a]` and `.` are finite (huge), so they have an exact
-        // cardinality even though they exceed the materialization cap: their
-        // `finite_pattern_lang` is Some but its words are None.
-        assert!(finite_pattern_lang("[^a]", 1024).is_some());
-        assert!(finite_pattern_lang("[^a]", 1024).unwrap().words.is_none());
-        assert!(finite_pattern_lang(".", 1024).is_some());
-        assert!(finite_pattern_lang(".{3}", 1024).is_some());
-        // The XML alphabet `.` has the documented finite cardinality.
-        assert_eq!(finite_pattern_lang(".", 1024).unwrap().count, xml_char_count());
-    }
-
-    #[test]
     fn str3_digit_pattern_pigeonhole_clash() {
-        // A datatype `xsd:string ⊓ pattern "\d"` has a value space of exactly the
-        // 10 single-digit strings. 11 pairwise-distinct nodes over it cannot all
-        // differ (pigeonhole) ⇒ a clash; 10 fit exactly.
+        // A datatype `xsd:string ⊓ pattern "[0-9]"` has a value space of exactly
+        // the 10 single-digit strings. 11 pairwise-distinct nodes over it cannot
+        // all differ (pigeonhole) ⇒ a clash; 10 fit exactly. (`\d` is `\p{Nd}`,
+        // every decimal digit, not only the ASCII ones.)
         let digit_string = || {
             LiteralDataRange::DatatypeRestriction(crate::model::DatatypeRestriction::create(
                 format!("{XSD}string"),
                 vec![format!("{XSD}pattern")],
-                vec![Constant::create("\\d", format!("{XSD}string"))],
+                vec![Constant::create("[0-9]", format!("{XSD}string"))],
             ))
         };
         let space = || node_value_space(None, &[(digit_string(), ())]);
@@ -5541,10 +5082,10 @@ mod tests {
     fn uri_patterns_beyond_the_string_alphabet_are_enumerated() {
         // The string automata have the XML characters, but an anyURI value may
         // also contain U+FFFE or U+FFFF, which are not XML characters.
-        // `[\u{FFFE}\u{FFFF}a]` denotes 3 anyURI values; the automata see only `a`,
-        // so they would count 1, and 0 after excluding `a`. A supplementary-plane
-        // character is an XML character, so the automata count it: `[𐀀-𐀐a]`
-        // denotes 18 anyURI values.
+        // `[\u{FFFE}\u{FFFF}a]` denotes 3 anyURI values; automata over the XML
+        // characters see only `a`, so they would count 1, and 0 after excluding
+        // `a`. The anyURI automata have both. A supplementary-plane character is
+        // an XML character: `[𐀀-𐀐a]` denotes 18 anyURI values.
         let pattern = |p: &str| {
             crate::model::DatatypeRestriction::create(
                 format!("{XSD}anyURI"),
@@ -5554,11 +5095,6 @@ mod tests {
         };
         let beyond = pattern("[\u{FFFE}\u{FFFF}a]");
         let wide = pattern("[\u{10000}-\u{10010}a]");
-        assert!(anyuri_patterns_exceed_string_alphabet(&[&beyond]));
-        assert!(!anyuri_patterns_exceed_string_alphabet(&[&wide]));
-        assert!(!anyuri_patterns_exceed_string_alphabet(&[&pattern("ab(c+)")]));
-        // A conjunction is judged as a whole: `[\u{FFFE}a]` and `[ab]` share only `a`.
-        assert!(!anyuri_patterns_exceed_string_alphabet(&[&pattern("[\u{FFFE}a]"), &pattern("[ab]")]));
         let uri = |s: &str| Constant::create(s, format!("{XSD}anyURI"));
         let without_a = crate::model::ConstantEnumeration::create(vec![uri("a")]).get_negation();
         for (range, character, count) in [(beyond, "\u{FFFE}", 3), (wide, "\u{10000}", 18)] {
@@ -5577,6 +5113,37 @@ mod tests {
                 _ => panic!("expected the URIs other than a"),
             }
         }
+    }
+
+    #[test]
+    fn uri_dot_matches_characters_beyond_the_xml_ones() {
+        // XSD `.` is `[^\n\r]` over every character (XSD 1.1 Part 2 §G.4.2.5),
+        // so anyURI[pattern "."] holds the URIs U+FFFE and U+FFFF, which are no
+        // XML characters. Removing every other character leaves exactly those
+        // two; a `.` over the XML characters left none, a false clash.
+        let uri_pattern = |p: &str| {
+            crate::model::DatatypeRestriction::create(
+                format!("{XSD}anyURI"),
+                vec![format!("{XSD}pattern")],
+                vec![Constant::create(p, format!("{XSD}string"))],
+            )
+        };
+        let ranges = [
+            (LiteralDataRange::DatatypeRestriction(uri_pattern(".")), ()),
+            (uri_pattern("[^\u{FFFE}\u{FFFF}]").get_negation(), ()),
+        ];
+        match node_value_space(None, &ranges) {
+            NodeValueSpace::Finite { count: 2, values: Some(values) } => {
+                for s in ["\u{FFFE}", "\u{FFFF}"] {
+                    let value = parse_value(&Constant::create(s, format!("{XSD}anyURI"))).unwrap();
+                    assert!(values.iter().any(|v| values_equal(v, &value)));
+                }
+            }
+            _ => panic!("expected the URIs U+FFFE and U+FFFF"),
+        }
+        // A pattern value is judged by the same automaton.
+        let value = parse_value(&Constant::create("\u{FFFE}", format!("{XSD}anyURI"))).unwrap();
+        assert!(value_satisfies_facet(&value, &format!("{XSD}pattern"), &Constant::create(".", format!("{XSD}string"))));
     }
 
     #[test]
@@ -5850,9 +5417,8 @@ mod tests {
             _ => panic!("expected empty space"),
         }
 
-        // A `\p{...}`-bounded pattern is finite but the lightweight enumerator
-        // (`finite_pattern_lang`) cannot model it, so this exercises the automaton
-        // path: \p{Lu} has a fixed finite count; excluding 'A' lowers it by one.
+        // A `\p{...}`-bounded pattern is finite: \p{Lu} has a fixed finite
+        // count; excluding 'A' lowers it by one.
         let full = string_space(&[(pattern("\\p{Lu}"), ())])
             .expect("decided");
         let full_count = match full {
@@ -5873,9 +5439,8 @@ mod tests {
 
     #[test]
     fn node_value_space_string_pattern_minus_oneof_exact_count() {
-        // End-to-end via node_value_space: a `\p{...}`-bounded pattern (which the
-        // finite_pattern_lang enumerator cannot decide) combined with a negated
-        // oneOf yields an EXACT finite count instead of Infinite.
+        // End-to-end via node_value_space: a `\p{...}`-bounded pattern combined
+        // with a negated oneOf yields an EXACT finite count instead of Infinite.
         use crate::model::{AtomicDataRange, AtomicNegationDataRange, ConstantEnumeration};
         let str_const = |s: &str| Constant::create(s, format!("{XSD}string"));
         let pat = LiteralDataRange::DatatypeRestriction(crate::model::DatatypeRestriction::create(
@@ -6661,22 +6226,22 @@ mod tests {
     }
 
     #[test]
-    fn string_length_counts_utf16_code_units() {
-        // HermiT counts UTF-16 code units (Java String.length()); an
-        // astral-plane char (here U+1F600) counts as 2.
+    fn string_length_counts_characters() {
+        // XSD 1.1 length facets count characters (Part 2 §4.3.1): an
+        // astral-plane char (here U+1F600) counts 1, although HermiT (Java
+        // String.length()) counts its two UTF-16 code units.
         let s = Constant::create("a\u{1F600}", format!("{XSD}string"));
         let value = parse_value(&s).unwrap();
-        // 2 code points, but 3 UTF-16 code units ('a' + surrogate pair).
-        assert!(value_satisfies_facet(&value, &format!("{XSD}length"), &integer("3")));
-        assert!(!value_satisfies_facet(&value, &format!("{XSD}length"), &integer("2")));
-        // anyURI length is also UTF-16 code units.
+        assert!(value_satisfies_facet(&value, &format!("{XSD}length"), &integer("2")));
+        assert!(!value_satisfies_facet(&value, &format!("{XSD}length"), &integer("3")));
+        // anyURI length is also in characters: "http://x/" is 9, the emoji 1.
         let uri = parse_value(&Constant::create(
             "http://x/\u{1F600}",
             format!("{XSD}anyURI"),
         ))
         .unwrap();
-        // "http://x/" = 9 + 2 for the emoji = 11 UTF-16 units.
-        assert!(value_satisfies_facet(&uri, &format!("{XSD}length"), &integer("11")));
+        assert!(value_satisfies_facet(&uri, &format!("{XSD}length"), &integer("10")));
+        assert!(!value_satisfies_facet(&uri, &format!("{XSD}length"), &integer("11")));
     }
 
     #[test]
@@ -8477,8 +8042,8 @@ mod tests {
     fn string_value_spaces_have_every_xml_character() {
         // xsd:string values are sequences of XML characters (XSD 1.1 Part 2
         // §3.3.1), #xD, #x80-#x9F and the supplementary characters included, so
-        // a pattern can require them. The length facets count UTF-16 code units,
-        // as value_satisfies_facet does: a supplementary character has length 2.
+        // a pattern can require them. The length facets count characters, as
+        // value_satisfies_facet does: a supplementary character has length 1.
         let string = |facets: &[(&str, &str)]| plain_range("string", facets);
         assert_eq!(plain_count(&[string(&[("pattern", "\\r")])]), Some(1));
         assert_eq!(plain_count(&[string(&[("pattern", "\\s")])]), Some(4));
@@ -8490,6 +8055,9 @@ mod tests {
                 DataValue::Text("a".into()),
                 DataValue::Text("\u{10000}".into()),
                 DataValue::Text("aa".into()),
+                DataValue::Text("a\u{10000}".into()),
+                DataValue::Text("\u{10000}a".into()),
+                DataValue::Text("\u{10000}\u{10000}".into()),
             ]
         );
         for value in plain_values(&supplementary) {

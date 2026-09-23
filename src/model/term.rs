@@ -276,7 +276,7 @@ mod tests {
             Some(DataValue::Typed {
                 kind: "anyURI",
                 canonical: "http://example.org/x".to_string(),
-                length: "http://example.org/x".encode_utf16().count(),
+                length: "http://example.org/x".chars().count(),
             })
         );
     }

@@ -76,7 +76,7 @@ pub enum DataValue {
     /// A datatype with its own value space disjoint from the others
     /// (`xsd:anyURI`, `xsd:hexBinary`, `xsd:base64Binary`, `rdf:XMLLiteral`):
     /// compared by canonical form, with a value-space `length` for the length
-    /// facets (octets for the binary types, UTF-16 code units for `anyURI`).
+    /// facets (octets for the binary types, characters for `anyURI`).
     /// `rdf:XMLLiteral` is registered as its own disjoint kind with no
     /// length (it admits no facets).
     Typed { kind: &'static str, canonical: String, length: usize },
@@ -1312,9 +1312,10 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         Some(DataValue::Typed {
             kind: "anyURI",
             canonical: lexical.to_string(),
-            // HermiT counts UTF-16 code units (Java String.length()), not
-            // Unicode code points, so an astral-plane character counts as 2.
-            length: lexical.encode_utf16().count(),
+            // The length of an anyURI is its number of characters (XSD 1.1
+            // Part 2 §4.3.1). HermiT counts UTF-16 code units (Java
+            // String.length()), so a supplementary character counts 2 there.
+            length: lexical.chars().count(),
         })
     } else if is_hex_binary_datatype(datatype) {
         parse_hex_binary(lexical).map(|(canonical, length)| DataValue::Typed {

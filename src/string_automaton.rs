@@ -21,15 +21,16 @@
 //   * `Automaton.union(other)`                   -> `Automaton::union`
 //
 // The XSD-Schema regular-expression flavour translated by `from_xsd_pattern`
-// matches dk.brics `RegExp` as HermiT constructs it (the default flags, i.e. the
-// full grammar): anchored whole-string match, the XSD multi-character escapes
+// follows XSD 1.1 Part 2 Appendix G, where dk.brics `RegExp` as HermiT uses it
+// differs (`.`, `\d` and `\w` have their XSD meaning over every character):
+// anchored whole-string match, the XSD multi-character escapes
 // (`\d \D \w \W \s \S`, the XML-name escapes `\i \I \c \C`), the category/block
 // escapes `\p{...}`/`\P{...}` (the common categories), single-character escapes,
 // char classes with ranges/negation/class-subtraction, the quantifiers
 // `? * + {m} {m,} {m,n}`, grouping and alternation.
 //
 // Everything here is sound for the emptiness/cardinality questions: an automaton
-// is built to recognise *exactly* the language HermiT's does (so an empty
+// is built to recognise *exactly* the pattern's language (so an empty
 // intersection is a real clash), and any pattern syntax we cannot translate makes
 // `from_xsd_pattern` return `None`, which the caller treats as "undecided" (never
 // a false clash).
@@ -706,11 +707,11 @@ impl<'a> Parser<'a> {
             '[' => self.parse_char_class(),
             '.' => {
                 self.bump();
-                // XSD `.` matches any character except the line terminators
-                // \n (#xA) and \r (#xD). dk.brics `RegExp` `.` is "any single
-                // char"; HermiT pattern automata are intersected with the XML
-                // string automaton, so restricting `.` to the XML alphabet (minus
-                // the two line terminators, per XSD) is faithful.
+                // XSD `.` is `[^\n\r]` (XSD 1.1 Part 2 §G.4.2.5): every
+                // character but the line terminators. The datatype automaton it
+                // is intersected with restricts it to the characters of the
+                // value space, so it must not stop at the XML characters: an
+                // anyURI may contain U+FFFE.
                 Some(ranges_to_automaton(&dot_ranges()))
             }
             '\\' => {
@@ -718,8 +719,9 @@ impl<'a> Parser<'a> {
                 let e = self.bump()?;
                 self.escape_to_automaton(e)
             }
+            // XSD patterns are implicitly anchored, and `^`/`$` are normal
+            // characters (XSD 1.1 Part 2 §G.4.2.3, `NormalChar`).
             ')' | '|' | '*' | '+' | '?' | '{' | '}' | ']' => None,
-            '^' | '$' => None, // XSD patterns are implicitly anchored; ^/$ are literals only inside classes
             lit => {
                 self.bump();
                 Some(Automaton::char(lit as u32))
@@ -859,9 +861,10 @@ enum ClassMember {
     Set(Vec<(u32, u32)>),
 }
 
-/// The ranges denoted by `.` in an XSD pattern: any XML char except `\n`/`\r`.
+/// The ranges denoted by `.` in an XSD pattern: `[^\n\r]`, every character
+/// except `\n`/`\r`.
 fn dot_ranges() -> Vec<(u32, u32)> {
-    subtract_ranges(&xml_char_ranges(), &[(0x0A, 0x0A), (0x0D, 0x0D)])
+    complement_ranges(&[(0x0A, 0x0A), (0x0D, 0x0D)])
 }
 
 /// The XML `Char` production, whose characters make up the xsd:string values
@@ -886,13 +889,14 @@ fn ranges_to_automaton(ranges: &[(u32, u32)]) -> Automaton {
 }
 
 /// The XSD multi-character class escapes (`\d \D \w \W \s \S \i \I \c \C`).
-/// Returns `None` for a non-class escape. The negated/uppercase variants are the
-/// complement within the XML character set (matching dk.brics, which intersects
-/// the pattern automaton with the XML alphabet downstream).
+/// Returns `None` for a non-class escape. The uppercase variants are the
+/// complements over all characters (XSD 1.1 Part 2 §G.4.2.5); the datatype
+/// automaton restricts them to the characters of the value space.
 fn class_escape_ranges(e: char) -> Option<Vec<(u32, u32)>> {
     match e {
-        'd' => Some(vec![(0x30, 0x39)]),
-        'D' => Some(complement_ranges(&[(0x30, 0x39)])),
+        // `\d` is `\p{Nd}`, every decimal digit, not only ASCII ones.
+        'd' => Some(digit_ranges()),
+        'D' => Some(complement_ranges(&digit_ranges())),
         's' => Some(vec![(0x09, 0x0A), (0x0D, 0x0D), (0x20, 0x20)]),
         'S' => Some(complement_ranges(&[(0x09, 0x0A), (0x0D, 0x0D), (0x20, 0x20)])),
         'w' => Some(word_char_ranges()),
@@ -909,36 +913,20 @@ fn class_escape_ranges(e: char) -> Option<Vec<(u32, u32)>> {
     }
 }
 
-/// `\w`: XSD defines `\w` as `[#x0000-#x10FFFF] - \p{P} - \p{Z} - \p{C}`, i.e. all
-/// characters that are not punctuation, separators, or "other". dk.brics models
-/// it concretely; the version HermiT exercises in practice over ASCII patterns is
-/// `[a-zA-Z0-9_]` plus the Unicode letter/number blocks. We use the broad Unicode
-/// letter+number+mark+connector set to stay faithful for non-ASCII.
+/// `\d`: `\p{Nd}` (XSD 1.1 Part 2 §G.4.2.5).
+fn digit_ranges() -> Vec<(u32, u32)> {
+    gencat_ranges("Nd").expect("the Nd category")
+}
+
+/// `\w`: `[#x0000-#x10FFFF]-[\p{P}\p{Z}\p{C}]` (XSD 1.1 Part 2 §G.4.2.5), every
+/// character that is not punctuation, a separator or "other"; symbols such as
+/// `$` and `+` are word characters.
 fn word_char_ranges() -> Vec<(u32, u32)> {
-    // letters + digits + underscore + the common Unicode letter blocks.
-    let mut r = vec![
-        (0x30u32, 0x39u32), // 0-9
-        (0x41, 0x5A),       // A-Z
-        (0x5F, 0x5F),       // _
-        (0x61, 0x7A),       // a-z
-        (0xAA, 0xAA),
-        (0xB5, 0xB5),
-        (0xBA, 0xBA),
-        (0xC0, 0xD6),
-        (0xD8, 0xF6),
-        (0xF8, 0x2FF),
-        (0x370, 0x37D),
-        (0x37F, 0x1FFF),
-        (0x200C, 0x200D),
-        (0x2070, 0x218F),
-        (0x2C00, 0x2FEF),
-        (0x3001, 0xD7FF),
-        (0xF900, 0xFDCF),
-        (0xFDF0, 0xFFFD),
-        (0x10000, 0xEFFFF),
-    ];
-    r.sort();
-    r
+    let mut non_word = Vec::new();
+    for category in ["P", "Z", "C"] {
+        non_word.extend(gencat_ranges(category).expect("a general category"));
+    }
+    complement_ranges(&non_word)
 }
 
 /// XML NameStartChar (the `\i` set, minus the colon, per XSD `\i`): letters and
@@ -1281,6 +1269,16 @@ pub fn any_string() -> Automaton {
     any_char().repeat()
 }
 
+/// The character sequences of anyURI values: the XML characters and U+FFFE
+/// and U+FFFF, which `is_valid_any_uri` admits too (as `java.net.URI` does). The
+/// value space is a subset, the sequences `is_valid_any_uri` accepts, so a
+/// caller enumerates these words and keeps those.
+pub fn any_uri_string_automaton() -> Automaton {
+    let mut chars = xml_char_ranges();
+    chars.push((0xFFFE, 0xFFFF));
+    Automaton::ranges(&normalize_ranges(&chars)).repeat()
+}
+
 /// The `normalizedString` value-space automaton:
 /// `([#x20-#x7F #xA0-#xD7FF #xE000-#xFFFD])*`.
 pub fn normalized_string_automaton() -> Automaton {
@@ -1412,6 +1410,7 @@ pub fn datatype_automaton(local_name: &str, is_plain_literal: bool) -> Option<Au
         "NCName" => ncname_automaton(),
         "NMTOKEN" => nmtoken_automaton(),
         "language" => language_automaton(),
+        "anyURI" => any_uri_string_automaton(),
         _ => return None,
     };
     Some(string_part.concatenate(&empty_lang_tag()))
@@ -1456,34 +1455,36 @@ pub fn language_range_automaton(language_range: &str) -> Automaton {
 }
 
 /// `toAutomaton(minLength, maxLength)` for a length-bounded restriction: the
-/// strings whose length lies in `[min_length, max_length]`, followed by a tag of
-/// the given mode. `max == None` means unbounded (Integer.MAX_VALUE). The length
-/// counts UTF-16 code units, as HermiT's does (Java `String.length()`) and as
-/// `value_satisfies_facet` does, so a supplementary character, a single symbol
-/// here, counts two.
+/// words whose string part has a length in `[min_length, max_length]`,
+/// followed by a tag of the given mode. `max == None` means unbounded. The
+/// length counts characters (code points), as the XSD 1.1 length facets do
+/// (Part 2 §4.3.1): a supplementary character has length 1, although HermiT
+/// counts it twice (Java `String.length()`). The string part may hold any
+/// symbol but SEPARATOR; the datatype automaton it is intersected with
+/// restricts the characters.
+///
+/// The automaton has one state per length up to the largest bound, so it is
+/// only built for small bounds; `Automaton::cardinality_within` and its
+/// siblings reason about large windows without it.
 pub fn length_automaton(min_length: usize, max_length: Option<usize>, lang: LangMode) -> Automaton {
-    // One state per number of code units read, up to the upper bound, or up to
+    // One state per number of characters read, up to the upper bound, or up to
     // the lower bound, which then stands for every longer length too.
     let last = max_length.unwrap_or(min_length);
     let mut string_part = Automaton::new();
     for _ in 0..=last {
         string_part.add_state();
     }
-    let (one_unit, two_units): (Vec<_>, Vec<_>) =
-        xml_char_ranges().into_iter().partition(|&(_, max)| max <= 0xFFFF);
-    for units in 0..=last {
-        string_part.accept[units] = units >= min_length;
-        for (width, ranges) in [(1, &one_unit), (2, &two_units)] {
-            let to = if units + width <= last {
-                units + width
-            } else if max_length.is_none() {
-                last
-            } else {
-                continue;
-            };
-            for &(min, max) in ranges {
-                string_part.trans[units].push(Transition { min, max, to });
-            }
+    for length in 0..=last {
+        string_part.accept[length] = length >= min_length;
+        let to = if length < last {
+            length + 1
+        } else if max_length.is_none() {
+            last
+        } else {
+            continue;
+        };
+        for (min, max) in complement_ranges(&[(SEPARATOR, SEPARATOR)]) {
+            string_part.trans[length].push(Transition { min, max, to });
         }
     }
     let tag = match lang {
@@ -1492,6 +1493,498 @@ pub fn length_automaton(min_length: usize, max_length: Option<usize>, lang: Lang
         LangMode::Present => nonempty_lang_tag(),
     };
     string_part.concatenate(&tag)
+}
+
+// ===========================================================================
+// Length windows over the string part, reasoned about symbolically.
+// ===========================================================================
+
+/// A window `[min, max]` of string-part lengths (in characters); a `max` of
+/// `None` is unbounded.
+pub type LengthWindow = (u64, Option<u64>);
+
+/// The windows in both lists, pairwise intersected.
+pub fn window_intersection(a: &[LengthWindow], b: &[LengthWindow]) -> Vec<LengthWindow> {
+    let mut out = Vec::new();
+    for &(a_min, a_max) in a {
+        for &(b_min, b_max) in b {
+            let min = a_min.max(b_min);
+            let max = match (a_max, b_max) {
+                (Some(x), Some(y)) => Some(x.min(y)),
+                (x, y) => x.or(y),
+            };
+            if max.is_none_or(|max| min <= max) {
+                out.push((min, max));
+            }
+        }
+    }
+    out
+}
+
+/// The lengths of the windows `a` outside every window of `b`.
+pub fn window_difference(a: &[LengthWindow], b: &[LengthWindow]) -> Vec<LengthWindow> {
+    let mut rest: Vec<LengthWindow> = a.to_vec();
+    for &(b_min, b_max) in b {
+        if b_max.is_some_and(|max| b_min > max) {
+            continue;
+        }
+        let mut next = Vec::with_capacity(rest.len() * 2);
+        for (min, max) in rest {
+            if min < b_min {
+                next.push((min, Some(max.map_or(b_min - 1, |max| max.min(b_min - 1)))));
+            }
+            if let Some(above) = b_max.and_then(|b_max| b_max.checked_add(1)) {
+                let min = min.max(above);
+                if max.is_none_or(|max| min <= max) {
+                    next.push((min, max));
+                }
+            }
+        }
+        rest = next;
+    }
+    rest
+}
+
+/// The length of the string part of a word: its characters before SEPARATOR.
+pub fn string_part_length(word: &str) -> u64 {
+    word.chars().take_while(|&c| c as u32 != SEPARATOR).count() as u64
+}
+
+/// Windows up to this length are handled by stepping through the lengths one
+/// by one; longer ones by repeated squaring.
+const STEP_LIMIT: u64 = 4096;
+
+/// Words longer than this are never materialised.
+const ENUMERATION_LENGTH_LIMIT: u64 = 4096;
+
+/// Above this many string-part states, a count over a long window is not
+/// computed by matrix powers (cubic in the states); it is reported as
+/// `u128::MAX`, the saturated "at least this many", which never causes a
+/// cardinality clash.
+const MATRIX_STATE_LIMIT: usize = 160;
+
+/// The string part of a determinised automaton as a graph whose steps are the
+/// characters before SEPARATOR, so that a word's string-part length is the
+/// number of steps of its path. The states are the live ones (those that
+/// reach an accepting state) reached before SEPARATOR; `tail[q]` counts the
+/// ways to finish a word from `q` without another string character (accept
+/// here, or read SEPARATOR and a tag), saturating, with `tail_infinite[q]`
+/// set when there are infinitely many.
+struct LengthView {
+    start: Option<usize>,
+    succ: Vec<Vec<(usize, u128)>>,
+    tail: Vec<u128>,
+    tail_infinite: Vec<bool>,
+}
+
+impl LengthView {
+    fn new(automaton: &Automaton) -> LengthView {
+        let dfa = automaton.determinize();
+        // The nodes are pairs (state, after SEPARATOR).
+        let mut ids: HashMap<(usize, bool), usize> = HashMap::new();
+        let mut nodes: Vec<(usize, bool)> = vec![(dfa.start, false)];
+        ids.insert((dfa.start, false), 0);
+        // Edges: (target, width, whether the edge reads a string character).
+        let mut edges: Vec<Vec<(usize, u128, bool)>> = vec![Vec::new()];
+        let mut i = 0;
+        while i < nodes.len() {
+            let (state, after) = nodes[i];
+            for t in &dfa.trans[state] {
+                let mut parts: Vec<(u32, u32, bool)> = Vec::new();
+                // SEPARATOR is U+0001, so only U+0000 lies below it.
+                if t.min < SEPARATOR {
+                    parts.push((t.min, SEPARATOR - 1, false));
+                }
+                if t.min <= SEPARATOR && SEPARATOR <= t.max {
+                    parts.push((SEPARATOR, SEPARATOR, true));
+                }
+                if t.max > SEPARATOR {
+                    parts.push((t.min.max(SEPARATOR + 1), t.max, false));
+                }
+                for (min, max, separator) in parts {
+                    if separator && after {
+                        continue; // a second SEPARATOR: no value
+                    }
+                    let key = (t.to, after || separator);
+                    let to = *ids.entry(key).or_insert_with(|| {
+                        nodes.push(key);
+                        edges.push(Vec::new());
+                        nodes.len() - 1
+                    });
+                    edges[i].push((to, (max - min) as u128 + 1, !after && !separator));
+                }
+            }
+            i += 1;
+        }
+        let n = nodes.len();
+        let mut live = vec![false; n];
+        let mut reverse: Vec<Vec<usize>> = vec![Vec::new(); n];
+        for (from, out) in edges.iter().enumerate() {
+            for &(to, _, _) in out {
+                reverse[to].push(from);
+            }
+        }
+        let mut stack: Vec<usize> = (0..n).filter(|&v| dfa.accept[nodes[v].0]).collect();
+        for &v in &stack {
+            live[v] = true;
+        }
+        while let Some(v) = stack.pop() {
+            for &p in &reverse[v] {
+                if !live[p] {
+                    live[p] = true;
+                    stack.push(p);
+                }
+            }
+        }
+        // The words after SEPARATOR, counted from each live node there.
+        let mut tag_words: Vec<Option<(u128, bool)>> = vec![None; n];
+        let mut on_stack = vec![false; n];
+        fn count_tags(
+            v: usize,
+            edges: &[Vec<(usize, u128, bool)>],
+            accept: &[bool],
+            live: &[bool],
+            memo: &mut [Option<(u128, bool)>],
+            on_stack: &mut [bool],
+        ) -> (u128, bool) {
+            if let Some(known) = memo[v] {
+                return known;
+            }
+            if on_stack[v] {
+                return (u128::MAX, true); // a live cycle: infinitely many tags
+            }
+            on_stack[v] = true;
+            let (mut total, mut infinite) = (accept[v] as u128, false);
+            for &(to, width, _) in &edges[v] {
+                if live[to] {
+                    let (count, inf) = count_tags(to, edges, accept, live, memo, on_stack);
+                    total = total.saturating_add(width.saturating_mul(count));
+                    infinite |= inf;
+                }
+            }
+            on_stack[v] = false;
+            if infinite {
+                total = u128::MAX;
+            }
+            memo[v] = Some((total, infinite));
+            (total, infinite)
+        }
+        let accept: Vec<bool> = nodes.iter().map(|&(state, _)| dfa.accept[state]).collect();
+        // The live string-part nodes, renumbered.
+        let mut index = vec![usize::MAX; n];
+        let mut count = 0;
+        for v in 0..n {
+            if live[v] && !nodes[v].1 {
+                index[v] = count;
+                count += 1;
+            }
+        }
+        let mut view = LengthView {
+            start: (index[0] != usize::MAX).then_some(index[0]),
+            succ: vec![Vec::new(); count],
+            tail: vec![0; count],
+            tail_infinite: vec![false; count],
+        };
+        for v in 0..n {
+            let q = index[v];
+            if q == usize::MAX {
+                continue;
+            }
+            let mut tail = accept[v] as u128;
+            for &(to, width, character) in &edges[v] {
+                if !live[to] {
+                    continue;
+                }
+                if character {
+                    view.succ[q].push((index[to], width));
+                } else {
+                    let (words, infinite) =
+                        count_tags(to, &edges, &accept, &live, &mut tag_words, &mut on_stack);
+                    tail = tail.saturating_add(width.saturating_mul(words));
+                    view.tail_infinite[q] |= infinite;
+                }
+            }
+            view.tail[q] = tail;
+        }
+        view
+    }
+
+    fn len(&self) -> usize {
+        self.succ.len()
+    }
+
+    /// Whether a cycle runs through the string-part nodes. They are all live
+    /// and reachable, so a cycle gives words of unbounded length.
+    fn has_cycle(&self) -> bool {
+        let mut indegree = vec![0usize; self.len()];
+        for out in &self.succ {
+            for &(to, _) in out {
+                indegree[to] += 1;
+            }
+        }
+        let mut ready: Vec<usize> = (0..self.len()).filter(|&q| indegree[q] == 0).collect();
+        let mut seen = 0;
+        while let Some(q) = ready.pop() {
+            seen += 1;
+            for &(to, _) in &self.succ[q] {
+                indegree[to] -= 1;
+                if indegree[to] == 0 {
+                    ready.push(to);
+                }
+            }
+        }
+        seen < self.len()
+    }
+
+    /// The nodes reached from the start by exactly `steps` string characters.
+    fn reached_at(&self, start: usize, steps: u64) -> Vec<bool> {
+        let n = self.len();
+        let mut current = vec![false; n];
+        current[start] = true;
+        let step = |set: &[bool], matrix: &[Vec<u64>]| -> Vec<bool> {
+            let mut next = vec![false; n];
+            for (q, _) in set.iter().enumerate().filter(|(_, &b)| b) {
+                for (word, bits) in matrix[q].iter().enumerate() {
+                    let mut bits = *bits;
+                    while bits != 0 {
+                        next[word * 64 + bits.trailing_zeros() as usize] = true;
+                        bits &= bits - 1;
+                    }
+                }
+            }
+            next
+        };
+        let words = n.div_ceil(64);
+        // The one-step reachability matrix, as bitsets, squared repeatedly.
+        let mut power: Vec<Vec<u64>> = vec![vec![0; words]; n];
+        for (q, out) in self.succ.iter().enumerate() {
+            for &(to, _) in out {
+                power[q][to / 64] |= 1 << (to % 64);
+            }
+        }
+        let mut remaining = steps;
+        while remaining > 0 {
+            if remaining & 1 == 1 {
+                current = step(&current, &power);
+            }
+            remaining >>= 1;
+            if remaining > 0 {
+                let mut squared = vec![vec![0u64; words]; n];
+                for q in 0..n {
+                    for word in 0..words {
+                        let mut bits = power[q][word];
+                        while bits != 0 {
+                            let via = word * 64 + bits.trailing_zeros() as usize;
+                            for (target, source) in squared[q].iter_mut().zip(&power[via]) {
+                                *target |= *source;
+                            }
+                            bits &= bits - 1;
+                        }
+                    }
+                }
+                power = squared;
+            }
+        }
+        current
+    }
+
+    /// Whether some node in `target` is reached from the start by a number of
+    /// string characters in the window.
+    fn window_reaches(&self, (min, max): LengthWindow, target: &dyn Fn(usize) -> bool) -> bool {
+        let Some(start) = self.start else {
+            return false;
+        };
+        if max.is_some_and(|max| min > max) {
+            return false;
+        }
+        // Every longer path passes a node reached after exactly `min` steps, so
+        // the lengths at least `min` are `min` plus the distances from there.
+        let reached = self.reached_at(start, min);
+        let mut distance: Vec<Option<u64>> =
+            reached.iter().map(|&r| r.then_some(0)).collect();
+        let mut queue: VecDeque<usize> = (0..self.len()).filter(|&q| reached[q]).collect();
+        while let Some(q) = queue.pop_front() {
+            let d = distance[q].unwrap_or_default();
+            if max.is_some_and(|max| d > max - min) {
+                break;
+            }
+            if target(q) {
+                return true;
+            }
+            for &(to, _) in &self.succ[q] {
+                if distance[to].is_none() {
+                    distance[to] = Some(d + 1);
+                    queue.push_back(to);
+                }
+            }
+        }
+        false
+    }
+
+    /// The number of words whose string part has a length in `[min, max]`,
+    /// saturating; the caller has excluded infinitely many tags there.
+    fn count_between(&self, start: usize, min: u64, max: u64) -> u128 {
+        let n = self.len();
+        if max <= STEP_LIMIT {
+            let mut paths = vec![0u128; n];
+            paths[start] = 1;
+            let mut total: u128 = 0;
+            for length in 0..=max {
+                if length >= min {
+                    for (count, tail) in paths.iter().zip(&self.tail) {
+                        total = total.saturating_add(count.saturating_mul(*tail));
+                    }
+                }
+                if length == max {
+                    break;
+                }
+                let mut next = vec![0u128; n];
+                for (&count, out) in paths.iter().zip(&self.succ) {
+                    if count == 0 {
+                        continue;
+                    }
+                    for &(to, width) in out {
+                        next[to] = next[to].saturating_add(count.saturating_mul(width));
+                    }
+                }
+                paths = next;
+            }
+            return total;
+        }
+        if n > MATRIX_STATE_LIMIT {
+            return u128::MAX;
+        }
+        // With M the step matrix and t the tails, A = [[M, t], [0, 1]] has
+        // A^k = [[M^k, sum_{j<k} M^j t], [0, 1]]. The count is
+        // e_start M^min sum_{j<=max-min} M^j t.
+        let size = n + 1;
+        let mut a = vec![vec![0u128; size]; size];
+        for (q, out) in self.succ.iter().enumerate() {
+            for &(to, width) in out {
+                a[q][to] = a[q][to].saturating_add(width);
+            }
+            a[q][n] = self.tail[q];
+        }
+        a[n][n] = 1;
+        let at_min = matrix_power(&a, min);
+        let sums = matrix_power(&a, max - min + 1);
+        let mut total: u128 = 0;
+        for q in 0..n {
+            total = total.saturating_add(at_min[start][q].saturating_mul(sums[q][n]));
+        }
+        total
+    }
+}
+
+/// Saturating product of square matrices of counts.
+fn matrix_product(a: &[Vec<u128>], b: &[Vec<u128>]) -> Vec<Vec<u128>> {
+    let size = a.len();
+    let mut out = vec![vec![0u128; size]; size];
+    for i in 0..size {
+        for k in 0..size {
+            let x = a[i][k];
+            if x == 0 {
+                continue;
+            }
+            for j in 0..size {
+                let y = b[k][j];
+                if y != 0 {
+                    out[i][j] = out[i][j].saturating_add(x.saturating_mul(y));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `a^exponent` with saturating counts.
+fn matrix_power(a: &[Vec<u128>], mut exponent: u64) -> Vec<Vec<u128>> {
+    let size = a.len();
+    let mut result: Vec<Vec<u128>> =
+        (0..size).map(|i| (0..size).map(|j| (i == j) as u128).collect()).collect();
+    let mut power = a.to_vec();
+    while exponent > 0 {
+        if exponent & 1 == 1 {
+            result = matrix_product(&result, &power);
+        }
+        exponent >>= 1;
+        if exponent > 0 {
+            power = matrix_product(&power, &power);
+        }
+    }
+    result
+}
+
+impl Automaton {
+    /// Whether no word has a string part whose length lies in a window. Only
+    /// the determinised automaton is built, never one per length, so a window
+    /// near 2^31 costs a logarithmic number of steps.
+    pub fn is_empty_within(&self, windows: &[LengthWindow]) -> bool {
+        let view = LengthView::new(self);
+        !windows.iter().any(|&window| view.window_reaches(window, &|q| view.tail[q] > 0))
+    }
+
+    /// The number of words whose string part has a length in a window, or
+    /// `None` when there are infinitely many. Counts saturate at `u128::MAX`,
+    /// as `cardinality` does; the windows must be disjoint.
+    pub fn cardinality_within(&self, windows: &[LengthWindow]) -> Option<u128> {
+        let view = LengthView::new(self);
+        let Some(start) = view.start else {
+            return Some(0);
+        };
+        // Infinitely many tags after a string of a length in a window.
+        if windows.iter().any(|&window| view.window_reaches(window, &|q| view.tail_infinite[q])) {
+            return None;
+        }
+        let cyclic = view.has_cycle();
+        let longest = view.len() as u64; // no path is longer without a cycle
+        let mut total: u128 = 0;
+        for &(min, max) in windows {
+            let max = match max {
+                // A cycle gives words of every large enough length in some
+                // progression, so an unbounded window holds infinitely many.
+                None if cyclic => {
+                    if view.window_reaches((min, None), &|q| view.tail[q] > 0) {
+                        return None;
+                    }
+                    continue;
+                }
+                None => longest,
+                Some(max) if cyclic => max,
+                Some(max) => max.min(longest),
+            };
+            if min <= max {
+                total = total.saturating_add(view.count_between(start, min, max));
+            }
+        }
+        Some(total)
+    }
+
+    /// Up to `cap` words whose string part has a length in a window, or `None`
+    /// when there are more, or when one would be longer than
+    /// `ENUMERATION_LENGTH_LIMIT` characters.
+    pub fn finite_strings_within(&self, windows: &[LengthWindow], cap: usize) -> Option<Vec<String>> {
+        let count = self.cardinality_within(windows)?;
+        if count > cap as u128 {
+            return None;
+        }
+        let view = LengthView::new(self);
+        let longest = if view.has_cycle() { u64::MAX } else { view.len() as u64 };
+        let mut lengths = Automaton::empty_language();
+        for &(min, max) in windows {
+            if !view.window_reaches((min, max), &|q| view.tail[q] > 0) {
+                continue;
+            }
+            let max = max.unwrap_or(u64::MAX).min(longest);
+            if max > ENUMERATION_LENGTH_LIMIT {
+                return None;
+            }
+            if min <= max {
+                lengths = lengths.union(&length_automaton(min as usize, Some(max as usize), LangMode::Any));
+            }
+        }
+        self.intersection(&lengths).finite_strings(cap)
+    }
 }
 
 /// Which language-tag mode a length window applies to.
@@ -1768,28 +2261,81 @@ mod tests {
     }
 
     #[test]
-    fn length_windows_count_utf16_code_units() {
-        // As HermiT measures a string's length (Java String.length()), and as
-        // value_satisfies_facet does, a supplementary character has length 2.
+    fn pattern_escapes_have_their_xsd_meaning() {
+        // XSD 1.1 Part 2 §G.4.2.5: `.` is `[^\n\r]`, over every character, so
+        // a datatype with U+FFFE (anyURI) keeps it.
+        let dot = xsd_pattern_to_automaton(".").unwrap();
+        assert!(dot.run("\u{FFFE}") && dot.run("\u{FFFF}"));
+        // `\d` is `\p{Nd}`: ARABIC-INDIC DIGIT THREE is a digit.
+        let digit = xsd_pattern_to_automaton("\\d").unwrap();
+        assert!(digit.run("7") && digit.run("\u{663}") && !digit.run("a"));
+        assert!(!xsd_pattern_to_automaton("\\D").unwrap().run("\u{663}"));
+        // `\w` excludes only punctuation, separators and "other": symbols are
+        // word characters, and `_` (Pc, connector punctuation) is not.
+        let word = xsd_pattern_to_automaton("\\w").unwrap();
+        for c in ["a", "$", "+", "\u{263A}", "\u{10000}"] {
+            assert!(word.run(c), "{c:?}");
+        }
+        for c in ["!", "_", " ", "-", "\u{1}", "\u{2028}"] {
+            assert!(!word.run(c), "{c:?}");
+        }
+        assert!(xsd_pattern_to_automaton("\\W").unwrap().run("-"));
+        // `^` and `$` are normal characters.
+        assert!(xsd_pattern_to_automaton("^a$").unwrap().run("^a$"));
+    }
+
+    #[test]
+    fn length_windows_count_characters() {
+        // XSD 1.1 length facets count characters (code points; Part 2 §4.3.1),
+        // so U+10000 has length 1, although HermiT (Java String.length())
+        // counts it twice.
         let separator = char::from_u32(SEPARATOR).unwrap();
         let word = |s: &str| format!("{s}{separator}");
-        let one = length_automaton(1, Some(1), LangMode::Absent);
-        assert!(one.run(&word("a")) && one.run(&word("\r")));
-        assert!(!one.run(&word("\u{10000}")) && !one.run(&word("")) && !one.run(&word("ab")));
-        // The strings of one code unit: every XML character below U+10000.
-        assert_eq!(one.cardinality(), Some(3 + (0xD7FF - 0x20 + 1) + (0xFFFD - 0xE000 + 1)));
-        let two = length_automaton(2, Some(2), LangMode::Absent);
-        assert!(two.run(&word("\u{10000}")) && two.run(&word("ab")));
-        assert!(!two.run(&word("a\u{10000}")));
+        let one = length_automaton(1, Some(1), LangMode::Absent).intersection(&any_string().concatenate(&empty_lang_tag()));
+        assert!(one.run(&word("a")) && one.run(&word("\r")) && one.run(&word("\u{10000}")));
+        assert!(!one.run(&word("")) && !one.run(&word("ab")) && !one.run(&word("a\u{10000}")));
+        // The strings of one character: every XML character.
+        assert_eq!(one.cardinality(), Some(1_112_033));
         let at_least_two = length_automaton(2, None, LangMode::Absent);
-        for s in ["\u{10000}", "abc", "a\u{10000}"] {
+        for s in ["\u{10000}\u{10000}", "abc", "a\u{10000}"] {
             assert!(at_least_two.run(&word(s)), "{s:?}");
         }
-        assert!(!at_least_two.run(&word("a")) && !at_least_two.run(&word("")));
-        // One state per code unit, so a large bound is cheap.
-        let long = length_automaton(0, Some(100_000), LangMode::Absent);
-        assert!(long.run(&word(&"a".repeat(100_000))));
-        assert!(!long.run(&word(&"a".repeat(100_001))));
+        assert!(!at_least_two.run(&word("\u{10000}")) && !at_least_two.run(&word("")));
+        // The symbolic windows agree.
+        let strings = any_string().concatenate(&empty_lang_tag());
+        assert_eq!(strings.cardinality_within(&[(1, Some(1))]), Some(1_112_033));
+        assert_eq!(string_part_length(&word("a\u{10000}")), 2);
+    }
+
+    #[test]
+    fn length_windows_near_two_to_the_31_are_symbolic() {
+        let separator = char::from_u32(SEPARATOR).unwrap();
+        let a_star = xsd_pattern_to_automaton("a*").unwrap().concatenate(&empty_lang_tag());
+        let huge = 2_147_483_000u64;
+        // Exactly one word per length, without a state per length.
+        assert!(!a_star.is_empty_within(&[(huge, None)]));
+        assert_eq!(a_star.cardinality_within(&[(huge, None)]), None);
+        assert_eq!(a_star.cardinality_within(&[(huge, Some(huge + 9))]), Some(10));
+        assert_eq!(a_star.finite_strings_within(&[(huge, Some(huge))], 10), None);
+        // Periodic lengths: `(ab)*` has only even lengths.
+        let ab = xsd_pattern_to_automaton("(ab)*").unwrap().concatenate(&empty_lang_tag());
+        assert!(ab.is_empty_within(&[(huge + 1, Some(huge + 1))]));
+        assert_eq!(ab.cardinality_within(&[(huge - 1, Some(huge + 1))]), Some(1));
+        // Two letters: 2^n words of length n, saturating.
+        let ab_star = xsd_pattern_to_automaton("[ab]*").unwrap().concatenate(&empty_lang_tag());
+        assert_eq!(ab_star.cardinality_within(&[(huge, Some(huge))]), Some(u128::MAX));
+        assert_eq!(ab_star.cardinality_within(&[(3, Some(4))]), Some(8 + 16));
+        // A finite pattern is bounded by its own length.
+        let finite = xsd_pattern_to_automaton("a{2,5}").unwrap().concatenate(&empty_lang_tag());
+        assert_eq!(finite.cardinality_within(&[(3, None)]), Some(3));
+        assert!(finite.is_empty_within(&[(6, Some(huge))]));
+        let words = finite.finite_strings_within(&[(0, Some(huge))], 10).unwrap();
+        assert_eq!(words.len(), 4);
+        assert!(words.contains(&format!("aa{separator}")));
+        // Tags after the string: infinitely many language tags.
+        let tagged = xsd_pattern_to_automaton("a").unwrap().concatenate(&nonempty_lang_tag());
+        assert_eq!(tagged.cardinality_within(&[(1, Some(1))]), None);
+        assert_eq!(tagged.cardinality_within(&[(2, Some(huge))]), Some(0));
     }
 
     #[test]
