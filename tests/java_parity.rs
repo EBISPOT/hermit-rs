@@ -407,7 +407,7 @@ fn run_case(path: &Path) {
         eprintln!("{} operation {index}: {}", case["java"], row["op"]);
         match row["op"].as_str().unwrap() {
             "normalize" | "clausify" => {
-                java_structural::run(row);
+                java_structural::run(case["java"].as_str().unwrap(), row);
                 assertions += 1;
             }
             "create" => {

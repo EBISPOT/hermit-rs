@@ -1,24 +1,4 @@
 {
-  "structural.ClausificationTest.testBasic": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testBasic\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationTest.testNominals1": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testNominals1\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationTest.testNominals2": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testNominals2\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationTest.testNominals3": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testNominals3\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationTest.testNominals4": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testNominals4\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
   "structural.NormalizationTest.testKeys2": {
     "origin": "upstream assertion also fails",
     "signature": "\"structural.NormalizationTest.testKeys2\" operation 0: \"normalize\"\nassertion `left == right` failed"

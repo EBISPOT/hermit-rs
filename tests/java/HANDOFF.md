@@ -77,9 +77,9 @@ cardinality, and inequality assignment consistent.
 Nineteen failing assertions also failed in the pinned Java checkout. These require
 investigation of obsolete controls or fixtures, not blindly changing Rust to
 match them. The two `BlockingValidatorTest` fixtures are repaired (#32, #33;
-see `corrected/` and [RESULTS.md](RESULTS.md)). Issues #35 to #44 and #46 are
-resolved by a semantic clause comparison (see [RESULTS.md](RESULTS.md)); 6
-structural controls remain. Original Java error traces are retained in the case fixtures and
+see `corrected/` and [RESULTS.md](RESULTS.md)). Issues #35 to #50 are
+resolved by a semantic clause comparison (see [RESULTS.md](RESULTS.md)); one
+structural control remains (#51). Original Java error traces are retained in the case fixtures and
 `upstream-failures.json`.
 
 ## Imported Java failures
@@ -127,12 +127,12 @@ two overrides are empty in the original Java source.
 | [#42](https://github.com/EBISPOT/hermit-rs/issues/42) | Compare datatype clausification semantically: testDataPropertiesDataOneOf4 (**resolved** with #35) | 1 |
 | [#43](https://github.com/EBISPOT/hermit-rs/issues/43) | Compare datatype clausification semantically: testDataPropertiesHasValue1 (**resolved** with #35) | 1 |
 | [#44](https://github.com/EBISPOT/hermit-rs/issues/44) | Compare datatype clausification semantically: testDataPropertiesHasValue2 (**resolved** with #35) | 1 |
-| [#45](https://github.com/EBISPOT/hermit-rs/issues/45) | Modernize the transitive-role clausification control without weakening semantics | 1 |
+| [#45](https://github.com/EBISPOT/hermit-rs/issues/45) | Modernize the transitive-role clausification control without weakening semantics (**resolved**; compared by automaton language) | 1 |
 | [#46](https://github.com/EBISPOT/hermit-rs/issues/46) | Compare clausification auxiliaries modulo consistent renaming (**resolved** with #35) | 1 |
-| [#47](https://github.com/EBISPOT/hermit-rs/issues/47) | Restore the nominal clausification control: testNominals1 | 1 |
-| [#48](https://github.com/EBISPOT/hermit-rs/issues/48) | Restore the nominal clausification control: testNominals2 | 1 |
-| [#49](https://github.com/EBISPOT/hermit-rs/issues/49) | Restore the nominal clausification control: testNominals3 | 1 |
-| [#50](https://github.com/EBISPOT/hermit-rs/issues/50) | Restore the nominal clausification control: testNominals4 | 1 |
+| [#47](https://github.com/EBISPOT/hermit-rs/issues/47) | Restore the nominal clausification control: testNominals1 (**resolved** with #45) | 1 |
+| [#48](https://github.com/EBISPOT/hermit-rs/issues/48) | Restore the nominal clausification control: testNominals2 (**resolved** with #45) | 1 |
+| [#49](https://github.com/EBISPOT/hermit-rs/issues/49) | Restore the nominal clausification control: testNominals3 (**resolved** with #45) | 1 |
+| [#50](https://github.com/EBISPOT/hermit-rs/issues/50) | Restore the nominal clausification control: testNominals4 (**resolved** with #45) | 1 |
 | [#51](https://github.com/EBISPOT/hermit-rs/issues/51) | Correct the upstream key-normalization expectation that drops a data property | 1 |
 
 ## OWL WG conformance
