@@ -1170,13 +1170,10 @@ pub(crate) fn is_entailed_core(
             // P symmetric  iff  Inv(P) ⊑ P.
             is_object_property_subsumed_by(ontology, invert_ope(&ax.0), ax.0.clone())
         }
-        Component::FunctionalObjectProperty(ax) => {
-            // P functional  iff  ⊤ ⊑ ≤1 P.⊤.
-            is_subsumed_by_core(ontology, thing(), max_one(&ax.0))
-        }
+        Component::FunctionalObjectProperty(ax) => is_functional_role_core(ontology, &ax.0),
         Component::InverseFunctionalObjectProperty(ax) => {
-            // P inverse-functional  iff  ⊤ ⊑ ≤1 Inv(P).⊤.
-            is_subsumed_by_core(ontology, thing(), max_one(&invert_ope(&ax.0)))
+            // P inverse-functional  iff  Inv(P) is functional.
+            is_functional_role_core(ontology, &invert_ope(&ax.0))
         }
         Component::DisjointUnion(ax) => {
             // C = C1 ⊔ ... ⊔ Cn with pairwise disjointness, entailed iff the
@@ -1206,8 +1203,21 @@ pub(crate) fn is_entailed_core(
                     ),
                 }
             };
+            // The empty role is disjoint from every role (Table 6). Its atom
+            // clashes only where the ontology mentions owl:bottomObjectProperty,
+            // which is then axiomatized, so a pair with it (or its inverse, the
+            // same role) is answered directly. Java misses it otherwise.
+            let is_bottom = |expr: &OPE<crate::structural::A>| {
+                crate::structural::canonical_property(expr)
+                    == OPE::ObjectProperty(Build::new_arc().object_property(
+                        crate::model::AtomicRole::bottom_object_role().iri(),
+                    ))
+            };
             for i in 0..ax.0.len() {
                 for j in (i + 1)..ax.0.len() {
+                    if is_bottom(&ax.0[i]) || is_bottom(&ax.0[j]) {
+                        continue;
+                    }
                     let atoms = [role_atom(&ax.0[i]), role_atom(&ax.0[j])];
                     if reasoner.is_consistent_with_test_atoms(&mut manager, &atoms) {
                         return Ok(false);
@@ -1221,16 +1231,42 @@ pub(crate) fn is_entailed_core(
             is_subsumed_by_core(ontology, thing(), data_all(&ax.dp, ax.dr.clone()))
         }
         Component::DisjointDataProperties(ax) => {
-            // Disjoint iff ∃Di.Literal ⊓ ∃Dj.Literal ⊓ ≤1 ⊤_D is unsatisfiable,
-            // for every pair (HermiT's reduction).
+            // Disjoint iff for every pair no individual has the same value for
+            // both: asserting Di(a,k) ∧ Dj(a,k) for a fresh individual a and a
+            // fresh anonymous constant k is inconsistent, as in
+            // `get_disjoint_data_properties`. HermiT's EntailmentChecker instead
+            // tests ∃Di.Literal ⊓ ∃Dj.Literal ⊓ ≤1 owl:topDataProperty, which its
+            // normalization rejects, so Java throws for every such axiom;
+            // answering deliberately deviates from Java.
+            use crate::model::{Atom, AtomicRole, Constant as DlConstant, Individual as DlIndividual};
+            let dl_ontology = clausify_for_query(ontology)?;
+            let reasoner = Reasoner::new(&dl_ontology);
+            let mut manager = reasoner.new_manager();
+            let a = DlIndividual::create(fresh_witness_iri("disjoint-dp-a"));
+            let k = DlConstant::create("disjoint-dp-k", "internal:anonymous-constants");
+            let top = AtomicRole::top_data_role().iri();
+            let bottom = AtomicRole::bottom_data_role().iri();
             for i in 0..ax.0.len() {
                 for j in (i + 1)..ax.0.len() {
-                    let desc = CE::ObjectIntersectionOf(vec![
-                        data_some_literal(&ax.0[i]),
-                        data_some_literal(&ax.0[j]),
-                        data_max_one_top(),
-                    ]);
-                    if is_concept_satisfiable_core(ontology, desc)? {
+                    let pair = [&ax.0[i], &ax.0[j]];
+                    // The empty data role is disjoint from every data role; its
+                    // atom clashes only where the ontology mentions it.
+                    if pair.iter().any(|dp| dp.0.as_ref() == bottom) {
+                        continue;
+                    }
+                    // owl:topDataProperty holds for every pair, so its atom adds
+                    // nothing (and may not be used where it is not mentioned).
+                    let atoms: Vec<Atom> = pair
+                        .iter()
+                        .filter(|dp| dp.0.as_ref() != top)
+                        .map(|dp| {
+                            Atom::create(
+                                DLPredicate::AtomicRole(AtomicRole::create(dp.0.to_string())),
+                                vec![Term::Individual(a), Term::Constant(k)],
+                            )
+                        })
+                        .collect();
+                    if reasoner.is_consistent_with_test_atoms(&mut manager, &atoms) {
                         return Ok(false);
                     }
                 }
@@ -1291,6 +1327,15 @@ pub(crate) fn is_entailed_core(
         },
         // EntailmentChecker.visit(OWLFunctionalDataPropertyAxiom) ->
         // reasoner.isFunctional(dp): the data property is functional iff ⊤ ⊑ ≤1 dp.Literal.
+        // owl:topDataProperty relates every individual to every data value, of
+        // which there are infinitely many, so it is functional only in an
+        // inconsistent ontology (Java's `isFunctional` answers so too). It may
+        // not occur in `≤1 dp`, which normalization rejects.
+        Component::FunctionalDataProperty(ax)
+            if ax.0 .0.as_ref() == crate::model::AtomicRole::top_data_role().iri() =>
+        {
+            Ok(!is_ontology_consistent(ontology)?)
+        }
         Component::FunctionalDataProperty(ax) => {
             is_subsumed_by_core(ontology, thing(), data_max_one(&ax.0))
         }
@@ -1815,9 +1860,28 @@ fn all_values(
     CE::ObjectAllValuesFrom { ope: ope.clone(), bce: Box::new(bce) }
 }
 
-/// `≤1 ope.⊤`.
-fn max_one(ope: &horned_owl::model::ObjectPropertyExpression<Ae>) -> CE<Ae> {
-    CE::ObjectMaxCardinality { n: 1, ope: ope.clone(), bce: Box::new(thing()) }
+/// Whether `FunctionalObjectProperty(ope)` is entailed, i.e. `⊤ ⊑ ≤1 ope.⊤`.
+///
+/// The entailment is well defined for every role, but `≤1 ope.⊤` may not be
+/// tested when `ope` is non-simple (transitive, chain-defined, a super-property
+/// of one, or owl:topObjectProperty): the tableau's number restrictions are
+/// complete only for simple roles. An element has two distinct `ope`-successors
+/// iff it can satisfy `∃ope.A ⊓ ∃ope.¬A` for a fresh class `A` (put one
+/// successor in `A` and the other outside it; conversely the two witnesses
+/// differ), so `ope` is functional iff that concept is unsatisfiable. It uses
+/// no number restriction and so answers every role, as Java's `isFunctional`
+/// does by testing two role atoms to distinct fresh individuals.
+fn is_functional_role_core(
+    ontology: &SetOntology<Ae>,
+    ope: &horned_owl::model::ObjectPropertyExpression<Ae>,
+) -> Result<bool, String> {
+    let build = Build::new_arc();
+    let marker = CE::Class(build.class(fresh_witness_iri("functional-marker")));
+    let two_successors = CE::ObjectIntersectionOf(vec![
+        some_values(ope, marker.clone()),
+        some_values(ope, CE::ObjectComplementOf(Box::new(marker))),
+    ]);
+    Ok(!is_concept_satisfiable_core(ontology, two_successors)?)
 }
 
 /// `∃dp.rdfs:Literal` (the top datatype).
@@ -1854,18 +1918,6 @@ fn data_max_one(dp: &horned_owl::model::DataProperty<Ae>) -> CE<Ae> {
     CE::DataMaxCardinality {
         n: 1,
         dp: dp.clone(),
-        dr: horned_owl::model::DataRange::Datatype(
-            build.datatype("http://www.w3.org/2000/01/rdf-schema#Literal"),
-        ),
-    }
-}
-
-/// `≤1 owl:topDataProperty.rdfs:Literal`.
-fn data_max_one_top() -> CE<Ae> {
-    let build = Build::new_arc();
-    CE::DataMaxCardinality {
-        n: 1,
-        dp: build.data_property("http://www.w3.org/2002/07/owl#topDataProperty"),
         dr: horned_owl::model::DataRange::Datatype(
             build.datatype("http://www.w3.org/2000/01/rdf-schema#Literal"),
         ),
@@ -6392,6 +6444,13 @@ pub fn get_disjoint_object_properties(
         }
     };
     let ope_atom = role_atom(ope);
+    // A role that is empty in every model, as one whose domain is owl:Nothing,
+    // is the empty role and so disjoint from every role, owl:topObjectProperty
+    // included. The walk below never tests the top node, as in Java, which
+    // therefore leaves it out.
+    if !reasoner.is_consistent_with_test_atoms(&mut manager, std::slice::from_ref(&ope_atom)) {
+        return Ok(hierarchy.all_elements().cloned().collect());
+    }
     // Top-down pruning walk (Reasoner.java:1202-1218): start from the top node's
     // children; test each node's representative for disjointness with `ope`; on
     // disjointness add the whole (reflexive) descendant subtree WITHOUT testing
@@ -6455,12 +6514,14 @@ pub fn get_disjoint_data_properties(
     let mut result: HashSet<DataProperty<crate::structural::A>> = HashSet::new();
 
     // hasDatatypes()==false branch (Reasoner.java:1556-1565): top -> {bottom},
-    // bottom -> {top}, otherwise empty (and empty when inconsistent).
+    // bottom -> {top}, and empty when inconsistent. Any other data property is
+    // outside the ontology's signature and so disjoint from owl:bottomDataProperty
+    // alone; Java answers the empty set for it, missing the empty data role.
     if !has_datatypes {
-        if consistent && dp_iri == top_iri {
-            result.insert(build.data_property(bottom_iri));
-        } else if consistent && dp_iri == bottom_iri {
+        if consistent && dp_iri == bottom_iri {
             result.insert(build.data_property(top_iri));
+        } else if consistent {
+            result.insert(build.data_property(bottom_iri));
         }
         return Ok(result);
     }
@@ -6508,6 +6569,13 @@ pub fn get_disjoint_data_properties(
         )
     };
     let dp_atom = data_atom(dp);
+    // A data property that is empty in every model, as one whose domain is
+    // owl:Nothing, is the empty data role and so disjoint from every data role,
+    // owl:topDataProperty included. The walk below never tests the top node, as
+    // in Java, which therefore leaves it out.
+    if !reasoner.is_consistent_with_test_atoms(&mut manager, std::slice::from_ref(&dp_atom)) {
+        return Ok(hierarchy.all_elements().cloned().collect());
+    }
     // Top-down pruning walk (Reasoner.java:1537-1550): start from the top node's
     // children, test each node's representative, and on disjointness add the whole
     // (reflexive) descendant subtree without testing it; otherwise descend.
