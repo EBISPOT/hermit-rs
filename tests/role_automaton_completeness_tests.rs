@@ -17,8 +17,9 @@
 //! ```
 //!
 //! and on the four-property pattern below Java misses the entailment on 18 of the
-//! 24 spellings. hermit-rs splices the sub-properties of both `R` and `Inv(R)`
-//! into `R`'s automaton, so it derives the entailment on all of them.
+//! 24 spellings. hermit-rs builds the automata from the role box independently
+//! of iteration order (see ROLE_AUTOMATON_CONSTRUCTION.md), so it derives the
+//! entailment on all of them.
 
 use hermit_rs::reasoner::is_subsumed_by;
 use horned_owl::model::{Build, ClassExpression as CE};

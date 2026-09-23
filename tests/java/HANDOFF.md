@@ -54,14 +54,17 @@ with the concept classifier (#22). Their hierarchy looks up
 `ObjectInverseOf(owl:topObjectProperty)` and
 `ObjectInverseOf(owl:bottomObjectProperty)` as the built-in properties (#26).
 
-The role automata keep a HermiT flaw that no imported case covers:
-`buildInversePropertiesMap` records `SubObjectPropertyOf(R ObjectInverseOf(S))`
-as if `R` and `S` were inverses, so when `S` is not simple, `forall R.C` also
-propagates along `Inv(S)`. With `TransitiveObjectProperty(S)`, `R <= Inv(S)` then
-yields `Inv(S) <= R` in class reasoning, `isSubObjectPropertyExpressionOf` and
-the property classifiers alike, as in Java.
+The role automata no longer keep HermiT's `buildInversePropertiesMap` flaw
+(**resolved**, deliberately deviating from Java). HermiT records
+`SubObjectPropertyOf(R ObjectInverseOf(S))` as if `R` and `S` were inverses. With
+`TransitiveObjectProperty(S)` it then derives `Inv(S) <= R` in class reasoning,
+`isSubObjectPropertyExpressionOf` and the property classifiers. The automata are
+now built from the role box as a grammar, per class of equivalent roles. A
+brute-force comparison over random role boxes checks that each automaton accepts
+exactly the entailed role words. See `ROLE_AUTOMATON_CONSTRUCTION.md` and
+`tests/inverse_transitive_automaton_tests.rs`.
 
-Two more gaps that no imported case covers, found while fixing #26. The
+Two gaps that no imported case covers, found while fixing #26. The
 `DisjointObjectProperties` entailment tests role atoms on the ontology's
 tableau, where `owl:bottomObjectProperty` is axiomatized only when the ontology
 mentions it; otherwise `DisjointObjectProperties(owl:bottomObjectProperty :r)`

@@ -2627,9 +2627,8 @@ fn equivalent_properties_with_cross_chains_is_regular() {
 }
 
 // `∀r.C` over a property `r` whose declared inverse `s` is *complex*
-// (transitive). `connectAllAutomata`'s inverse-union pass must enrich r's
-// automaton with the mirror of s's automaton so the universal propagates
-// along the inverse of the complex role.
+// (transitive). r's automaton must contain the mirror of s's automaton so the
+// universal propagates along the inverse of the complex role.
 #[test]
 fn universal_propagates_along_inverse_of_complex_role() {
     use horned_owl::model::{
