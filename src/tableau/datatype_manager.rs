@@ -966,6 +966,26 @@ impl Tableau {
                 self.set_clash(&fold_deps(&deps));
                 return true;
             }
+            // Two fixed-value nodes: the inequality holds iff their values differ.
+            // Distinct literals can denote one value (`"1"^^xsd:int`,
+            // `"01"^^xsd:int` and `"1.0"^^xsd:decimal`), so compare values, as
+            // HermiT's DatatypeChecker does when both constants become variables
+            // of the inequality. The components below never start from a constant,
+            // so this edge would otherwise go unchecked.
+            let constant = |n: NodeId| {
+                if self.nodes[n].get_node_type() == NodeType::RootConstantNode {
+                    self.nodes[n].constant_value().and_then(parse_value)
+                } else {
+                    None
+                }
+            };
+            if let (Some(value_a), Some(value_b)) = (constant(a), constant(b)) {
+                if values_equal(&value_a, &value_b) {
+                    self.set_clash(&fold_deps(&deps));
+                    return true;
+                }
+                continue;
+            }
             ensure(self, &mut value_space, &mut ranges_by_node, a);
             ensure(self, &mut value_space, &mut ranges_by_node, b);
             adjacency.entry(a).or_default().push(b);
