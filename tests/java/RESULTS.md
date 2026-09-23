@@ -46,8 +46,8 @@ assertion, or an unexpected pass fails CI; an unexpected pass requires removing
 the stale exception. `HERMIT_JAVA_STRICT=1` disables exceptions. The default test
 runner's accepted outcomes must not be read as the strict conformance pass count.
 
-The separate OWL WG runner checks all 359 scoped cases: **354 pass, 5 skip**.
-The skips all have unconsumed logical RDF triples. Both checks for each of
+The separate OWL WG runner checks all 359 scoped cases: **all 359 pass, none skip**.
+Both checks for each of
 description-logic tests 208 and 209 (the DL98 k_poly ABox, on which Java HermiT
 also times out) used to exceed the 15-second deadline. Their premise consists
 only of acyclic class definitions and assertions, so consistency checks now use
@@ -57,11 +57,28 @@ The RDF reader now parses blank-node (anonymous) individuals, the OWL 1 DL
 compatibility patterns (Tables 5, 6, 14 and 18 of the OWL 2 mapping to RDF) and
 unqualified cardinalities on data properties, and the harness resolves entity
 kinds against the declarations of the bundled import closure (as OWLAPI does).
-This moved 138 former parse skips to verified passes (#52). The five remaining
-parse skips are three stray, unattached class expressions in a premise (WebOnt
-I5.26-001) and in conclusions (I5.26-010, I5.5-005), an `owl:oneOf` blank node without
-`rdf:type owl:Class` (owl2-rl-valid-oneof), and a blank node typed
-`owl:NamedIndividual` (owl2-rl-anonymous-individual).
+This moved 138 former parse skips to verified passes (#52). The last five now
+pass too:
+
+- A standalone class expression, one that no triple references, is fully
+  parsed. Section 3.2.4 of the mapping removes a class expression's triples
+  when its pattern is matched, whether or not an axiom uses it, so it
+  contributes no axiom. This covers WebOnt I5.26-001 (premise), I5.26-010 and
+  I5.5-005 (conclusions). The WG descriptions of the last two say the
+  conclusion is trivially true, or that the union "does not appear in an
+  axiom". OWLAPI also leaves such expressions out of the ontology. A class
+  expression that is referenced but never used is still reported as
+  incomplete.
+- A blank node with `owl:oneOf` over a non-empty list of IRIs but no
+  `rdf:type owl:Class` is read as `ObjectOneOf` (owl2-rl-valid-oneof). This is
+  a lenient reading, as in OWLAPI: DataOneOf members are literals, so the
+  reading is unambiguous. Literal and empty lists are not guessed.
+- `rdf:type owl:NamedIndividual` on a blank node is consumed as redundant
+  typing with no declaration (owl2-rl-anonymous-individual). Table 7 declares
+  only IRIs, and OWLAPI reads the node the same way.
+
+OWLAPI 4.2.8, the version Java HermiT uses, gives the same axioms for all
+five inputs.
 Every identity and outcome is checked against `tests/owl_wg/expected.tsv`.
 Missing cases, wrong answers, newly skipped cases, changed skip reasons and
 unexpectedly passing skips all fail the gate.

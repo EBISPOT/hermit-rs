@@ -3,12 +3,14 @@ use horned_owl::{
     io::rdf::reader,
     model::{AnnotatedComponent, Build, Component},
 };
-fn parse(shared: bool) -> (usize, bool) {
-    let uses = if shared {
-        r#"<owl:Class rdf:about="urn:A"><rdfs:subClassOf rdf:nodeID="restriction"/></owl:Class><owl:Class rdf:about="urn:B"><rdfs:subClassOf rdf:nodeID="restriction"/></owl:Class>"#
-    } else {
-        ""
-    };
+fn parse(uses: &str) -> (usize, bool) {
+    let (count, incomplete) = parse_with_residue(uses);
+    (count, incomplete.is_complete())
+}
+fn unused_class_expressions(uses: &str) -> usize {
+    parse_with_residue(uses).1.class_expression.len()
+}
+fn parse_with_residue(uses: &str) -> (usize, reader::IncompleteParse<A>) {
     let rdf = format!(
         r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:owl="http://www.w3.org/2002/07/owl#"><owl:ObjectProperty rdf:about="urn:p"/><owl:Class rdf:about="urn:C"/><owl:Restriction rdf:nodeID="restriction"><owl:onProperty rdf:resource="urn:p"/><owl:someValuesFrom rdf:resource="urn:C"/></owl:Restriction>{uses}</rdf:RDF>"#
     );
@@ -24,15 +26,27 @@ fn parse(shared: bool) -> (usize, bool) {
         .into_iter()
         .filter(|a| matches!(a.component, Component::SubClassOf(_)))
         .count();
-    (count, incomplete.is_complete())
+    (count, incomplete)
 }
 #[test]
 fn shared_class_expression_is_consumed_once_and_reused() {
-    assert_eq!(parse(true), (2, true));
+    let uses = r#"<owl:Class rdf:about="urn:A"><rdfs:subClassOf rdf:nodeID="restriction"/></owl:Class><owl:Class rdf:about="urn:B"><rdfs:subClassOf rdf:nodeID="restriction"/></owl:Class>"#;
+    assert_eq!(parse(uses), (2, true));
 }
+/// A class expression that no triple references is consumed when its
+/// pattern is matched (OWL 2 Mapping to RDF Graphs, Section 3.2.4) and
+/// yields no axiom, so the parse is complete (WebOnt I5.26-001/010, I5.5-005).
 #[test]
-fn unused_class_expression_is_still_reported() {
-    assert_eq!(parse(false), (0, false));
+fn standalone_class_expression_is_consumed_without_axiom() {
+    assert_eq!(parse(""), (0, true));
+}
+/// A class expression that is referenced but never used as one (here the
+/// value of an annotation) is still reported: its reference was lost.
+#[test]
+fn referenced_but_unused_class_expression_is_still_reported() {
+    let uses = r#"<owl:Class rdf:about="urn:A"><rdfs:comment rdf:nodeID="restriction"/></owl:Class>"#;
+    assert_eq!(parse(uses), (0, false));
+    assert_eq!(unused_class_expressions(uses), 1);
 }
 
 /// Parse RDF/XML body content and return its logical components, asserting
@@ -142,4 +156,59 @@ fn owl1_compatibility_vocabulary_is_parsed() {
         assert!(s.contains(expected), "missing {expected} in\n{s}");
     }
     assert!(!s.contains("rdf-schema#Class"), "{s}");
+}
+
+#[test]
+fn untyped_enumeration_of_individuals_is_object_one_of() {
+    // Lenient reading, as OWLAPI's (owl2-rl-valid-oneof): Table 13 types the
+    // node owl:Class, but IRI members can only form an ObjectOneOf.
+    let c = parse_components(
+        r#"<owl:Class rdf:about="urn:ex#C"/>
+        <rdf:Description><rdfs:subClassOf rdf:resource="urn:ex#C"/><owl:oneOf rdf:parseType="Collection"><owl:NamedIndividual rdf:about="urn:ex#x"/><owl:NamedIndividual rdf:about="urn:ex#y"/></owl:oneOf></rdf:Description>"#,
+    );
+    assert_eq!(
+        show(&c),
+        r#"SubClassOf(SubClassOf { sup: Class(Class(IRI("urn:ex#C"))), sub: ObjectOneOf([Named(NamedIndividual(IRI("urn:ex#x"))), Named(NamedIndividual(IRI("urn:ex#y")))]) })"#
+    );
+}
+
+#[test]
+fn untyped_enumeration_of_literals_or_nothing_stays_unparsed() {
+    // A literal list would be a data range, and an empty list is ambiguous
+    // between owl:Nothing and an empty data range: neither is guessed.
+    for list in [r#"<rdf:first>1</rdf:first><rdf:rest rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>"#, ""] {
+        let one_of = if list.is_empty() {
+            r#"<owl:oneOf rdf:resource="http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"/>"#.to_string()
+        } else {
+            format!(r#"<owl:oneOf><rdf:Description>{list}</rdf:Description></owl:oneOf>"#)
+        };
+        let rdf = format!(
+            r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:owl="http://www.w3.org/2002/07/owl#"><owl:Class rdf:about="urn:ex#C"/><rdf:Description><rdfs:subClassOf rdf:resource="urn:ex#C"/>{one_of}</rdf:Description></rdf:RDF>"#
+        );
+        let b: Build<A> = Build::new();
+        let (_, incomplete) = reader::read_with_build::<A, AnnotatedComponent<A>, _>(
+            &mut std::io::Cursor::new(rdf),
+            &b,
+            Default::default(),
+        )
+        .unwrap();
+        assert!(!incomplete.is_complete(), "{one_of}");
+    }
+}
+
+#[test]
+fn blank_node_typed_named_individual_is_anonymous_individual() {
+    // Lenient reading, as OWLAPI's (owl2-rl-anonymous-individual): Table 7
+    // declares only IRIs, so the type triple is redundant and not a declaration.
+    let c = parse_components(
+        r#"<owl:ObjectProperty rdf:about="urn:ex#p"/><owl:NamedIndividual rdf:about="urn:ex#i"/>
+        <owl:NamedIndividual><ex:p rdf:resource="urn:ex#i"/></owl:NamedIndividual>"#,
+    );
+    let s = show(&c);
+    assert_eq!(c.len(), 1, "{s}");
+    assert!(
+        s.starts_with(r#"ObjectPropertyAssertion(ObjectPropertyAssertion { ope: ObjectProperty(ObjectProperty(IRI("urn:ex#p"))), from: Anonymous("#)
+            && s.ends_with(r#"to: Named(NamedIndividual(IRI("urn:ex#i"))) })"#),
+        "{s}"
+    );
 }
