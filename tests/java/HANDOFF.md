@@ -100,7 +100,7 @@ two overrides are empty in the original Java source.
 | [#18](https://github.com/EBISPOT/hermit-rs/issues/18) | Infer data-property subsumption forced by singleton values (**resolved** with #22) | 3 |
 | [#19](https://github.com/EBISPOT/hermit-rs/issues/19) | Return only the most specific direct individual types (**resolved**) | 3 |
 | [#20](https://github.com/EBISPOT/hermit-rs/issues/20) | Correct property hierarchy axioms emitted by printHierarchies (**resolved** with #22) | 3 |
-| [#21](https://github.com/EBISPOT/hermit-rs/issues/21) | Avoid declaring built-in bottom classes in collapsed hierarchies | 3 |
+| [#21](https://github.com/EBISPOT/hermit-rs/issues/21) | Avoid declaring built-in bottom classes in collapsed hierarchies (**resolved**) | 3 |
 | [#22](https://github.com/EBISPOT/hermit-rs/issues/22) | Infer role subsumption implied by chains and existential restrictions (**resolved**) | 3 |
 | [#23](https://github.com/EBISPOT/hermit-rs/issues/23) | Infer role subsumption forced by nominals and transitivity (**resolved** with #22) | 3 |
 | [#24](https://github.com/EBISPOT/hermit-rs/issues/24) | Classify role subsumption with chains, transitivity and symmetry (**resolved** with #22) | 3 |

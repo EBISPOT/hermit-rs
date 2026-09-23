@@ -6997,38 +6997,32 @@ pub fn print_hierarchies_with_configuration(
     if object_properties {
         // RolePrinter (HierarchyPrinterFSS.java:206-209,219-221,236-238): uses
         // SubObjectPropertyOf / EquivalentObjectProperties / Declaration( ObjectProperty( ... ) );
-        // needsDeclaration (line 259-260) suppresses top/bottom AND inverse roles.
-        let top_op_iri = "http://www.w3.org/2002/07/owl#topObjectProperty";
-        let bottom_op_iri = "http://www.w3.org/2002/07/owl#bottomObjectProperty";
+        // needsDeclaration (line 259-260) suppresses top/bottom, which the printer
+        // never declares, AND inverse roles.
         let hierarchy = classify_object_property_expressions_with_configuration(ontology, configuration)?;
         let render_op = |p: &OPE<crate::structural::A>| match p {
             OPE::ObjectProperty(op) => format!("<{}>", op.0),
             OPE::InverseObjectProperty(op) => format!("ObjectInverseOf( <{}> )", op.0),
         };
-        let top_repr = format!("<{}>", top_op_iri);
-        let bottom_repr = format!("<{}>", bottom_op_iri);
         sections.push(hierarchy.print_functional_syntax_with(
             render_op,
             "SubObjectPropertyOf",
             "EquivalentObjectProperties",
             "ObjectProperty",
-            |m: &str| m != top_repr && m != bottom_repr && !m.starts_with("ObjectInverseOf"),
+            |m: &str| !m.starts_with("ObjectInverseOf"),
         ));
     }
     if data_properties {
         // RolePrinter (HierarchyPrinterFSS.java:208-209,222-223,239-240): uses
-        // SubDataPropertyOf / EquivalentDataProperties / Declaration( DataProperty( ... ) ).
-        let top_dp_iri = "http://www.w3.org/2002/07/owl#topDataProperty";
-        let bottom_dp_iri = "http://www.w3.org/2002/07/owl#bottomDataProperty";
+        // SubDataPropertyOf / EquivalentDataProperties / Declaration( DataProperty( ... ) );
+        // the printer never declares top/bottom.
         let hierarchy = classify_data_properties_with_configuration(ontology, configuration)?;
-        let top_repr = format!("<{}>", top_dp_iri);
-        let bottom_repr = format!("<{}>", bottom_dp_iri);
         sections.push(hierarchy.print_functional_syntax_with(
             |p: &horned_owl::model::DataProperty<crate::structural::A>| format!("<{}>", p.0),
             "SubDataPropertyOf",
             "EquivalentDataProperties",
             "DataProperty",
-            |m: &str| m != top_repr && m != bottom_repr,
+            |_: &str| true,
         ));
     }
     Ok(sections

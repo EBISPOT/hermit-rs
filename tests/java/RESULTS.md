@@ -7,22 +7,22 @@ dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
 string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #22 property classification fix, which also resolved #13, #18, #20, #23, #24,
 #25 and #27, the issue #26 fix for the inverses of the built-in object
-properties, and the issue #19 fix for the direct types of individuals. All 598
-declared Java methods are accounted for; inherited methods also run under their
+properties, the issue #19 fix for the direct types of individuals, and the
+issue #21 fix for the declarations in printed hierarchies. All 598 declared
+Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 899 | 23 | 2 |
+| Query/structural replay | 902 | 20 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 949 | 26 | 2 |
+| Total, excluding OWL WG | 952 | 23 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 26 failures are:
+The Rust port does **not** yet have full Java test parity. The 23 failures are:
 
-* **7 Rust/Java discrepancies**, including inherited repetitions: hierarchy
-  printing; three core-blocking Widmann scenarios; and description-graph/SWRL
-  integration.
+* **4 Rust/Java discrepancies**: three core-blocking Widmann scenarios and
+  description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure
@@ -328,6 +328,33 @@ fixture, both `realize` gaps, the deviation above, owl:Thing, a class
 equivalent to it, an unsatisfiable class, equivalent and incomparable types,
 equality and nominals. The pinned Java checkout gives the same answers, except
 in the deviation above.
+
+Issue #21 was a gap in the printed hierarchies of inconsistent ontologies.
+Every OWL 2 ontology implicitly declares owl:Thing, owl:Nothing and the top and
+bottom object and data properties (OWL 2 Structural Specification §5.8, Table
+5), so declaring one is redundant, and HermiT's `HierarchyPrinterFSS` declares
+none: its `needsDeclaration` compares each element with the built-in constants.
+An inconsistent ontology entails every axiom, so each of its hierarchies is one
+node, both the top and the bottom node, which the top element represents. The
+Rust printers took the built-in entities to be the representatives of the top
+and bottom nodes, so the class printer declared owl:Nothing
+(`ReasonerTest.testHierarchyPrinting3`). The property printers also compared
+with the built-in IRIs, so they declared nothing more, but those of
+`printHierarchies`, like the dumpers, sorted the bottom element among the other
+members, whereas HermiT's comparators put it first. A hierarchy now keeps the
+top and bottom elements it is built with, and `transform` maps them too; every
+printer and dumper compares with them, for classes and properties alike. Java
+is right here: the expected `hierarchy-printing-3.txt` stands, and nothing
+deviates from Java.
+
+The regressions print the hierarchies of inconsistent ontologies with and
+without properties and inverse roles, and of a consistent ontology whose
+built-in entities share their nodes with other entities, under the default,
+core-blocking and individual-reuse configurations. Exactly the entities that
+are not built in are declared, each hierarchy of an inconsistent ontology is
+one equivalence led by its bottom and top elements, and a printed class
+hierarchy, read back, prints the same. The pinned Java checkout prints the same
+axioms for each of these ontologies.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
