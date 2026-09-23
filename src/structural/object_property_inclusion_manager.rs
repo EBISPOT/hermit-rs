@@ -8,34 +8,16 @@
 // (Horrocks/Kutz/Sattler): transitivity and chains never materialise role
 // edges; instead the universal restrictions are pushed along the automaton.
 //
-// SCOPE. The upstream construction also threads inverse roles through the
-// automata (mirrored copies, `increaseAutomatonWithInversePropertyAutomaton`,
-// symmetric/equivalent-role handling). That machinery only changes behaviour
-// when the role box itself contains inverse/symmetric/equivalent object-
-// property *inclusions*; in their absence HermiT's automata reduce to the
-// forward construction ported here, and the two agree on the accepted
-// language (which is all that the `∀`-rewriting depends on). We therefore port
-// the forward fragment faithfully. Several cases beyond the bare forward
-// fragment are handled soundly: `∀Inv(R).C` over a complex R (its automaton is
-// the mirror of R's, matching `finalizeConstruction`); *symmetric* properties
-// (r ⊑ Inv(r)) and *genuine inverse inclusions* (r ⊑ Inv(s)) over simple roles
-// -- clausified directly as role-inclusion clauses materialising the edge
-// directions; and role chains containing an inverse of a *simple* property
-// (e.g. p ∘ Inv(q) ⊑ r). When q is simple the `Inv(q)`-labelled transition
-// becomes a `∀Inv(q).D` clause the clausifier already handles; when q is
-// *complex*, `buildCompleteAutomataForProperties`'s inverse branch substitutes
-// the mirror of q's automaton (`getMirroredCopy`) into the transition.
-// Equivalent properties share an automaton (each equivalent of a complex
-// property is given a clone, its inverse the mirror -- `individualAutomataFor
-// EquivRoles`). A chain inclusion with an inverse *super*-property
-// (S1∘...∘Sn ⊑ Inv(r)) is passed through unchanged exactly as Java does: the
-// individual automaton is keyed on the anonymous super `Inv(r)`, and the
-// mirror-fill / inverse passes derive the named `r`. Genuine inverse simple
-// inclusions touching a complex property (r ⊑ Inv(s)) are clausified directly,
-// materialising the inverse edges that feed the complex property's automaton.
-// The full role-box machinery is thus covered; the only errors are genuine
-// OWL 2 DL violations (a non-simple property in a number/Self restriction, an
-// irregular role hierarchy) which HermiT also rejects.
+// CONSTRUCTION. The automata are built from the role box as a grammar (see
+// `RoleBox`) rather than by porting `connectAllAutomata`: HermiT's construction
+// depends on `HashMap` iteration order, and its `buildInversePropertiesMap`
+// reads `R ⊑ Inv(S)` as if `R` and `S` were declared inverses, so with a
+// transitive `S` it propagates `∀R.C` along `Inv(S)`-chains. Inverse roles,
+// symmetric and equivalent roles and chains through inverses are all covered by
+// closing the inclusions under inverse and building one automaton per class of
+// equivalent roles. HermiT's structural regularity checks are kept; an
+// irregular role box they miss is rejected when its automata would depend on
+// each other.
 
 use std::collections::{HashMap, HashSet};
 
@@ -43,9 +25,7 @@ use horned_owl::model::{Build, ClassExpression as CE, Individual};
 
 use crate::graph::Graph;
 
-use super::automaton::{
-    automata_connector, mirrored_copy, Automaton,
-};
+use super::automaton::{automata_connector, mirrored_copy, Automaton, State};
 use super::owl_axioms::Fact;
 use super::{
     inverse_property, is_anonymous_property, ClassExpr, ExpressionManager, ObjectPropExpr,
@@ -55,19 +35,10 @@ use super::{
 const OWL_THING: &str = "http://www.w3.org/2002/07/owl#Thing";
 const OWL_NOTHING: &str = "http://www.w3.org/2002/07/owl#Nothing";
 
-/// A canonical, run-stable ordering key for an object-property expression.
-///
-/// HermiT's role-automaton construction (`ObjectPropertyInclusionManager`) keeps
-/// its working automata in `java.util.HashMap`/`HashSet`s and is *order-sensitive*:
-/// `automataConnector` disjoint-unions states on every inverse-enrichment, so the
-/// automaton a property ends up with depends on the order in which the maps are
-/// iterated. Java's hashing is content-based and unseeded, so that order is stable
-/// across runs and the construction is reproducible; Rust's `RandomState` reseeds
-/// per process, so the unsorted iteration produced a *different* automaton each run
-/// (under-enriched -> incomplete, or over-enriched -> unsound). We therefore iterate
-/// every such collection in this fixed order, which makes the construction
-/// deterministic and confluent. Named properties sort before their inverses, then
-/// by IRI -- a total order on the property expressions actually built.
+/// A canonical, run-stable ordering key for an object-property expression:
+/// named properties sort before their inverses, then by IRI. The automata are
+/// built in this order so that their state numbering, and therefore the
+/// clauses `rewrite_axioms` emits, do not depend on `HashMap` iteration order.
 fn prop_sort_key(ope: &ObjectPropExpr) -> (u8, String) {
     use horned_owl::model::ObjectPropertyExpression as OPE;
     match ope {
@@ -76,61 +47,12 @@ fn prop_sort_key(ope: &ObjectPropExpr) -> (u8, String) {
     }
 }
 
-/// Java `String.hashCode()` over UTF-16 code units.
-fn java_string_hash(s: &str) -> i32 {
-    let mut h: i32 = 0;
-    for u in s.encode_utf16() {
-        h = h.wrapping_mul(31).wrapping_add(u as i32);
-    }
-    h
-}
-
-/// OWLAPI `IRI.hashCode()` = prefix.hashCode() + remainder.hashCode(), splitting the
-/// IRI at the last '#'/'/' (the NCName boundary for OBO/EFO IRIs).
-fn owlapi_iri_hash(iri: &str) -> i32 {
-    let split = iri.rfind(|c| c == '#' || c == '/').map(|i| i + 1).unwrap_or(0);
-    java_string_hash(&iri[..split]).wrapping_add(java_string_hash(&iri[split..]))
-}
-
-/// OWLAPI `OWLObjectPropertyExpression.hashCode()`. Reverse-engineered from the
-/// bundled OWLAPI: a named property hashes to `IRI.hashCode() + 128743`, and an
-/// inverse to the named hash `+ 131471`.
-fn owlapi_prop_hash(ope: &ObjectPropExpr) -> i32 {
-    use horned_owl::model::ObjectPropertyExpression as OPE;
-    match ope {
-        OPE::ObjectProperty(p) => owlapi_iri_hash(&p.0.to_string()).wrapping_add(128743),
-        OPE::InverseObjectProperty(p) => {
-            owlapi_iri_hash(&p.0.to_string()).wrapping_add(128743).wrapping_add(131471)
-        }
-    }
-}
-
-/// The `java.util.HashMap` table capacity holding `n` entries (default 16, doubling
-/// whenever `0.75 * capacity` would be below the entry count).
-fn java_hashmap_capacity(n: usize) -> usize {
-    let mut cap = 16usize;
-    while (cap as f64) * 0.75 < n as f64 {
-        cap <<= 1;
-    }
-    cap
-}
-
-/// A `java.util.HashMap` iteration-order key for `ope` among a collection of `n`
-/// entries: HermiT's automaton maps are `HashMap`s, iterated in bucket order
-/// `spread(hash) & (capacity-1)`. The construction is order-sensitive, so to match
-/// HermiT bit-for-bit we iterate in this order. `prop_sort_key` breaks bucket
-/// collisions deterministically (Java orders those by insertion; collisions are
-/// absent in the role boxes we target, and the tiebreak keeps us deterministic).
-fn java_map_order_key(ope: &ObjectPropExpr, n: usize) -> (i32, u8, String) {
-    let h = owlapi_prop_hash(ope);
-    let spread = h ^ ((h as u32 >> 16) as i32);
-    let bucket = spread & (java_hashmap_capacity(n) as i32 - 1);
-    let (tag, iri) = prop_sort_key(ope);
-    (bucket, tag, iri)
-}
-
 pub struct ObjectPropertyInclusionManager {
     automata_by_property: HashMap<ObjectPropExpr, Automaton>,
+    /// Whether the role box is irregular in a way HermiT's checks accept, so
+    /// that the automata are sound but need not be complete.
+    #[cfg_attr(not(test), allow(dead_code))]
+    irregular: bool,
     build: Build<super::A>,
     expression_manager: ExpressionManager,
 }
@@ -151,9 +73,10 @@ impl ObjectPropertyInclusionManager {
     /// `axioms.complex_object_property_expressions`.
     pub fn new(axioms: &mut OWLAxioms) -> Result<ObjectPropertyInclusionManager, String> {
         let mut automata_by_property: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
-        create_automata(&mut automata_by_property, axioms)?;
+        let irregular = create_automata(&mut automata_by_property, axioms)?;
         Ok(ObjectPropertyInclusionManager {
             automata_by_property,
+            irregular,
             build: Build::new_arc(),
             expression_manager: ExpressionManager::new(),
         })
@@ -376,21 +299,17 @@ fn is_owl_nothing(ce: &ClassExpr) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Automaton construction (forward fragment).
+// Automaton construction.
 // ---------------------------------------------------------------------------
 
+/// Builds the automata of the non-simple properties. Returns whether the role
+/// box turned out to be irregular in a way HermiT's checks accept (see
+/// `RoleBox::complete_automaton`).
 fn create_automata(
     automata_by_property: &mut HashMap<ObjectPropExpr, Automaton>,
     axioms: &mut OWLAxioms,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let simple: Vec<[ObjectPropExpr; 2]> = axioms.simple_object_property_inclusions.clone();
-    // Faithful port of Java `createAutomata`/`buildIndividualAutomata`: the raw
-    // `complexObjectPropertyInclusions` are passed straight through and the
-    // automaton is keyed on `superObjectProperty` EVEN WHEN it is anonymous
-    // (`Inv(r)`). `buildPropertyOrdering` adds edges to the anonymous super and
-    // the mirror-fill / inverse passes derive the named `r`. (Previously the
-    // Rust normalized an inverse super up front, S1∘...∘Sn ⊑ Inv(r) ⇒
-    // Inv(Sn)∘...∘Inv(S1) ⊑ r, keying on the named `r`; that diverged from Java.)
     let complex: Vec<(Vec<ObjectPropExpr>, ObjectPropExpr)> = axioms
         .complex_object_property_inclusions
         .iter()
@@ -402,186 +321,239 @@ fn create_automata(
         })
         .collect();
 
-    // The full role-box automaton machinery is ported: the forward chain
-    // fragment, plus the inverse/symmetric/equivalent extensions HermiT threads
-    // through `connectAllAutomata` / `finalizeConstruction`. Equivalent
-    // properties share automata; inverse sub/super-properties are handled by the
-    // mirror substitution / normalization; the symmetric splice and the
-    // transitive-inverse loop are applied in `finalize_construction`; and the
-    // inverse-union passes enrich a property's automaton with the (mirror of)
-    // its complex inverse's automaton.
+    // HermiT's structural regularity checks, kept so that the same role boxes
+    // are rejected with the same message.
     let equivalent = find_equivalent_properties(&simple);
-
     let property_dependency_graph = build_property_ordering(&simple, &complex, &equivalent)?;
     check_for_regularity(&property_dependency_graph, &equivalent)?;
 
-    let mut complex_dependency_graph = property_dependency_graph.clone();
-    let mut transitive_properties: HashSet<ObjectPropExpr> = HashSet::new();
-    let mut individual_automata = build_individual_automata(
-        &mut complex_dependency_graph,
-        &complex,
-        &equivalent,
-        &mut transitive_properties,
-    )?;
-
-    // Properties that are both symmetric (`r ⊑ Inv(r)` / `Inv(r) ⊑ r`)
-    // and complex need the symmetric language spliced into their automaton in
-    // `finalize_construction` (Java `findSymmetricProperties`, threaded into
-    // `finalizeConstruction`).
-    let symmetric_properties = find_symmetric_properties(&simple);
-    let inverse_map = build_inverse_properties_map(&simple);
-
-    let simple_properties = find_simple_properties(&complex_dependency_graph, &individual_automata);
-
-    let mut property_dependency_graph = property_dependency_graph;
-    property_dependency_graph.remove_elements(&simple_properties);
-    complex_dependency_graph.remove_elements(&simple_properties);
-
-    for element in complex_dependency_graph.get_elements().clone() {
-        axioms.complex_object_property_expressions.insert(element);
+    let role_box = RoleBox::new(&simple, &complex);
+    let mut non_simple: Vec<ObjectPropExpr> = role_box.non_simple.iter().cloned().collect();
+    non_simple.sort_by_key(prop_sort_key);
+    let mut building: HashSet<ObjectPropExpr> = HashSet::new();
+    let mut irregular = false;
+    for property in &non_simple {
+        role_box.complete_automaton(property, automata_by_property, &mut building, &mut irregular);
+        axioms.complex_object_property_expressions.insert(property.clone());
     }
 
-    // A simple sub-property of a complex property contributes a direct
-    // transition into that property's automaton.
-    for inclusion in &simple {
-        if axioms.complex_object_property_expressions.contains(&inclusion[0])
-            && individual_automata.contains_key(&inclusion[1])
-        {
-            let automaton = individual_automata.get_mut(&inclusion[1]).unwrap();
-            let initial = automaton.initial_state();
-            let final_state = automaton.final_state();
-            automaton.add_transition(initial, Some(inclusion[0].clone()), final_state);
-        }
+    // Java always constructs an automaton for owl:topObjectProperty since it
+    // might occur in queries (the axiomatisation at query time fails
+    // otherwise): an initial -> final transition on the top role plus an ε
+    // loop (transitivity). See buildIndividualAutomata ~lines 784-800.
+    let top = top_object_property();
+    if !automata_by_property.contains_key(&top) {
+        let mut automaton = Automaton::new();
+        let initial = automaton.add_state(true, false);
+        let finalst = automaton.add_state(false, true);
+        automaton.add_transition(initial, Some(top.clone()), finalst);
+        automaton.add_transition(finalst, None, initial);
+        automata_by_property.insert(inverse_property(&top), mirrored_copy(&automaton));
+        automata_by_property.insert(top, automaton);
     }
+    Ok(irregular)
+}
 
-    let inverse_of_complex: Vec<ObjectPropExpr> = axioms
-        .complex_object_property_expressions
-        .iter()
-        .map(inverse_property)
-        .collect();
-    for property in inverse_of_complex {
-        axioms.complex_object_property_expressions.insert(property);
-    }
+/// The role box as a grammar: `w ⊑ R` holds exactly when `R` derives the word
+/// `w` from the told inclusions closed under inverse (`S1...Sn ⊑ R` also gives
+/// `Inv(Sn)...Inv(S1) ⊑ Inv(R)`). The automaton of a non-simple `R` accepts
+/// exactly the words `R` derives through chain inclusions; the tableau's
+/// role-inclusion clauses supply the simple hierarchy on each edge, so a simple
+/// sub-property needs no transition of its own.
+///
+/// This replaces HermiT's `connectAllAutomata`, whose output depends on
+/// `HashMap` iteration order and which treats `R ⊑ Inv(S)` as if `R` and `S`
+/// were declared inverses (`buildInversePropertiesMap`): with a transitive `S`
+/// that made `∀R.C` propagate along `Inv(S)`-chains, i.e. `Inv(S) ⊑ R`, which
+/// does not follow. The construction here is the one of Horrocks, Kutz and
+/// Sattler ("The Even More Irresistible SROIQ", KR 2006), over classes of
+/// equivalent roles.
+struct RoleBox {
+    /// `supers[X]`: the reflexive-transitive closure of the simple inclusions
+    /// (closed under inverse) above `X`.
+    supers: HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
+    /// Simple inclusions closed under inverse, in a fixed order.
+    inclusions: Vec<[ObjectPropExpr; 2]>,
+    /// Chain inclusions (length ≥ 2) closed under inverse, in a fixed order.
+    chains: Vec<(Vec<ObjectPropExpr>, ObjectPropExpr)>,
+    /// Roles with a chain inclusion below them, closed under inverse.
+    non_simple: HashSet<ObjectPropExpr>,
+}
 
-    connect_all_automata(
-        automata_by_property,
-        &property_dependency_graph,
-        &individual_automata,
-        &inverse_map,
-        &symmetric_properties,
-        &transitive_properties,
-    );
-
-    // `∀Inv(R).C` support: the automaton of an inverse property is the mirror
-    // of the property's automaton (HermiT's `finalizeConstruction`).
-    // Java runs the mirror-fill twice (ObjectPropertyInclusionManager.java
-    // :342-347 then 350-354), with a `putAll` of the staged mirrors into the live
-    // map BETWEEN the two passes, so the second pass observes inverses added by
-    // the first pass (mirrors of mirrors). Both passes use the same effective
-    // guard (line 351's first conjunct is always true while iterating the map):
-    // for each entry whose inverse has no automaton, stage `getMirroredCopy`.
-    for _ in 0..2 {
-        let mut existing: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        let n_existing = existing.len();
-        existing.sort_by_key(|(k, _)| java_map_order_key(k, n_existing));
-        let mut extra_inverse: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
-        for (property, automaton) in existing {
-            let inverse = inverse_property(&property);
-            if !automata_by_property.contains_key(&inverse) {
-                extra_inverse.insert(inverse, mirrored_copy(&automaton));
+impl RoleBox {
+    fn new(
+        simple: &[[ObjectPropExpr; 2]],
+        complex: &[(Vec<ObjectPropExpr>, ObjectPropExpr)],
+    ) -> RoleBox {
+        let mut inclusions: Vec<[ObjectPropExpr; 2]> = Vec::new();
+        for [sub, sup] in simple {
+            for inclusion in [
+                [sub.clone(), sup.clone()],
+                [inverse_property(sub), inverse_property(sup)],
+            ] {
+                if inclusion[0] != inclusion[1] && !inclusions.contains(&inclusion) {
+                    inclusions.push(inclusion);
+                }
             }
         }
-        automata_by_property.extend(extra_inverse);
+        let mut chains: Vec<(Vec<ObjectPropExpr>, ObjectPropExpr)> = Vec::new();
+        for (subs, sup) in complex {
+            let mirrored: Vec<ObjectPropExpr> = subs.iter().rev().map(inverse_property).collect();
+            for chain in [(subs.clone(), sup.clone()), (mirrored, inverse_property(sup))] {
+                if !chains.contains(&chain) {
+                    chains.push(chain);
+                }
+            }
+        }
+        let mut direct: HashMap<ObjectPropExpr, Vec<ObjectPropExpr>> = HashMap::new();
+        for [sub, sup] in &inclusions {
+            direct.entry(sub.clone()).or_default().push(sup.clone());
+        }
+        let mut roles: HashSet<ObjectPropExpr> = HashSet::new();
+        for [sub, sup] in &inclusions {
+            roles.insert(sub.clone());
+            roles.insert(sup.clone());
+        }
+        for (subs, sup) in &chains {
+            roles.extend(subs.iter().cloned());
+            roles.insert(sup.clone());
+        }
+        let mut supers: HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>> = HashMap::new();
+        for role in &roles {
+            let mut reached: HashSet<ObjectPropExpr> = HashSet::from([role.clone()]);
+            let mut pending = vec![role.clone()];
+            while let Some(current) = pending.pop() {
+                for sup in direct.get(&current).into_iter().flatten() {
+                    if reached.insert(sup.clone()) {
+                        pending.push(sup.clone());
+                    }
+                }
+            }
+            supers.insert(role.clone(), reached);
+        }
+        let mut non_simple: HashSet<ObjectPropExpr> = HashSet::new();
+        for (_, sup) in &chains {
+            non_simple.extend(supers[sup].iter().cloned());
+        }
+        RoleBox { supers, inclusions, chains, non_simple }
     }
 
-    // Port of `connectAllAutomata`'s final `inversePropertiesMap` pass: for every
-    // property with a *declared* inverse (an `InverseObjectProperties`/`r ⊑ Inv(s)`
-    // relationship), enrich the property's automaton with the (mirrored) automaton
-    // of its inverse, so `∀property.C` propagates along the inverse's reversed
-    // regular language. Without this, `∀r.C` over `InverseObjectProperties(r, s)`
-    // with a *complex* `s` (transitive / chain super-role) under-propagates.
-    // Java order: this pass runs INSIDE connectAllAutomata (line ~357) BEFORE the
-    // equivalent-role clone block (line ~207), so equivalent-role cloning sees the
-    // inverse-enriched automata (ObjectPropertyInclusionManager.java:357-372,207-228).
-    if !inverse_map.is_empty() {
-        // Java iterates the LIVE `completeAutomata` (ObjectPropertyInclusionManager
-        // .java:357-372). `autoOfPropExpr = entry.getValue()` is the live map's
-        // value; `increaseAutomatonWithInversePropertyAutomaton` mutates it in
-        // place, so the inverse automaton read by later iterations
-        // (`completeAutomata.get(inverseProp)`) observes enrichment accumulated by
-        // earlier iterations. The else-branch mirrors are staged with `put`
-        // (overwrite) and only merged into the live map at the closing `putAll`, so
-        // they are not visible to the in-loop live-map reads.
-        let mut keys: Vec<ObjectPropExpr> = automata_by_property.keys().cloned().collect();
-        let n_keys = keys.len();
-        keys.sort_by_key(|k| java_map_order_key(k, n_keys));
-        let mut extra: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
-        for property in keys {
-            let Some(inverses) = inverse_map.get(&property) else { continue };
-            let mut inverses: Vec<&ObjectPropExpr> = inverses.iter().collect();
-            let n_inv = inverses.len();
-            inverses.sort_by_key(|p| java_map_order_key(p, n_inv));
-            for inverse_prop in inverses {
-                if let Some(inverse_automaton) = automata_by_property.get(inverse_prop).cloned() {
-                    // Java line 363-364: enrich the live entry in place.
-                    let automaton = automata_by_property.get_mut(&property).unwrap();
-                    increase_automaton_with_inverse(automaton, &inverse_automaton);
+    fn is_sub_property(&self, sub: &ObjectPropExpr, sup: &ObjectPropExpr) -> bool {
+        sub == sup || self.supers.get(sub).is_some_and(|s| s.contains(sup))
+    }
+
+    /// Whether `a` and `b` are equivalent, so that `L(a) = L(b)`.
+    fn equivalent(&self, a: &ObjectPropExpr, b: &ObjectPropExpr) -> bool {
+        self.is_sub_property(a, b) && self.is_sub_property(b, a)
+    }
+
+    /// The automaton accepting the words `property` derives, memoised in
+    /// `complete`. A non-simple role of another class, which is smaller in the
+    /// regular order, is spliced in as its own complete automaton.
+    ///
+    /// HermiT's structural checks accept some role boxes whose classes depend
+    /// on each other (through equivalences or inverses those checks do not
+    /// close over); their languages need not be regular. There the dependency
+    /// is cut and the role is kept as a plain label: every accepted word is
+    /// still entailed, and `irregular` records that completeness is not
+    /// guaranteed, as it is not in HermiT.
+    fn complete_automaton(
+        &self,
+        property: &ObjectPropExpr,
+        complete: &mut HashMap<ObjectPropExpr, Automaton>,
+        building: &mut HashSet<ObjectPropExpr>,
+        irregular: &mut bool,
+    ) -> Automaton {
+        if let Some(automaton) = complete.get(property) {
+            return automaton.clone();
+        }
+        if is_anonymous_property(property) {
+            // `L(Inv(R))` is the mirror of `L(R)`.
+            let named = inverse_property(property);
+            if building.contains(&named) {
+                *irregular = true;
+                return single_transition_automaton(property);
+            }
+            let automaton =
+                mirrored_copy(&self.complete_automaton(&named, complete, building, irregular));
+            complete.insert(property.clone(), automaton.clone());
+            return automaton;
+        }
+        if building.contains(property) {
+            *irregular = true;
+            return single_transition_automaton(property);
+        }
+        building.insert(property.clone());
+        let in_class = |role: &ObjectPropExpr| self.equivalent(role, property);
+
+        // The skeleton: `initial -R-> final` plus one path per inclusion into
+        // the class of `R`, where an occurrence of the class itself at the start
+        // (end) of a chain becomes the final (initial) state.
+        let mut automaton = Automaton::new();
+        let initial = automaton.add_state(true, false);
+        let finalst = automaton.add_state(false, true);
+        let mut transitions: Vec<(State, Option<ObjectPropExpr>, State)> =
+            vec![(initial, Some(property.clone()), finalst)];
+        for [sub, sup] in &self.inclusions {
+            // A simple sub-property is covered by the role-inclusion clauses.
+            if in_class(sup) && !in_class(sub) && self.non_simple.contains(sub) {
+                transitions.push((initial, Some(sub.clone()), finalst));
+            }
+        }
+        for (subs, sup) in &self.chains {
+            if !in_class(sup) {
+                continue;
+            }
+            let n = subs.len();
+            let starts_in_class = in_class(&subs[0]);
+            let ends_in_class = in_class(&subs[n - 1]);
+            let middle = &subs[usize::from(starts_in_class)..n - usize::from(ends_in_class)];
+            let from = if starts_in_class { finalst } else { initial };
+            let to = if ends_in_class { initial } else { finalst };
+            if middle.is_empty() {
+                // `R ∘ R ⊑ R`: transitivity.
+                transitions.push((from, None, to));
+                continue;
+            }
+            let mut current = from;
+            for (index, role) in middle.iter().enumerate() {
+                let next = if index + 1 == middle.len() {
+                    to
                 } else {
-                    let mirrored = mirrored_copy(&automata_by_property[&property]);
-                    extra.insert(inverse_prop.clone(), mirrored);
-                }
+                    automaton.add_state(false, false)
+                };
+                transitions.push((current, Some(role.clone()), next));
+                current = next;
             }
         }
-        automata_by_property.extend(extra);
-    }
 
-    // Equivalent properties share an automaton: each equivalent of a property
-    // with an automaton gets a clone of it (and its inverse the mirror), porting
-    // `individualAutomataForEquivRoles`. Runs AFTER the inverse-map pass so that
-    // cloning sees inverse-enriched automata (Java: line ~207-228 after connectAllAutomata).
-    let mut snapshot: Vec<(ObjectPropExpr, Automaton)> = automata_by_property
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
-    let n_snap = snapshot.len();
-    snapshot.sort_by_key(|(k, _)| java_map_order_key(k, n_snap));
-    let mut equivalent_automata: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
-    for (property, automaton) in snapshot {
-        if let Some(equiv_set) = equivalent.get(&property) {
-            let mut equiv_set: Vec<&ObjectPropExpr> = equiv_set.iter().collect();
-            let n_eq = equiv_set.len();
-            equiv_set.sort_by_key(|p| java_map_order_key(p, n_eq));
-            for equiv_property in equiv_set {
-                if *equiv_property != property
-                    && !automata_by_property.contains_key(equiv_property)
-                {
-                    equivalent_automata.insert(equiv_property.clone(), automaton.clone());
-                    axioms
-                        .complex_object_property_expressions
-                        .insert(equiv_property.clone());
+        // Substitute each non-simple role by its automaton. A role of this
+        // class occurs inside a chain only in an irregular role box.
+        for (from, label, to) in transitions {
+            match label {
+                Some(role) if in_class(&role) && !(from == initial && to == finalst) => {
+                    *irregular = true;
+                    automaton.add_transition(from, Some(role), to);
                 }
-                let inverse_equiv = inverse_property(equiv_property);
-                if inverse_equiv != property
-                    && !automata_by_property.contains_key(&inverse_equiv)
-                {
-                    equivalent_automata.insert(inverse_equiv.clone(), mirrored_copy(&automaton));
-                    axioms
-                        .complex_object_property_expressions
-                        .insert(inverse_equiv);
+                Some(role) if !in_class(&role) && self.non_simple.contains(&role) => {
+                    let smaller = self.complete_automaton(&role, complete, building, irregular);
+                    automata_connector(&mut automaton, &smaller, from, to);
                 }
+                label => automaton.add_transition(from, label, to),
             }
         }
+        building.remove(property);
+        complete.insert(property.clone(), automaton.clone());
+        automaton
     }
-    // Merge the equivalent-role clones into the automata map (Java
-    // `automataByProperty.putAll(individualAutomataForEquivRoles)`, line ~228).
-    // Without this the clones built above are discarded, so a property equivalent
-    // to a complex one (e.g. `s` with `r ≡ s`, `r` transitive) gets no automaton
-    // and `∀s.C` fails to propagate along its (shared) chains.
-    automata_by_property.extend(equivalent_automata);
-    Ok(())
+}
+
+fn single_transition_automaton(property: &ObjectPropExpr) -> Automaton {
+    let mut automaton = Automaton::new();
+    let initial = automaton.add_state(true, false);
+    let finalst = automaton.add_state(false, true);
+    automaton.add_transition(initial, Some(property.clone()), finalst);
+    automaton
 }
 
 /// Port of `findEquivalentProperties`: groups mutually-included properties.
@@ -615,50 +587,6 @@ fn find_equivalent_properties(
         }
     }
     result
-}
-
-/// Port of `findSymmetricProperties` (~lines 230-238): a property is symmetric
-/// when it appears in an inclusion `R ⊑ Inv(R)` (equivalently `Inv(R) ⊑ R`).
-/// Both `R` and `Inv(R)` are recorded so the symmetric splice is applied to
-/// either orientation in `finalize_construction`.
-fn find_symmetric_properties(simple: &[[ObjectPropExpr; 2]]) -> HashSet<ObjectPropExpr> {
-    let mut result: HashSet<ObjectPropExpr> = HashSet::new();
-    for inclusion in simple {
-        if inverse_property(&inclusion[1]) == inclusion[0]
-            || inclusion[1] == inverse_property(&inclusion[0])
-        {
-            result.insert(inclusion[0].clone());
-            result.insert(inverse_property(&inclusion[0]));
-        }
-    }
-    result
-}
-
-/// Port of `buildInversePropertiesMap` (~lines 239-270): maps each property to
-/// the set of properties declared as its inverse via an inclusion whose other
-/// side is an `Inv(...)` expression (`InverseObjectProperties`, `R ⊑ Inv(S)`).
-fn build_inverse_properties_map(
-    simple: &[[ObjectPropExpr; 2]],
-) -> HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>> {
-    let mut map: HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>> = HashMap::new();
-    for inclusion in simple {
-        if is_anonymous_property(&inclusion[1]) {
-            map.entry(inclusion[0].clone())
-                .or_default()
-                .insert(inverse_property(&inclusion[1]));
-            map.entry(inverse_property(&inclusion[1]))
-                .or_default()
-                .insert(inclusion[0].clone());
-        } else if is_anonymous_property(&inclusion[0]) {
-            map.entry(inclusion[1].clone())
-                .or_default()
-                .insert(inverse_property(&inclusion[0]));
-            map.entry(inverse_property(&inclusion[0]))
-                .or_default()
-                .insert(inclusion[1].clone());
-        }
-    }
-    map
 }
 
 /// Port of `buildPropertyOrdering`: the sub→super dependency graph, raising the
@@ -754,108 +682,6 @@ fn check_for_regularity(
     Ok(())
 }
 
-/// Port of `buildIndividualAutomata`: the per-super-property automaton built
-/// directly from its complex inclusions (the four chain shapes).
-fn build_individual_automata(
-    complex_dependency_graph: &mut Graph<ObjectPropExpr>,
-    complex: &[(Vec<ObjectPropExpr>, ObjectPropExpr)],
-    equivalent: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    transitive_properties: &mut HashSet<ObjectPropExpr>,
-) -> Result<HashMap<ObjectPropExpr, Automaton>, String> {
-    // Java rewrites every chain transition label to the super-property when the
-    // label is equivalent to it (`if (equivalentPropertiesMap.containsKey(...)
-    // && ...contains(transitionLabel)) transitionLabel=superObjectProperty;`).
-    let substitute_label = |sup: &ObjectPropExpr, label: &ObjectPropExpr| -> ObjectPropExpr {
-        if equivalent.get(sup).is_some_and(|s| s.contains(label)) {
-            sup.clone()
-        } else {
-            label.clone()
-        }
-    };
-    let mut automata_map: HashMap<ObjectPropExpr, Automaton> = HashMap::new();
-    for (subs, sup) in complex {
-        let (initial_state, final_state) = if !automata_map.contains_key(sup) {
-            let mut automaton = Automaton::new();
-            let initial = automaton.add_state(true, false);
-            let finalst = automaton.add_state(false, true);
-            automaton.add_transition(initial, Some(sup.clone()), finalst);
-            automata_map.insert(sup.clone(), automaton);
-            (initial, finalst)
-        } else {
-            let automaton = &automata_map[sup];
-            (automaton.initial_state(), automaton.final_state())
-        };
-        let n = subs.len();
-        let automaton = automata_map.get_mut(sup).unwrap();
-        if n == 2 && subs[0] == *sup && subs[1] == *sup {
-            // R R -> R : transitivity (an ε loop final → initial).
-            automaton.add_transition(final_state, None, initial_state);
-            transitive_properties.insert(sup.clone());
-        } else if subs[0] == *sup {
-            // R S2 ... Sn -> R
-            let mut from_state = final_state;
-            for sub in subs.iter().take(n - 1).skip(1) {
-                from_state = automaton.add_new_transition(from_state, substitute_label(sup, sub));
-            }
-            automaton.add_transition(
-                from_state,
-                Some(substitute_label(sup, &subs[n - 1])),
-                final_state,
-            );
-        } else if subs[n - 1] == *sup {
-            // S1 ... Sn-1 R -> R
-            let mut from_state = initial_state;
-            for sub in subs.iter().take(n - 2) {
-                from_state = automaton.add_new_transition(from_state, substitute_label(sup, sub));
-            }
-            automaton.add_transition(
-                from_state,
-                Some(substitute_label(sup, &subs[n - 2])),
-                initial_state,
-            );
-        } else {
-            // S1 ... Sn -> R
-            let mut from_state = initial_state;
-            for sub in subs.iter().take(n - 1) {
-                from_state = automaton.add_new_transition(from_state, substitute_label(sup, sub));
-            }
-            automaton.add_transition(
-                from_state,
-                Some(substitute_label(sup, &subs[n - 1])),
-                final_state,
-            );
-        }
-    }
-    // A purely transitive super-property has no dependency edges; register it as
-    // a self-dependent complex property so it is not classified as simple.
-    for (subs, sup) in complex {
-        if subs.len() == 2 && subs[0] == *sup && subs[1] == *sup {
-            let inverse = inverse_property(sup);
-            if !complex_dependency_graph.get_elements().contains(sup)
-                && !automata_map.contains_key(&inverse)
-            {
-                complex_dependency_graph.add_edge(sup.clone(), sup.clone());
-                let mirrored = mirrored_copy(&automata_map[sup]);
-                automata_map.insert(inverse, mirrored);
-            }
-        }
-    }
-    // Java always constructs an automaton for owl:topObjectProperty since it
-    // might occur in queries (the axiomatisation at query time fails otherwise):
-    // an initial -> final transition on the top role plus an ε self-loop
-    // (transitivity). See buildIndividualAutomata ~lines 784-800.
-    let top = top_object_property();
-    if !automata_map.contains_key(&top) {
-        let mut automaton = Automaton::new();
-        let initial = automaton.add_state(true, false);
-        let finalst = automaton.add_state(false, true);
-        automaton.add_transition(initial, Some(top.clone()), finalst);
-        automaton.add_transition(finalst, None, initial); // transitivity
-        automata_map.insert(top, automaton);
-    }
-    Ok(automata_map)
-}
-
 /// The `owl:topObjectProperty` expression (Java's
 /// `df.getOWLTopObjectProperty()`).
 fn top_object_property() -> ObjectPropExpr {
@@ -865,593 +691,306 @@ fn top_object_property() -> ObjectPropExpr {
     )
 }
 
-/// Port of `findSimpleProperties`.
-fn find_simple_properties(
-    complex_dependency_graph: &Graph<ObjectPropExpr>,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-) -> HashSet<ObjectPropExpr> {
-    let mut simple_properties: HashSet<ObjectPropExpr> = HashSet::new();
-
-    let mut with_inverses = complex_dependency_graph.clone();
-    for property1 in complex_dependency_graph.get_elements().clone() {
-        for property2 in complex_dependency_graph.get_successors(&property1) {
-            with_inverses.add_edge(inverse_property(&property1), inverse_property(&property2));
-        }
-    }
-
-    let mut inverted = with_inverses.get_inverse();
-    inverted.transitively_close();
-
-    for property in inverted.get_elements().clone() {
-        let mut has_complex_subproperty = false;
-        for sub in inverted.get_successors(&property) {
-            if individual_automata.contains_key(&sub)
-                || individual_automata.contains_key(&inverse_property(&sub))
-            {
-                has_complex_subproperty = true;
-                break;
-            }
-        }
-        if !has_complex_subproperty
-            && !individual_automata.contains_key(&property)
-            && !individual_automata.contains_key(&inverse_property(&property))
-        {
-            simple_properties.insert(property);
-        }
-    }
-    simple_properties
-}
-
-/// Port of `increaseWithDefinedInverseIfNecessary` (Java 541-556): if the
-/// property has a declared inverse in `inversePropertiesMap` with its own
-/// individual automaton, splice that inverse's individual automaton into this
-/// property's automaton before `finalizeConstruction`.
-fn increase_with_defined_inverse_if_necessary(
-    property: &ObjectPropExpr,
-    automaton: &mut Automaton,
-    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-) {
-    if let Some(inverses) = inverse_map.get(property) {
-        for inverse in inverses {
-            if individual_automata.contains_key(inverse) && inverse != property {
-                // Java 548: splice the inverse's INDIVIDUAL automaton.
-                let inv_auto = individual_automata[inverse].clone();
-                increase_automaton_with_inverse(automaton, &inv_auto);
-            }
-        }
-    } else {
-        // Java 552-555: else-if Inv(R) (anonymous) has an individual automaton.
-        let inv_prop = inverse_property(property);
-        if individual_automata.contains_key(&inv_prop) {
-            let inv_auto = individual_automata[&inv_prop].clone();
-            increase_automaton_with_inverse(automaton, &inv_auto);
-        }
-    }
-}
-
-fn increase_automaton_with_inverse(property_automaton: &mut Automaton, inverse_automaton: &Automaton) {
-    let initial = property_automaton.initial_state();
-    let finalst = property_automaton.final_state();
-    let mirrored = mirrored_copy(inverse_automaton);
-    automata_connector(property_automaton, &mirrored, initial, finalst);
-}
-
-/// Port of `connectAllAutomata`: builds each property's complete automaton by
-/// substituting its sub-properties' automata, then finalizes each (transitive-
-/// inverse ε-loop + symmetric splice). The `inverse_dependency_graph` /
-/// `symmetric_properties` / `transitive_properties` are threaded through so
-/// `finalize_construction` (Java's `finalizeConstruction`) can be applied at the
-/// point each automaton is completed.
-fn connect_all_automata(
-    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
-    property_dependency_graph: &Graph<ObjectPropExpr>,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    symmetric_properties: &HashSet<ObjectPropExpr>,
-    transitive_properties: &HashSet<ObjectPropExpr>,
-) {
-    let mut trans_closed = property_dependency_graph.clone();
-    trans_closed.transitively_close();
-
-    let mut properties_to_start: Vec<ObjectPropExpr> = Vec::new();
-    for prop in trans_closed.get_elements() {
-        if trans_closed.successors_is_empty(prop) {
-            properties_to_start.push(prop.clone());
-        }
-    }
-    // Java seeds the recursion with the SINKS of the transitively-closed
-    // dependency graph only (`propertiesToStartRecursion`), and everything else is
-    // reached by the descent from them. Which seed is walked first decides whether
-    // a property or its inverse is built directly and which one becomes the
-    // mirror; `build_complete_automaton_inner` splices the sub-properties of both
-    // sides into whichever is built first, so the answer no longer depends on that
-    // order (EBISPOT/hermit-rs#5). The order still shapes the automaton, so it is
-    // fixed to Java's for a like-for-like clause dump.
-    let n_pts = properties_to_start.len();
-    properties_to_start.sort_by_key(|p| java_map_order_key(p, n_pts));
-    // Seed order shapes the NFA, so keep it reproducible. Completeness and
-    // soundness come from completing both orientations with their chain paths
-    // intact, not from relying on a particular property IRI hash order.
-    let inverse_dependency_graph = property_dependency_graph.get_inverse();
-
-    // Tracks the properties currently on the recursion stack, so a cyclic
-    // complex-property dependency is broken instead of recursing forever (see the
-    // guard in `build_complete_automaton`). Balanced insert/remove keeps it empty
-    // between top-level seeds.
-    let mut building: HashSet<ObjectPropExpr> = HashSet::new();
-    for superproperty in properties_to_start {
-        build_complete_automaton(
-            &superproperty,
-            individual_automata,
-            complete_automata,
-            &inverse_dependency_graph,
-            inverse_map,
-            symmetric_properties,
-            transitive_properties,
-            &mut building,
-        );
-    }
-
-    // Port of `connectAllAutomata`'s leftover-individual-automata loop
-    // (~lines 329-341). For each property with an individual automaton lacking a
-    // complete automaton, if its inverse has an automaton (in `complete_automata`,
-    // where the inverse is in the dependency graph, or in `individual_automata`),
-    // enrich the property's automaton with the (mirror of the) inverse's
-    // automaton before storing it, so `∀property.C` propagates along the
-    // inverse of a complex role even when the property is only a leftover leaf.
-    let mut individual_keys: Vec<&ObjectPropExpr> = individual_automata.keys().collect();
-    let n_ik = individual_keys.len();
-    individual_keys.sort_by_key(|p| java_map_order_key(p, n_ik));
-    for property in individual_keys {
-        let automaton = &individual_automata[property];
-        if complete_automata.contains_key(property) {
-            continue;
-        }
-        let inverse = inverse_property(property);
-        let inverse_in_graph = inverse_dependency_graph.get_elements().contains(&inverse);
-        let mut property_automaton = automaton.clone();
-        // Java gates on `(complete.has(inv) && invGraph.contains(inv)) ||
-        // individual.has(inv)`, then ALWAYS prefers `complete.get(inv)`,
-        // falling back to `individual.get(inv)` only when the complete
-        // automaton is absent.
-        if (complete_automata.contains_key(&inverse) && inverse_in_graph)
-            || individual_automata.contains_key(&inverse)
-        {
-            let inverse_automaton = complete_automata
-                .get(&inverse)
-                .or_else(|| individual_automata.get(&inverse))
-                .cloned();
-            if let Some(inverse_automaton) = inverse_automaton {
-                increase_automaton_with_inverse(&mut property_automaton, &inverse_automaton);
-            }
-        }
-        // Java line 339: bare put — no transitive-ε loop, no symmetric splice, no
-        // inverse mirror; those are applied by `finalize_construction` and the
-        // inverse-map / equivalent-role passes that follow.
-        complete_automata.insert(property.clone(), property_automaton);
-    }
-}
-
-/// Port of `finalizeConstruction` (~lines 524-540). Applies the two language
-/// extensions HermiT adds once a property's automaton is otherwise complete and
-/// stores the automaton (and the mirror for its inverse):
-///   * if `Inv(R)` is transitive, an ε transition `terminal -> initial`
-///     (so `∀R.C` keeps propagating around the transitive loop);
-///   * if `R` is symmetric, splice `getMirroredCopy(automaton)` along an
-///     `Inv(R)`-labelled basic transition, so the symmetric (reversed)
-///     language is recognised even for a *non-simple* `R`.
-fn finalize_construction(
-    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
-    property: &ObjectPropExpr,
-    mut automaton: Automaton,
-    symmetric_properties: &HashSet<ObjectPropExpr>,
-    transitive_properties: &HashSet<ObjectPropExpr>,
-) {
-    if transitive_properties.contains(&inverse_property(property)) {
-        let terminal = automaton.final_state();
-        let initial = automaton.initial_state();
-        automaton.add_transition(terminal, None, initial);
-    }
-    if symmetric_properties.contains(property) {
-        // The basic `Inv(R)`-labelled transition the mirror is spliced into runs
-        // from the automaton's initial to its terminal state (Java
-        // `new Transition(initials, Inv(R), terminals)`).
-        let initial = automaton.initial_state();
-        let terminal = automaton.final_state();
-        let mirrored = mirrored_copy(&automaton);
-        automata_connector(&mut automaton, &mirrored, initial, terminal);
-    }
-    complete_automata.insert(property.clone(), automaton.clone());
-    // Java stores the authoritative mirror for the inverse unconditionally
-    // (`completeAutomata.put(prop.getInverseProperty(), getMirroredCopy(auto))`),
-    // replacing any entry an earlier mutually-recursive step left behind.
-    complete_automata.insert(inverse_property(property), mirrored_copy(&automaton));
-}
-
-/// Port of `buildCompleteAutomataForProperties` (forward fragment), finalizing
-/// each completed automaton via `finalize_construction`. Wrapper: the memo check
-/// plus a cycle guard on `building` (the set of properties currently on the build
-/// stack). Because the seeding above starts the recursion from EVERY property (not
-/// just Java's sinks, for forward-chain completeness), a cyclic complex-property
-/// dependency — e.g. equivalent properties with cross-chains (`a≡b`, `a∘x⊑b`,
-/// `b∘y⊑a`) give `a→b→a` — would otherwise recurse forever. Java never enters such
-/// a cycle. On re-entry of a property still being built, return its own
-/// (individual, else single-transition) language to break the loop; the outer
-/// build still completes and stores the full automaton. Acyclic hierarchies
-/// (including EFO) never re-enter, so this is behaviour-preserving for them.
-#[allow(clippy::too_many_arguments)]
-fn build_complete_automaton(
-    property: &ObjectPropExpr,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
-    inverse_dependency_graph: &Graph<ObjectPropExpr>,
-    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    symmetric_properties: &HashSet<ObjectPropExpr>,
-    transitive_properties: &HashSet<ObjectPropExpr>,
-    building: &mut HashSet<ObjectPropExpr>,
-) -> Automaton {
-    if let Some(automaton) = complete_automata.get(property) {
-        return automaton.clone();
-    }
-    if building.contains(property) {
-        return individual_automata.get(property).cloned().unwrap_or_else(|| {
-            let mut automaton = Automaton::new();
-            let initial = automaton.add_state(true, false);
-            let finalst = automaton.add_state(false, true);
-            automaton.add_transition(initial, Some(property.clone()), finalst);
-            automaton
-        });
-    }
-    building.insert(property.clone());
-    let result = build_complete_automaton_inner(
-        property,
-        individual_automata,
-        complete_automata,
-        inverse_dependency_graph,
-        inverse_map,
-        symmetric_properties,
-        transitive_properties,
-        building,
-    );
-    building.remove(property);
-    result
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_complete_automaton_inner(
-    property: &ObjectPropExpr,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
-    inverse_dependency_graph: &Graph<ObjectPropExpr>,
-    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    symmetric_properties: &HashSet<ObjectPropExpr>,
-    transitive_properties: &HashSet<ObjectPropExpr>,
-    building: &mut HashSet<ObjectPropExpr>,
-) -> Automaton {
-    // Java 384-388: for ANY property (named or anonymous) whose inverse already
-    // has a COMPLETE automaton and which has no individual automaton, the complete
-    // automaton is the mirror of the inverse's complete automaton. Gated only by
-    // `completeAutomata.containsKey(Inv(R)) && !individualAutomata.containsKey(R)`.
-    if complete_automata.contains_key(&inverse_property(property))
-        && !individual_automata.contains_key(property)
-    {
-        let mirrored = mirrored_copy(&complete_automata[&inverse_property(property)]);
-        complete_automata.insert(property.clone(), mirrored.clone());
-        return mirrored;
-    }
-
-    // Java 390: a property is a "leaf" only when neither it nor its inverse has
-    // any complex sub-property in the dependency graph.
-    // Both sets are walked below; sort them so the automaton (state numbering,
-    // splice order) does not depend on `HashSet` iteration order.
-    let mut sub_properties: Vec<ObjectPropExpr> =
-        inverse_dependency_graph.get_successors(property).into_iter().collect();
-    sub_properties.sort_by_key(prop_sort_key);
-    let mut inverse_sub_properties: Vec<ObjectPropExpr> = inverse_dependency_graph
-        .get_successors(&inverse_property(property))
-        .into_iter()
-        .collect();
-    inverse_sub_properties.sort_by_key(prop_sort_key);
-
-    if sub_properties.is_empty() && inverse_sub_properties.is_empty() {
-        // Leaf property.
-        if let Some(own) = individual_automata.get(property).cloned() {
-            // Java 432-446: has its own automaton; enrich with the inverse's
-            // language and finalize.
-            return apply_inverse_and_finalize(
-                property,
-                own,
-                individual_automata,
-                complete_automata,
-                inverse_dependency_graph,
-                inverse_map,
-                symmetric_properties,
-                transitive_properties,
-                true,
-                building,
-            );
-        }
-        // Java 393-417: no own automaton. If a declared inverse has its own
-        // automaton, the leaf automaton is the mirror of that inverse's COMPLETE
-        // automaton (stored directly, without finalization).
-        if let Some(inverses) = inverse_map.get(property) {
-            for inverse in inverses {
-                if individual_automata.contains_key(inverse) && inverse != property {
-                    let inv_complete = build_complete_automaton(
-                        inverse,
-                        individual_automata,
-                        complete_automata,
-                        inverse_dependency_graph,
-                        inverse_map,
-                        symmetric_properties,
-                        transitive_properties,
-                        building,
-                    );
-                    let mirrored = mirrored_copy(&inv_complete);
-                    complete_automata.insert(property.clone(), mirrored.clone());
-                    return mirrored;
-                }
-            }
-        } else if individual_automata.contains_key(&inverse_property(property)) {
-            // Java 407-417: else-if Inv(R) has an automaton.
-            let inv_prop = inverse_property(property);
-            let inv_complete = build_complete_automaton(
-                &inv_prop,
-                individual_automata,
-                complete_automata,
-                inverse_dependency_graph,
-                inverse_map,
-                symmetric_properties,
-                transitive_properties,
-                building,
-            );
-            if complete_automata.contains_key(property) {
-                return complete_automata[property].clone();
-            }
-            let mirrored = mirrored_copy(&inv_complete);
-            complete_automata.insert(property.clone(), mirrored.clone());
-            return mirrored;
-        }
-        // Java 418-430: no inverse with an automaton; a single-transition
-        // automaton, finalized.
-        let mut automaton = Automaton::new();
-        let initial = automaton.add_state(true, false);
-        let finalst = automaton.add_state(false, true);
-        automaton.add_transition(initial, Some(property.clone()), finalst);
-        finalize_construction(
-            complete_automata,
-            property,
-            automaton,
-            symmetric_properties,
-            transitive_properties,
-        );
-        return complete_automata[property].clone();
-    }
-
-    // Non-leaf property.
-    let has_own_automaton = individual_automata.contains_key(property);
-    let bigger = if let Some(bigger) = individual_automata.get(property).cloned() {
-        // The property has its own automaton; substitute sub-property automata
-        // into every transition labelled by a (complex) sub-property.
-        let mut bigger = bigger;
-        for smaller_property in &sub_properties {
-            let mut matched = false;
-            for transition in bigger.delta() {
-                if transition.label.as_ref() == Some(smaller_property) {
-                    let smaller = build_complete_automaton(
-                        smaller_property,
-                        individual_automata,
-                        complete_automata,
-                        inverse_dependency_graph,
-                        inverse_map,
-                        symmetric_properties,
-                        transitive_properties,
-                        building,
-                    );
-                    if smaller.delta().len() != 1 {
-                        automata_connector(
-                            &mut bigger,
-                            &smaller,
-                            transition.start,
-                            transition.end,
-                        );
-                    }
-                    matched = true;
-                }
-            }
-            if !matched {
-                let smaller = build_complete_automaton(
-                    smaller_property,
-                    individual_automata,
-                    complete_automata,
-                    inverse_dependency_graph,
-                    inverse_map,
-                    symmetric_properties,
-                    transitive_properties,
-                    building,
-                );
-                let initial = bigger.initial_state();
-                let finalst = bigger.final_state();
-                automata_connector(&mut bigger, &smaller, initial, finalst);
-            }
-        }
-        bigger
-    } else {
-        // No own automaton: a fresh initial→final transition, with each
-        // sub-property's automaton spliced in (and a direct sub-property edge).
-        let mut bigger = Automaton::new();
-        let initial = bigger.add_state(true, false);
-        let finalst = bigger.add_state(false, true);
-        bigger.add_transition(initial, Some(property.clone()), finalst);
-        for smaller_property in &sub_properties {
-            let smaller = build_complete_automaton(
-                smaller_property,
-                individual_automata,
-                complete_automata,
-                inverse_dependency_graph,
-                inverse_map,
-                symmetric_properties,
-                transitive_properties,
-                building,
-            );
-            automata_connector(&mut bigger, &smaller, initial, finalst);
-            bigger.add_transition(initial, Some(smaller_property.clone()), finalst);
-        }
-        bigger
+/// Brute-force cross-check of the role automata against the RBox they encode.
+///
+/// For regular RBoxes of inclusions (no reflexivity), a role word `w` is a
+/// sub-role of `P` exactly when `P` derives `w` in the grammar of the RBox's
+/// inclusions closed under inverse (`S1...Sn ⊑ R` also gives
+/// `Inv(Sn)...Inv(S1) ⊑ Inv(R)`): `∀P.C` is propagated along walks, so a
+/// word such as `R Inv(R) R` is a walk even where the model folds it back.
+/// A `∀P.C` restriction propagates along the words `P`'s automaton accepts,
+/// widened letter by letter by the simple role hierarchy, which the tableau's
+/// role-inclusion clauses apply. So, for every random RBox and every word up to
+/// a bounded length:
+/// * every word the automaton accepts is derivable (soundness);
+/// * every derivable word is covered by an accepted word (completeness), and
+///   a property without an automaton derives only single letters.
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+    use horned_owl::model::{
+        Component, EquivalentObjectProperties, InverseObjectProperties, MutableOntology,
+        SubObjectPropertyExpression as SOPE, SubObjectPropertyOf, SymmetricObjectProperty,
+        TransitiveObjectProperty,
     };
+    use horned_owl::ontology::set::SetOntology;
 
-    // Dependencies of Inv(R) include both genuine sub-properties and roles
-    // occurring inside chains. Preserve the inverse's path structure while
-    // completing those dependencies: a chain S o Inv(R) <= Inv(R) does NOT
-    // entail Inv(S) <= R. Splicing each dependency directly between R's initial
-    // and final states loses the rest of the chain and invents that inclusion.
-    let mut bigger = bigger;
-    let declared_inverses = inverse_map.get(property);
-    let inverse_dependencies: Vec<_> = inverse_sub_properties.iter().filter(|smaller| {
-        *smaller != property && !declared_inverses.is_some_and(|s| s.contains(*smaller))
-    }).collect();
-    if !inverse_dependencies.is_empty() {
-        let inverse = inverse_property(property);
-        let mut fragment = individual_automata.get(&inverse).cloned().unwrap_or_else(|| {
-            let mut a = Automaton::new();
-            let start = a.add_state(true, false);
-            let end = a.add_state(false, true);
-            a.add_transition(start, Some(inverse), end);
-            a
-        });
-        for smaller_property in inverse_dependencies {
-            let smaller = build_complete_automaton(
-                smaller_property, individual_automata, complete_automata,
-                inverse_dependency_graph, inverse_map, symmetric_properties,
-                transitive_properties, building,
-            );
-            let transitions: Vec<_> = fragment.delta().into_iter().filter(|t| {
-                t.label.as_ref() == Some(smaller_property)
-            }).collect();
-            if transitions.is_empty() {
-                // A dependency absent from the individual chain automaton came
-                // from a simple sub-property inclusion and contributes a full path.
-                let start = fragment.initial_state();
-                let end = fragment.final_state();
-                automata_connector(&mut fragment, &smaller, start, end);
-            } else {
-                for transition in transitions {
-                    automata_connector(&mut fragment, &smaller, transition.start, transition.end);
+    use crate::structural::OWLNormalization;
+
+    const ROLES: usize = 3;
+    const MAX_LENGTH: usize = 4;
+
+    /// Letter `2i` is role `i`, letter `2i + 1` its inverse.
+    struct Grammar {
+        letters: Vec<ObjectPropExpr>,
+        /// `up[l]`: the letters reachable from `l` by simple inclusions,
+        /// reflexively and transitively.
+        up: Vec<HashSet<usize>>,
+        chains: Vec<(Vec<usize>, usize)>,
+    }
+
+    impl Grammar {
+        fn letter(&self, ope: &ObjectPropExpr) -> usize {
+            self.letters.iter().position(|l| l == ope).expect("letter")
+        }
+
+        fn new(letters: Vec<ObjectPropExpr>, axioms: &OWLAxioms) -> Grammar {
+            let mut grammar = Grammar { up: Vec::new(), chains: Vec::new(), letters };
+            let n = grammar.letters.len();
+            let mut up: Vec<HashSet<usize>> = (0..n).map(|l| HashSet::from([l])).collect();
+            for [sub, sup] in &axioms.simple_object_property_inclusions {
+                let (sub, sup) = (grammar.letter(sub), grammar.letter(sup));
+                up[sub].insert(sup);
+                up[sub ^ 1].insert(sup ^ 1);
+            }
+            loop {
+                let mut changed = false;
+                for l in 0..n {
+                    for m in up[l].clone() {
+                        for k in up[m].clone() {
+                            changed |= up[l].insert(k);
+                        }
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+            grammar.up = up;
+            for inclusion in &axioms.complex_object_property_inclusions {
+                let subs: Vec<usize> = inclusion
+                    .sub_object_properties
+                    .iter()
+                    .map(|s| grammar.letter(s))
+                    .collect();
+                let sup = grammar.letter(&inclusion.super_object_property);
+                let mirrored = subs.iter().rev().map(|s| s ^ 1).collect();
+                grammar.chains.push((subs, sup));
+                grammar.chains.push((mirrored, sup ^ 1));
+            }
+            grammar
+        }
+
+        /// The letters deriving each factor `w[i..j]`, indexed `[i][j]`.
+        fn derivations(&self, word: &[usize]) -> Vec<Vec<HashSet<usize>>> {
+            let n = word.len();
+            let mut table = vec![vec![HashSet::new(); n + 1]; n + 1];
+            for length in 1..=n {
+                for i in 0..=n - length {
+                    let j = i + length;
+                    let mut direct: HashSet<usize> = HashSet::new();
+                    if length == 1 {
+                        direct.insert(word[i]);
+                    }
+                    for (subs, sup) in &self.chains {
+                        if subs.len() <= length && Self::splits(&table, subs, i, j) {
+                            direct.insert(*sup);
+                        }
+                    }
+                    table[i][j] = direct.iter().flat_map(|l| self.up[*l].iter().copied()).collect();
+                }
+            }
+            table
+        }
+
+        /// Whether `w[i..j]` splits into non-empty factors derived by `subs`.
+        fn splits(table: &[Vec<HashSet<usize>>], subs: &[usize], i: usize, j: usize) -> bool {
+            match subs {
+                [] => i == j,
+                [last] => i < j && table[i][j].contains(last),
+                [first, rest @ ..] => (i + 1..j)
+                    .any(|k| table[i][k].contains(first) && Self::splits(table, rest, k, j)),
+            }
+        }
+    }
+
+    /// Whether `automaton` accepts a word whose `i`-th label is one of `word[i]`.
+    fn accepts(automaton: &Automaton, word: &[HashSet<ObjectPropExpr>]) -> bool {
+        let mut pending: Vec<(State, usize)> =
+            automaton.initials().into_iter().map(|s| (s, 0)).collect();
+        let mut seen = HashSet::new();
+        let delta = automaton.delta();
+        while let Some((state, position)) = pending.pop() {
+            if !seen.insert((state, position)) {
+                continue;
+            }
+            if position == word.len() && automaton.is_terminal(state) {
+                return true;
+            }
+            for transition in delta.iter().filter(|t| t.start == state) {
+                match &transition.label {
+                    None => pending.push((transition.end, position)),
+                    Some(label) if word.get(position).is_some_and(|w| w.contains(label)) => {
+                        pending.push((transition.end, position + 1))
+                    }
+                    Some(_) => {}
                 }
             }
         }
-        let initial = bigger.initial_state();
-        let finalst = bigger.final_state();
-        automata_connector(&mut bigger, &mirrored_copy(&fragment), initial, finalst);
+        false
     }
 
-    // Java applies the inverse-handling + finalize tail to the no-own-automaton
-    // non-leaf case TWICE: once inside the `biggerPropertyAutomaton==null` block
-    // (lines 471-485) and once at the shared tail (lines 506-520). The has-own
-    // case (lines 487-505) only reaches the shared tail. The second pass over the
-    // no-own automaton re-applies the inverse splice in place (finalize is then
-    // skipped because the automaton is already stored).
-    let first = apply_inverse_and_finalize(
-        property,
-        bigger,
-        individual_automata,
-        complete_automata,
-        inverse_dependency_graph,
-        inverse_map,
-        symmetric_properties,
-        transitive_properties,
-        false,
-        building,
-    );
-    if has_own_automaton {
-        first
-    } else {
-        apply_inverse_and_finalize(
-            property,
-            first,
-            individual_automata,
-            complete_automata,
-            inverse_dependency_graph,
-            inverse_map,
-            symmetric_properties,
-            transitive_properties,
-            false,
-            building,
-        )
-    }
-}
+    /// A small xorshift generator: the cases are reproducible from the seed.
+    struct Random(u64);
 
-/// Port of the inverse-handling + `finalizeConstruction` tail shared by the leaf
-/// and non-leaf branches of `buildCompleteAutomataForProperties` (Java 432-446 /
-/// 505-524). When `Inv(R)` is anonymous and has its own automaton, the COMPLETE
-/// automaton of `Inv(R)` is spliced in (case "a"); otherwise the declared
-/// inverses' INDIVIDUAL automata are spliced via `increaseWithDefinedInverseIfNecessary`
-/// (case "b"). `unconditional_finalize` reproduces the leaf-with-own-automaton
-/// case "b", which finalizes regardless of whether a complete automaton already
-/// exists.
-#[allow(clippy::too_many_arguments)]
-fn apply_inverse_and_finalize(
-    property: &ObjectPropExpr,
-    mut automaton: Automaton,
-    individual_automata: &HashMap<ObjectPropExpr, Automaton>,
-    complete_automata: &mut HashMap<ObjectPropExpr, Automaton>,
-    inverse_dependency_graph: &Graph<ObjectPropExpr>,
-    inverse_map: &HashMap<ObjectPropExpr, HashSet<ObjectPropExpr>>,
-    symmetric_properties: &HashSet<ObjectPropExpr>,
-    transitive_properties: &HashSet<ObjectPropExpr>,
-    unconditional_finalize: bool,
-    building: &mut HashSet<ObjectPropExpr>,
-) -> Automaton {
-    let inv_prop = inverse_property(property);
-    // `Inv(R)` is anonymous exactly when `R` is a named property.
-    let inverse_is_anonymous = !is_anonymous_property(property);
-    if inverse_is_anonymous && individual_automata.contains_key(&inv_prop) {
-        let inv_complete = build_complete_automaton(
-            &inv_prop,
-            individual_automata,
-            complete_automata,
-            inverse_dependency_graph,
-            inverse_map,
-            symmetric_properties,
-            transitive_properties,
-            building,
-        );
-        increase_automaton_with_inverse(&mut automaton, &mirrored_copy(&inv_complete));
-        if !complete_automata.contains_key(property) {
-            finalize_construction(
-                complete_automata,
-                property,
-                automaton,
-                symmetric_properties,
-                transitive_properties,
-            );
+    impl Random {
+        fn below(&mut self, n: usize) -> usize {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % n as u64) as usize
         }
-        // Java 509-512: when `R` is ALREADY in completeAutomata (cached, as the
-        // mirror written by the inverse's `finalizeConstruction` at Java 539 during
-        // the `buildCompleteAutomataForProperties(Inv(R))` call above), Java
-        // DISCARDS the locally built automaton and adopts the cached one
-        // (`biggerPropertyAutomaton = completeAutomata.get(R)`). We do the same;
-        // because `Inv(R)` was built with `R`'s sub-properties spliced in (see the
-        // inverse-side splice in `build_complete_automaton_inner`), that mirror
-        // already carries `R`'s sub-chains and nothing is lost here.
-    } else {
-        increase_with_defined_inverse_if_necessary(
-            property,
-            &mut automaton,
-            inverse_map,
-            individual_automata,
-        );
-        if unconditional_finalize || !complete_automata.contains_key(property) {
-            finalize_construction(
-                complete_automata,
-                property,
-                automaton,
-                symmetric_properties,
-                transitive_properties,
-            );
-        }
-        // Java 516-519: same as above — adopt the cached automaton, discard the local.
     }
-    complete_automata[property].clone()
+
+    fn random_rbox(random: &mut Random, letters: &[ObjectPropExpr]) -> (Vec<String>, SetOntology<super::super::A>) {
+        let mut ontology: SetOntology<super::super::A> = SetOntology::new();
+        let mut shown = Vec::new();
+        let letter = |random: &mut Random| letters[random.below(letters.len())].clone();
+        for _ in 0..1 + random.below(5) {
+            let component = match random.below(8) {
+                0 | 1 => Component::SubObjectPropertyOf(SubObjectPropertyOf {
+                    sub: SOPE::ObjectPropertyExpression(letter(random)),
+                    sup: letter(random),
+                }),
+                2 | 3 => Component::TransitiveObjectProperty(TransitiveObjectProperty(letter(random))),
+                4 | 5 => {
+                    let length = 2 + random.below(2);
+                    Component::SubObjectPropertyOf(SubObjectPropertyOf {
+                        sub: SOPE::ObjectPropertyChain((0..length).map(|_| letter(random)).collect()),
+                        sup: letter(random),
+                    })
+                }
+                6 => Component::InverseObjectProperties(InverseObjectProperties(
+                    letter(random),
+                    letter(random),
+                )),
+                _ => match random.below(2) {
+                    0 => Component::SymmetricObjectProperty(SymmetricObjectProperty(letter(random))),
+                    _ => Component::EquivalentObjectProperties(EquivalentObjectProperties(vec![
+                        letter(random),
+                        letter(random),
+                    ])),
+                },
+            };
+            shown.push(format!("{component:?}"));
+            ontology.insert(component);
+        }
+        (shown, ontology)
+    }
+
+    fn words(letters: usize) -> Vec<Vec<usize>> {
+        let mut result: Vec<Vec<usize>> = vec![Vec::new()];
+        let mut frontier = result.clone();
+        for _ in 0..MAX_LENGTH {
+            frontier = frontier
+                .iter()
+                .flat_map(|w| (0..letters).map(move |l| [w.clone(), vec![l]].concat()))
+                .collect();
+            result.extend(frontier.iter().cloned());
+        }
+        result
+    }
+
+    /// Checks one RBox, returning the first unsound and the first incomplete
+    /// word found, if any, and whether completeness was checked at all.
+    fn check(
+        ontology: &SetOntology<super::super::A>,
+        letters: &[ObjectPropExpr],
+    ) -> (Option<String>, Option<String>, bool) {
+        let mut normalization = OWLNormalization::new(OWLAxioms::new(), 0);
+        normalization.process_ontology(ontology).expect("normalize");
+        let mut axioms = normalization.into_axioms();
+        let grammar = Grammar::new(letters.to_vec(), &axioms);
+        // HermiT's structural checks reject many irregular role boxes.
+        let Ok(manager) = ObjectPropertyInclusionManager::new(&mut axioms) else {
+            return (None, None, false);
+        };
+        let (mut unsound, mut incomplete) = (None, None);
+        let show = |word: &[usize]| -> Vec<String> {
+            word.iter().map(|l| format!("{:?}", letters[*l])).collect()
+        };
+        for word in words(letters.len()) {
+            let table = grammar.derivations(&word);
+            let derived: HashSet<usize> =
+                if word.is_empty() { HashSet::new() } else { table[0][word.len()].clone() };
+            let exact: Vec<HashSet<ObjectPropExpr>> =
+                word.iter().map(|l| HashSet::from([letters[*l].clone()])).collect();
+            let widened: Vec<HashSet<ObjectPropExpr>> = word
+                .iter()
+                .map(|l| grammar.up[*l].iter().map(|u| letters[*u].clone()).collect())
+                .collect();
+            for (index, property) in letters.iter().enumerate() {
+                let entailed = derived.contains(&index);
+                match manager.automaton(property) {
+                    Some(automaton) => {
+                        if unsound.is_none() && !entailed && accepts(automaton, &exact) {
+                            unsound = Some(format!("{:?} accepts {:?}", property, show(&word)));
+                        }
+                        if incomplete.is_none()
+                            && !manager.irregular
+                            && entailed
+                            && !accepts(automaton, &widened)
+                        {
+                            incomplete = Some(format!("{:?} misses {:?}", property, show(&word)));
+                        }
+                    }
+                    None if incomplete.is_none() && !manager.irregular && entailed && word.len() > 1 => {
+                        incomplete = Some(format!(
+                            "incomplete: {:?} has no automaton but derives {:?}",
+                            property,
+                            show(&word)
+                        ));
+                    }
+                    None => {}
+                }
+            }
+        }
+        (unsound, incomplete, !manager.irregular)
+    }
+
+    fn letters() -> Vec<ObjectPropExpr> {
+        let build: Build<super::super::A> = Build::new_arc();
+        (0..ROLES)
+            .flat_map(|i| {
+                let named = ObjectPropExpr::ObjectProperty(build.object_property(format!("http://ex/r{i}")));
+                [named.clone(), inverse_property(&named)]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn inverse_super_property_of_transitive_role_is_not_a_sub_property() {
+        let letters = letters();
+        let mut ontology: SetOntology<super::super::A> = SetOntology::new();
+        ontology.insert(Component::TransitiveObjectProperty(TransitiveObjectProperty(
+            letters[2].clone(),
+        )));
+        ontology.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
+            sub: SOPE::ObjectPropertyExpression(letters[0].clone()),
+            sup: letters[3].clone(),
+        }));
+        assert_eq!(check(&ontology, &letters), (None, None, true));
+    }
+
+    #[test]
+    fn automata_accept_exactly_the_entailed_role_words() {
+        let letters = letters();
+        let mut random = Random(0x9e37_79b9_7f4a_7c15);
+        let mut failures = Vec::new();
+        let mut regular = 0;
+        for case in 0..1500 {
+            let (shown, ontology) = random_rbox(&mut random, &letters);
+            let (unsound, incomplete, checked) = check(&ontology, &letters);
+            regular += usize::from(checked);
+            if let Some(failure) = unsound {
+                failures.push(format!("case {case}: unsound: {failure}\n  {}", shown.join("\n  ")));
+            }
+            if let Some(failure) = incomplete {
+                failures.push(format!("case {case}: incomplete: {failure}\n  {}", shown.join("\n  ")));
+            }
+        }
+        assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+        // Most random role boxes are regular, so completeness is exercised.
+        assert!(regular > 800, "only {regular} regular role boxes");
+    }
 }

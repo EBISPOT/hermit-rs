@@ -28,8 +28,9 @@ graph as recursion seeds, `connectAllAutomata` walks those seeds in
 `java.util.HashSet` order, and if `Inv(u)` is built before `u` then `u` is stored
 as the plain mirror of `Inv(u)`, which never saw `u`'s own sub-chain `a ∘ b*`.
 Deleting the inverse axiom makes Java derive the subsumption on every spelling.
-hermit-rs builds each property's automaton from the sub-properties of both `R` and
-`Inv(R)`, so its answer is the same on every spelling (EBISPOT/hermit-rs#5).
+hermit-rs builds each property's automaton from the role box closed under inverse,
+independently of iteration order, so its answer is the same on every spelling
+(EBISPOT/hermit-rs#5).
 
 ## `inverse_chain_completeness.ofn`
 
