@@ -3586,7 +3586,8 @@ pub fn classify_object_properties_with_configuration(
 /// ontology has inverse roles), where `M` is a fresh concept with an instance;
 /// owl:topObjectProperty and owl:bottomObjectProperty map to owl:Thing and
 /// owl:Nothing. The proxies are classified like atomic concepts, and the
-/// hierarchy is transformed back.
+/// hierarchy is transformed back. Its lookups find the nodes of
+/// owl:topObjectProperty and owl:bottomObjectProperty for their inverses.
 pub fn classify_object_property_expressions(
     ontology: &SetOntology<crate::structural::A>,
 ) -> Result<
@@ -3703,15 +3704,24 @@ pub fn classify_object_property_expressions_with_configuration(
     inverse_proxies.insert(thing.clone(), thing);
     inverse_proxies.insert(nothing.clone(), nothing);
 
-    classify_property_proxies(
+    let mut hierarchy = classify_property_proxies(
         &extended,
         configuration,
-        top,
-        bottom,
+        top.clone(),
+        bottom.clone(),
         roles_for_proxies,
         &proxies_for_roles,
         has_inverse_roles.then_some(inverse_proxies),
-    )
+    )?;
+    // As the two are their own inverses, a lookup of
+    // ObjectInverseOf(owl:topObjectProperty) or
+    // ObjectInverseOf(owl:bottomObjectProperty) finds the node of the property
+    // itself, as `Reasoner.H` resolves it (`canonical_property`), not the node of
+    // a fresh property between top and bottom.
+    for built_in in [top, bottom] {
+        hierarchy.add_alias(crate::structural::inverse_property(&built_in), &built_in);
+    }
+    Ok(hierarchy)
 }
 
 /// HermiT's reduction of role classification to concept classification, shared
@@ -6332,6 +6342,9 @@ pub fn get_disjoint_object_properties(
         OPE::ObjectProperty(p) | OPE::InverseObjectProperty(p) => p.0.to_string(),
     };
     let mut result: HashSet<OPE<crate::structural::A>> = HashSet::new();
+    // Inv(owl:topObjectProperty) and Inv(owl:bottomObjectProperty) are the
+    // properties themselves (`Reasoner.H`).
+    let ope = &crate::structural::canonical_property(ope);
     let arg_iri = named_iri(ope);
     // owl:topObjectProperty is disjoint only from the bottom node (Reasoner.java:1187).
     if arg_iri == TOP {
@@ -6339,10 +6352,13 @@ pub fn get_disjoint_object_properties(
     }
     // owl:bottomObjectProperty is disjoint from EVERYTHING: the top node plus all its
     // descendants -- i.e. every classified expression (Reasoner.java:1191-1196).
-    // Java uses `propertyExpression.isOWLBottomObjectProperty()`, which (unlike the
-    // top check) does NOT unwrap inverses, so `Inv(owl:bottomObjectProperty)` is
-    // NOT treated as bottom and falls through to the general per-node walk.
-    if matches!(ope, OPE::ObjectProperty(_)) && arg_iri == BOTTOM {
+    // So is its inverse, the same empty role. This deliberately deviates from Java,
+    // whose `propertyExpression.isOWLBottomObjectProperty()` does not unwrap the
+    // inverse: Java sends `Inv(owl:bottomObjectProperty)` to the per-node walk below,
+    // whose atom `bottom(a,b)` clashes only when the ontology mentions
+    // owl:bottomObjectProperty (only then is it axiomatized), so it returns the
+    // bottom node alone, or every node except the top node.
+    if arg_iri == BOTTOM {
         return Ok(hierarchy.all_elements().cloned().collect());
     }
     // Java reuses one tableau (getTableau()) and tests each candidate node with

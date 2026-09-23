@@ -50,9 +50,9 @@ provide the starting point. Java is pinned to
 The property classifiers now reduce object roles to proxy concepts
 `C_R = exists R.M` with a fresh inhabited marker `M`, and data roles to
 `C_P = exists P.U` with a fresh unknown datatype `U`, and classify the proxies
-with the concept classifier (#22). Issue #26 remains: property queries must look
-up `ObjectInverseOf(owl:topObjectProperty)` and
-`ObjectInverseOf(owl:bottomObjectProperty)` as the built-in properties.
+with the concept classifier (#22). Their hierarchy looks up
+`ObjectInverseOf(owl:topObjectProperty)` and
+`ObjectInverseOf(owl:bottomObjectProperty)` as the built-in properties (#26).
 
 The role automata keep a HermiT flaw that no imported case covers:
 `buildInversePropertiesMap` records `SubObjectPropertyOf(R ObjectInverseOf(S))`
@@ -60,6 +60,15 @@ as if `R` and `S` were inverses, so when `S` is not simple, `forall R.C` also
 propagates along `Inv(S)`. With `TransitiveObjectProperty(S)`, `R <= Inv(S)` then
 yields `Inv(S) <= R` in class reasoning, `isSubObjectPropertyExpressionOf` and
 the property classifiers alike, as in Java.
+
+Two more gaps that no imported case covers, found while fixing #26. The
+`DisjointObjectProperties` entailment tests role atoms on the ontology's
+tableau, where `owl:bottomObjectProperty` is axiomatized only when the ontology
+mentions it; otherwise `DisjointObjectProperties(owl:bottomObjectProperty :r)`
+is not entailed, as in Java, although the empty role is disjoint from every
+role. And `isFunctional`/`isInverseFunctional` test `owl:Thing <= max 1 P`,
+which rejects a non-simple `P` (a transitive property or
+`owl:topObjectProperty`) that Java's role atoms answer.
 
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
@@ -96,7 +105,7 @@ two overrides are empty in the original Java source.
 | [#23](https://github.com/EBISPOT/hermit-rs/issues/23) | Infer role subsumption forced by nominals and transitivity (**resolved** with #22) | 3 |
 | [#24](https://github.com/EBISPOT/hermit-rs/issues/24) | Classify role subsumption with chains, transitivity and symmetry (**resolved** with #22) | 3 |
 | [#25](https://github.com/EBISPOT/hermit-rs/issues/25) | Recognize equivalent data properties forced to a common singleton range (**resolved** with #22) | 3 |
-| [#26](https://github.com/EBISPOT/hermit-rs/issues/26) | Normalize inverse built-in roles in property hierarchy queries | 3 |
+| [#26](https://github.com/EBISPOT/hermit-rs/issues/26) | Normalize inverse built-in roles in property hierarchy queries (**resolved**) | 3 |
 | [#27](https://github.com/EBISPOT/hermit-rs/issues/27) | Recognize object properties equivalent to the universal role (**resolved** with #22) | 3 |
 | [#28](https://github.com/EBISPOT/hermit-rs/issues/28) | Reject the first unsatisfiable Widmann case under core blocking | 1 |
 | [#29](https://github.com/EBISPOT/hermit-rs/issues/29) | Reject the second unsatisfiable Widmann case under core blocking | 1 |
