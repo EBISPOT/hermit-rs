@@ -824,17 +824,6 @@ pub enum FloatSpecial {
     NegInf,
     Nan,
 }
-/// Strip a single trailing `f`/`F`/`d`/`D` type suffix, the way Java's
-/// `Float.parseFloat`/`Double.parseDouble` tolerate one (e.g. `"1.0f"`,
-/// `"1.0D"`). Only removed when the remainder is non-empty so a bare `"f"`/`"d"`
-/// still fails the subsequent numeric parse, matching Java.
-pub fn strip_float_suffix(t: &str) -> &str {
-    if t.len() > 1 && matches!(t.as_bytes()[t.len() - 1], b'f' | b'F' | b'd' | b'D') {
-        &t[..t.len() - 1]
-    } else {
-        t
-    }
-}
 pub fn is_hex_binary_datatype(uri: &str) -> bool {
     uri.strip_prefix(XSD) == Some("hexBinary")
 }
@@ -884,6 +873,11 @@ fn is_java_whitespace(c: char) -> bool {
 /// octet_count)`. Whitespace is ignored; the body must be the base64 alphabet
 /// with 0--2 trailing `=` and a total length that is a multiple of four.
 ///
+/// The bits a padded final quad does not use must be zero: XSD 1.1 Part 2
+/// §3.3.16.2 allows only a B16char (`[AEIMQUYcgkosw048]`) before a single `=`
+/// and only a B04char (`[AQgw]`) before `==`, so `"QR=="` is not a lexical form
+/// (Java's BinaryData.parseBase64Binary drops the stray bits and accepts it).
+///
 /// The canonical form returned here is the uppercase hex of the decoded bytes,
 /// the same encoding as `parse_hex_binary`'s canonical, so two base64 lexical
 /// forms of the same octets are one value. The parse branch tags the value with
@@ -928,6 +922,10 @@ pub fn parse_base64_binary(lexical: &str) -> Option<(String, usize)> {
             nbits -= 8;
             bytes.push((acc >> nbits) as u8);
         }
+    }
+    // The unused low bits of the last sextet (4 before `==`, 2 before `=`).
+    if acc & ((1 << nbits) - 1) != 0 {
+        return None;
     }
     let len = bytes.len();
     Some((encode_hex_upper(&bytes), len))
@@ -995,12 +993,21 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
         !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit())
     }
     let s = lexical.trim();
+    // The grammar is ASCII; a non-ASCII character would also make the byte
+    // slicing below split a character and panic.
+    if !s.is_ascii() {
+        return None;
+    }
     let neg_year = s.starts_with('-');
     let mut rest = if neg_year { &s[1..] } else { s };
 
     let year_end = rest.find('-')?;
     if year_end < 4 {
         return None; // XSD requires at least four year digits
+    }
+    if year_end > 4 && rest.starts_with('0') {
+        // yearFrag (XSD 1.1 Part 2 §D.2.2, §3.3.7.2): a leading '0' only pads to four digits.
+        return None;
     }
     if !digits_only(&rest[..year_end]) {
         return None;
@@ -1164,15 +1171,12 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         }
         Some(DataValue::Integer(parsed))
     } else if is_decimal_datatype(datatype) {
-        // xsd:decimal is kept exact. HermiT parses with `new BigDecimal(...)`, which
-        // also accepts scientific (exponent) notation, e.g. "1E2". Numbers.parseDecimal
-        // does NOT trim, so surrounding whitespace makes the literal ill-typed.
-        let t = lexical;
-        // Split off an optional exponent (e/E followed by a signed integer).
-        let (mantissa, exp): (&str, i32) = match t.split_once(['e', 'E']) {
-            Some((m, e)) => (m, e.parse::<i32>().ok()?),
-            None => (t, 0),
-        };
+        // xsd:decimal is kept exact. Its lexical space is
+        // `(\+|-)?([0-9]+(\.[0-9]*)?|\.[0-9]+)` (XSD 1.1 Part 2 §3.3.3.1), with no
+        // exponent; HermiT's `new BigDecimal(...)` also accepts one ("1E2"), which
+        // is ill-typed here. Numbers.parseDecimal does NOT trim, so surrounding
+        // whitespace makes the literal ill-typed.
+        let mantissa = lexical;
         if !mantissa
             .bytes()
             .all(|b| b.is_ascii_digit() || b == b'+' || b == b'-' || b == b'.')
@@ -1208,14 +1212,6 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         for _ in 0..frac_part.len() {
             den *= &ten;
         }
-        // Apply the exponent exactly: positive scales the numerator, negative the
-        // denominator (10^|exp|).
-        for _ in 0..exp.max(0) {
-            num *= &ten;
-        }
-        for _ in 0..(-exp).max(0) {
-            den *= &ten;
-        }
         if negative {
             num = -num;
         }
@@ -1227,8 +1223,10 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         // FloatDatatypeHandler.parseLiteral: Float.parseFloat (which trims and
         // accepts "Infinity"/"NaN") is tried first; only on failure is the lexical
         // form matched EXACTLY (untrimmed) against "INF"/"-INF". So " INF " is
-        // ill-typed while " Infinity " is not.
-        let v: f32 = if lexical == "INF" {
+        // ill-typed while " Infinity " is not. "+INF" is in the XSD 1.1 lexical
+        // space (Part 2 §3.3.4.2) although Java rejects it. Java's trailing
+        // f/F/d/D type suffix ("1.0f") is not, so it is ill-typed here.
+        let v: f32 = if lexical == "INF" || lexical == "+INF" {
             f32::INFINITY
         } else if lexical == "-INF" {
             f32::NEG_INFINITY
@@ -1238,12 +1236,11 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
                 "Infinity" | "+Infinity" => f32::INFINITY,
                 "-Infinity" => f32::NEG_INFINITY,
                 "NaN" => f32::NAN,
-                // Java's Float.parseFloat accepts a trailing 'f'/'F'/'d'/'D' type
-                // suffix (e.g. "1.0f"), so strip a single one before parsing.
-                // It rounds an overflowing finite numeral to ±Infinity without
-                // throwing; a real overflow numeral always has a digit, while
-                // lenient spellings like "inf" do not.
-                _ => match strip_float_suffix(t).parse::<f32>() {
+                // `str::parse` accepts the XSD numerals plus case-insensitive
+                // "inf"/"infinity"/"nan", which have no digit. It rounds an
+                // overflowing finite numeral to ±Infinity, as the XSD lexical
+                // mapping does; a real overflow numeral always has a digit.
+                _ => match t.parse::<f32>() {
                     Ok(v) if !v.is_nan() && (v.is_finite() || t.bytes().any(|b| b.is_ascii_digit())) => v,
                     _ => return None,
                 },
@@ -1252,9 +1249,9 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         Some(DataValue::Float(if v.is_nan() { f32::NAN.to_bits() } else { v.to_bits() }))
     } else if is_xsd_double(datatype) {
         // As for xsd:float: Double.parseDouble (trims, accepts "Infinity"/"NaN")
-        // is tried first; "INF"/"-INF" are matched only as an exact, untrimmed
-        // fallback.
-        let v: f64 = if lexical == "INF" {
+        // is tried first; "INF"/"+INF"/"-INF" are matched only as an exact,
+        // untrimmed fallback, and a type suffix is ill-typed.
+        let v: f64 = if lexical == "INF" || lexical == "+INF" {
             f64::INFINITY
         } else if lexical == "-INF" {
             f64::NEG_INFINITY
@@ -1264,11 +1261,8 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
                 "Infinity" | "+Infinity" => f64::INFINITY,
                 "-Infinity" => f64::NEG_INFINITY,
                 "NaN" => f64::NAN,
-                // Java's Double.parseDouble accepts a trailing 'f'/'F'/'d'/'D'
-                // type suffix (e.g. "1.0d"); strip a single one before parsing.
-                // It rounds an overflowing finite numeral to ±Infinity without
-                // throwing; a real overflow numeral always has a digit.
-                _ => match strip_float_suffix(t).parse::<f64>() {
+                // As for xsd:float, a numeral with a digit or nothing.
+                _ => match t.parse::<f64>() {
                     Ok(v) if !v.is_nan() && (v.is_finite() || t.bytes().any(|b| b.is_ascii_digit())) => v,
                     _ => return None,
                 },
@@ -1276,11 +1270,13 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         };
         Some(DataValue::Double(if v.is_nan() { f64::NAN.to_bits() } else { v.to_bits() }))
     } else if is_boolean_datatype(datatype) {
-        // HermiT accepts "true"/"false" case-insensitively, but "1"/"0" exactly.
+        // The lexical space is exactly "true", "false", "1" and "0" (XSD 1.1
+        // Part 2 §3.3.2.2); HermiT also accepts "TRUE"/"False" etc., which are
+        // ill-typed here.
         let t = lexical.trim();
-        if t.eq_ignore_ascii_case("true") || t == "1" {
+        if t == "true" || t == "1" {
             Some(DataValue::Boolean(true))
-        } else if t.eq_ignore_ascii_case("false") || t == "0" {
+        } else if t == "false" || t == "0" {
             Some(DataValue::Boolean(false))
         } else {
             None
@@ -2106,6 +2102,10 @@ mod rescan_tests {
         assert!(parse_datetime("2020-01-01T00:+5:00Z", true).is_none()); // minute
         assert!(parse_datetime("2020-01-01T00:00:+5Z", true).is_none()); // second
         assert!(parse_datetime("2020-01-01T00:00:00+0a:30", true).is_none()); // tz
+        // yearFrag: a leading '0' only pads the year to four digits.
+        assert!(parse_datetime("0999-01-01T00:00:00", true).is_some());
+        assert!(parse_datetime("01999-01-01T00:00:00", true).is_none());
+        assert!(parse_datetime("-01999-01-01T00:00:00", true).is_none());
     }
 
     // The canonical form of a base64 value is the uppercase hex of the decoded
@@ -2113,10 +2113,20 @@ mod rescan_tests {
     #[test]
     fn base64_equality_is_by_decoded_bytes() {
         let (c1, n1) = parse_base64_binary("QQ==").unwrap(); // decodes to 0x41
-        let (c2, n2) = parse_base64_binary("QR==").unwrap(); // non-canonical, also 0x41
+        let (c2, n2) = parse_base64_binary("Q Q = =").unwrap(); // spaced, also 0x41
         assert_eq!(c1, c2, "forms decoding to the same bytes must be equal");
         assert_eq!(c1, "41");
         assert_eq!((n1, n2), (1, 1));
+        let (c4, _) = parse_base64_binary("QUI=").unwrap(); // 0x41,0x42
+        assert_eq!(c4, parse_base64_binary("Q U I =").unwrap().0);
+        assert_eq!(c4, "4142");
+        // The bits a padded quad leaves unused must be zero (XSD 1.1 Part 2
+        // §3.3.16.2: only [AQgw] before "==", only [AEIMQUYcgkosw048] before "=").
+        assert!(parse_base64_binary("QR==").is_none());
+        assert!(parse_base64_binary("QUJ=").is_none());
+        for last in ["A", "Q", "g", "w"] {
+            assert!(parse_base64_binary(&format!("Q{last}==")).is_some());
+        }
         // Whitespace is ignored; the canonical form is the hex of the bytes.
         let (c3, n3) = parse_base64_binary(" QU JD ").unwrap(); // "ABC" = 0x41,0x42,0x43
         assert_eq!(c3, "414243");

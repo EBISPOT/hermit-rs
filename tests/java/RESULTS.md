@@ -165,6 +165,35 @@ records a hexBinary value; [corrections.json](corrections.json) records the
 base64Binary value instead. `tests/base64_binary_value_space.rs` checks
 membership, length facets, enumerations, counting and constant inequalities.
 
+A NaN bounding facet on xsd:float or xsd:double empties the range. NaN is
+incomparable with every value, itself included (XSD 1.1 Part 2 §3.3.4.1,
+§3.3.5.1), so no value is `>=`, `>`, `<=` or `<` it; the note in §3.3.4.1 says
+that a NaN bound yields an empty value space. NaN is in the value space, so it
+is a valid facet value, and OWL 2 takes these facets from XML Schema (OWL 2
+Structural Specification §4.2). HermiT drops a NaN xsd:double bound, and a NaN
+xsd:float max* bound because `FloatInterval.isNaN` masks with `0x003fffff`, so
+those ranges held every value but NaN; a NaN float min* bound was already empty.
+Rust now makes every NaN-bounded range empty, and its complement holds every
+value of the datatype, NaN included, in emptiness, counting and enumeration.
+This deliberately deviates from Java; no imported case uses a NaN bound.
+`tests/nan_bounds_and_lexical_validation.rs` checks each facet on both datatypes.
+
+Lexical forms outside the XSD 1.1 grammars are ill-typed, and like every
+ill-typed literal of a supported datatype they reject the ontology (HermiT's
+`MalformedLiteralException`). HermiT accepts base64Binary with nonzero padding
+bits (`"QR=="`; §3.3.16.2 allows only `[AQgw]` before `==` and
+`[AEIMQUYcgkosw048]` before `=`), boolean `"TRUE"`/`"False"` (§3.3.2.2),
+decimal exponents (`"1E2"`, §3.3.3.1), a float/double `f`/`d` type suffix
+(§3.3.4.2, §3.3.5.2) and dateTime years zero-padded past four digits (§D.2.2).
+It rejects `"+INF"`, which §3.3.4.2 lists; Rust now accepts it. A non-ASCII
+character in a dateTime made the Rust parser panic; it is now ill-typed. Left
+as they are: surrounding whitespace, which the `collapse` whiteSpace facet of
+these datatypes removes; the `Infinity`/`+Infinity`/`-Infinity` spellings of
+`Double.parseDouble`, which `DatatypesTest.testINF` uses; dateTime years beyond
+±9999 and fractions beyond milliseconds, which are valid but unsupported; and
+anyURI, whose check is stricter than XSD 1.1 (any string). No imported case
+changes.
+
 Issues #15 and #16 had one cause, in the numeric value spaces. owl:real,
 owl:rational, xsd:decimal and the integer datatypes share one value space, whose
 values nest (OWL 2 Structural Specification §4.1). It was counted from the

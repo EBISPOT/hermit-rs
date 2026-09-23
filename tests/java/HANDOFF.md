@@ -95,6 +95,15 @@ two value spaces disjoint. The `BinaryDataTest.testBase64Parsing` expectation is
 corrected in [corrections.json](corrections.json); see
 `tests/base64_binary_value_space.rs`.
 
+A NaN bound on xsd:float or xsd:double empties the range (**resolved**, no
+issue, deliberately deviating from Java, which drops a NaN double bound and a
+NaN float max* bound), and lexical forms outside the XSD 1.1 grammars are
+ill-typed (**resolved**, no issue): base64Binary with nonzero padding bits,
+boolean case variants, decimal exponents, float/double type suffixes and
+over-padded dateTime years; `"+INF"` is accepted. See
+`tests/nan_bounds_and_lexical_validation.rs` and [RESULTS.md](RESULTS.md),
+which lists the lexical leniencies deliberately kept.
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
