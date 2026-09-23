@@ -11,9 +11,9 @@
 // (`xsd:double`/`xsd:float`) with their special values `NaN`/`INF`/`-INF`
 // (`NaN` is a single value-space point; the specials are rejected for
 // `xsd:decimal`) -- and `oneOf` enumerations and their negations, by testing
-// the constant value against each asserted range. `xsd:anyURI` and the binary
+// the constant value against each asserted range. `xsd:anyURI`, the binary
 // types (`xsd:hexBinary`/`xsd:base64Binary`, with octet-counted length facets)
-// are covered as their own disjoint value spaces.
+// and `rdf:XMLLiteral` are covered as their own disjoint value spaces.
 // It is *sound* (a clash is reported only when a value provably violates a
 // range or the conjunction is provably empty). Value comparisons use XSD
 // value-space equality (so `1^^integer` equals `1.0^^decimal`, and `01` equals
@@ -1832,7 +1832,13 @@ fn most_specific_datatype_uri<D>(ranges: &[(LiteralDataRange, D)]) -> Option<Str
 ///   * binary (BinaryDataDatatypeHandler.java:186-188): disjoint iff different
 ///     URI (hexBinary vs base64Binary);
 ///   * strings (RDFPlainLiteralDatatypeHandler.java:344-348): never disjoint;
-///   * float / double / dateTime: never disjoint (single member each).
+///   * float / double / dateTime / rdf:XMLLiteral: never disjoint (single member
+///     each).
+///
+/// rdf:XMLLiteral has a handler of its own (XMLLiteralDatatypeHandler), so it is
+/// disjoint from every other datatype: OWL 2 Structural Specification §4.8 takes
+/// it from RDF Concepts §5.1, whose XML values are disjoint from the value space
+/// of every XML Schema datatype and from the strings.
 /// Unrecognized datatype URIs are treated conservatively as NOT disjoint.
 fn datatypes_disjoint(uri1: &str, uri2: &str) -> bool {
     let (Some(c1), Some(c2)) = (value_space_class(uri1), value_space_class(uri2)) else {
@@ -1868,6 +1874,27 @@ fn datatypes_disjoint(uri1: &str, uri2: &str) -> bool {
         // Different handlers / kinds ⇒ disjoint; identical singular kinds ⇒ not.
         c1 != c2
     }
+}
+
+/// Whether two positive datatype restrictions of a conjunction name disjoint
+/// datatypes (`datatypes_disjoint`), so that no value lies in both and the
+/// conjunction is empty. HermiT clashes on the first restriction disjoint from
+/// the running most specific one (`DVariable.addDataRange`, see
+/// `disjoint_datatype_pair_deps`); every pair is compared here, so that a
+/// datatype outside the datatype map, which is never judged disjoint, cannot
+/// hide a disjoint pair.
+fn positive_datatypes_disjoint<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
+    let datatypes: Vec<&str> = ranges
+        .iter()
+        .filter_map(|(range, _)| match range {
+            LiteralDataRange::DatatypeRestriction(r) => Some(r.datatype_uri()),
+            _ => None,
+        })
+        .collect();
+    datatypes
+        .iter()
+        .enumerate()
+        .any(|(i, uri)| datatypes[..i].iter().any(|earlier| datatypes_disjoint(earlier, uri)))
 }
 
 // ===========================================================================
@@ -3685,9 +3712,11 @@ fn base_datatype_negation_subsumes<D>(ranges: &[(LiteralDataRange, D)]) -> bool 
 fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     // A negated datatype that removes the whole of a positive datatype's value
     // space empties the conjunction even when that value space is infinite
-    // (e.g. `integer ⊓ ¬integer`). The interval/enumeration logic below only
-    // sees the positive ranges, so handle this subsumption case up front.
-    if negation_subsumes(ranges) {
+    // (e.g. `integer ⊓ ¬integer`), and so do two positive datatypes that share
+    // no value (e.g. `rdf:XMLLiteral ⊓ xsd:boolean`). The interval/enumeration
+    // logic below only sees the positive ranges of one datatype family, so
+    // handle these cases up front.
+    if negation_subsumes(ranges) || positive_datatypes_disjoint(ranges) {
         return true;
     }
     // If any oneOf is present, the value must be one of its (parseable) members
@@ -3719,82 +3748,45 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     }
 
     // Otherwise, only datatype restrictions / internal datatypes / negations.
-    // A value must lie in every restriction's base datatype; numeric, string and
-    // boolean kinds are mutually exclusive.
-    let mut kinds: std::collections::HashSet<&'static str> = std::collections::HashSet::new();
-    for (range, _) in ranges {
-        if let LiteralDataRange::DatatypeRestriction(r) = range {
-            let uri = r.datatype_uri();
-            let kind = if is_integer_datatype(uri)
-                || is_decimal_datatype(uri)
-                || is_rational_datatype(uri)
-                || is_real_datatype(uri)
-            {
-                "numeric"
-            } else if is_xsd_float(uri) {
-                // xsd:float, xsd:double and the owl:real family are managed by
-                // distinct handlers in HermiT; values of different handlers are
-                // disjoint (DatatypeRegistry.isDisjointWith), so they must be
-                // separate kinds for the incompatible-base-datatype check below.
-                "float"
-            } else if is_xsd_double(uri) {
-                "double"
-            } else if is_string_datatype(uri) {
-                "string"
-            } else if is_boolean_datatype(uri) {
-                "boolean"
-            } else if is_datetime_datatype(uri) {
-                "datetime"
-            } else if is_anyuri_datatype(uri) {
-                "anyURI"
-            } else if is_hex_binary_datatype(uri) {
-                "hexBinary"
-            } else if is_base64_datatype(uri) {
-                "base64Binary"
-            } else {
-                continue; // unknown datatype -> cannot decide -> ignore
-            };
-            kinds.insert(kind);
+    // No two positive datatypes are disjoint, so those of the datatype map
+    // belong to one handler, named by the first; datatypes outside the map
+    // cannot be decided and are ignored.
+    let Some(class) = ranges.iter().find_map(|(range, _)| match range {
+        LiteralDataRange::DatatypeRestriction(r) => value_space_class(r.datatype_uri()),
+        _ => None,
+    }) else {
+        return false;
+    };
+    use ValueSpaceClass::*;
+    match class {
+        // The owl:real, xsd:float and xsd:double value spaces `node_value_space`
+        // counts: an empty interval, a negated restriction or an excluded value
+        // can empty them.
+        Numeric(_) | IntegerBounded(_, _) => {
+            real_value_space(ranges).is_some_and(|space| space.is_empty())
         }
-    }
-    if kinds.len() >= 2 {
-        return true; // incompatible base datatypes
-    }
-    // The owl:real, xsd:float and xsd:double value spaces `node_value_space`
-    // counts: an empty interval, a negated restriction or an excluded value can
-    // empty them.
-    if kinds.contains("numeric")
-        && real_value_space(ranges).is_some_and(|space| space.is_empty())
-    {
-        return true;
-    }
-    for (name, kind) in [("float", FloatKind::Float), ("double", FloatKind::Double)] {
-        if kinds.contains(name)
-            && float_value_space(ranges, kind).is_some_and(|space| space.is_empty())
-        {
-            return true;
+        Float => float_value_space(ranges, FloatKind::Float).is_some_and(|space| space.is_empty()),
+        Double => float_value_space(ranges, FloatKind::Double).is_some_and(|space| space.is_empty()),
+        // xsd:dateTime / xsd:dateTimeStamp: the value space `node_value_space`
+        // counts, so an empty interval, a negated interval or an excluded value
+        // can empty it.
+        DateTime => datetime_value_space(ranges).is_some_and(|space| space.is_empty()),
+        // xsd:hexBinary / xsd:base64Binary: the value space `node_value_space`
+        // counts, so a negated length restriction or an excluded value can empty
+        // it.
+        HexBinary | Base64 => {
+            matches!(binary_value_space(ranges), Some(NodeValueSpace::Finite { count: 0, .. }))
         }
+        // rdf:PlainLiteral, xsd:string and the other string datatypes: the value
+        // space `node_value_space` counts, so a negated restriction or an
+        // excluded value can empty it.
+        StringType(_) => plain_literal_value_space(ranges).is_some_and(|space| space.is_empty()),
+        // xsd:boolean and xsd:anyURI are counted by `node_value_space` only; the
+        // assignment check reports an empty one. rdf:XMLLiteral has no facets, so
+        // its value space holds every XML literal, infinitely many, unless a
+        // negated rdf:XMLLiteral removes them all (`negation_subsumes`).
+        Boolean | AnyUri | XmlLiteral => false,
     }
-    // xsd:dateTime / xsd:dateTimeStamp: the value space `node_value_space`
-    // counts, so an empty interval, a negated interval or an excluded value can
-    // empty it.
-    if kinds.contains("datetime") && datetime_value_space(ranges).is_some_and(|space| space.is_empty()) {
-        return true;
-    }
-    // xsd:hexBinary / xsd:base64Binary: the value space `node_value_space`
-    // counts, so a negated length restriction or an excluded value can empty it.
-    if (kinds.contains("hexBinary") || kinds.contains("base64Binary"))
-        && matches!(binary_value_space(ranges), Some(NodeValueSpace::Finite { count: 0, .. }))
-    {
-        return true;
-    }
-    // rdf:PlainLiteral, xsd:string and the other string datatypes: the value
-    // space `node_value_space` counts, so a negated restriction or an excluded
-    // value can empty it.
-    if kinds.contains("string") && plain_literal_value_space(ranges).is_some_and(|space| space.is_empty()) {
-        return true;
-    }
-    false
 }
 
 /// Maximum timezone correction, in MILLISECONDS: XSD timezone offsets range over
@@ -4206,9 +4198,10 @@ fn node_value_space<D>(
         return NodeValueSpace::Finite { count: 1, values: Some(vec![v.clone()]) };
     }
     // A negated datatype that subsumes a positive datatype's value space empties
-    // the node even over an infinite base (e.g. `integer ⊓ ¬integer`); the
+    // the node even over an infinite base (e.g. `integer ⊓ ¬integer`), and so do
+    // two disjoint positive datatypes (e.g. `rdf:XMLLiteral ⊓ xsd:boolean`); the
     // interval/enumeration arms below would otherwise report it Infinite.
-    if negation_subsumes(ranges) {
+    if negation_subsumes(ranges) || positive_datatypes_disjoint(ranges) {
         return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
     }
     let excluded = |candidate: &DataValue| {
@@ -4306,6 +4299,14 @@ fn node_value_space<D>(
     let is_binary = |r: &&DatatypeRestriction| is_hex_binary_datatype(r.datatype_uri()) || is_base64_datatype(r.datatype_uri());
     if restrictions.iter().all(is_binary) {
         return binary_value_space(ranges).unwrap_or(NodeValueSpace::Infinite);
+    }
+
+    // rdf:XMLLiteral has no facets, so its value space holds every XML literal,
+    // infinitely many (XMLLiteralDatatypeHandler's XML_LITERAL_ALL), unless a
+    // negated rdf:XMLLiteral removes them all (`negation_subsumes`, above).
+    // Excluded values leave infinitely many.
+    if restrictions.iter().all(|r| is_xml_literal_datatype(r.datatype_uri())) {
+        return NodeValueSpace::Infinite;
     }
 
     // URI-1: xsd:anyURI with a length facet. Java AnyURIValueSpaceSubset.hasCardinalityAtLeast
@@ -7316,6 +7317,125 @@ mod tests {
         // Genuinely different content is NOT equal.
         assert!(!eq("<a>x</a>", "<a>y</a>"));
         assert!(!eq("<e a=\"1\"/>", "<e a=\"2\"/>"));
+    }
+
+    /// Whether a fresh node's value space is empty, checked against its count:
+    /// an rdf:XMLLiteral value space that is not empty is infinite.
+    fn xml_literal_space_is_empty(ranges: &[(LiteralDataRange, ())]) -> bool {
+        let empty = conjunction_is_empty(ranges);
+        match node_value_space(None, ranges) {
+            NodeValueSpace::Finite { count, values } => {
+                assert!(empty && count == 0 && values.is_some_and(|values| values.is_empty()));
+            }
+            NodeValueSpace::Infinite => assert!(!empty),
+        }
+        empty
+    }
+
+    #[test]
+    fn xml_literal_is_disjoint_from_the_other_datatypes() {
+        // Issue #31 (XMLLiteralTest.testRange_3). OWL 2 Structural Specification
+        // §4.8 takes rdf:XMLLiteral from RDF Concepts §5.1, whose XML values are
+        // disjoint from the value space of every XML Schema datatype and from the
+        // strings; owl:real, owl:rational and rdf:PlainLiteral hold numbers,
+        // strings and tagged strings. A negated datatype is its complement within
+        // the data domain, so it keeps the values of every other datatype.
+        let xml_literal_uri = format!("{RDF}XMLLiteral");
+        let xml_literal = || (dtype(xml_literal_uri.clone()), ());
+        let not_xml_literal = || (neg_dtype(xml_literal_uri.clone()), ());
+        let boolean = || (dtype(format!("{XSD}boolean")), ());
+        let others = [
+            format!("{XSD}boolean"),
+            format!("{RDF}PlainLiteral"),
+            format!("{XSD}string"),
+            format!("{XSD}language"),
+            format!("{OWL}real"),
+            format!("{OWL}rational"),
+            format!("{XSD}decimal"),
+            format!("{XSD}integer"),
+            format!("{XSD}unsignedByte"),
+            format!("{XSD}float"),
+            format!("{XSD}double"),
+            format!("{XSD}dateTime"),
+            format!("{XSD}dateTimeStamp"),
+            format!("{XSD}anyURI"),
+            format!("{XSD}hexBinary"),
+            format!("{XSD}base64Binary"),
+        ];
+        for other in &others {
+            assert!(datatypes_disjoint(&xml_literal_uri, other), "{other}");
+            assert!(datatypes_disjoint(other, &xml_literal_uri), "{other}");
+            // No fresh value lies in both, in either order; rdfs:Literal, the data
+            // domain, changes nothing.
+            let other_range = || (dtype(other.clone()), ());
+            assert!(xml_literal_space_is_empty(&[xml_literal(), other_range()]), "{other}");
+            assert!(
+                xml_literal_space_is_empty(&[other_range(), (rdfs_literal(), ()), xml_literal()]),
+                "{other}"
+            );
+            // Every XML literal lies outside the other datatype, and its values
+            // lie outside rdf:XMLLiteral.
+            let outside_other = (neg_dtype(other.clone()), ());
+            assert!(!xml_literal_space_is_empty(&[xml_literal(), outside_other]), "{other}");
+            assert!(!conj(vec![dtype(other.clone()), neg_dtype(xml_literal_uri.clone())]), "{other}");
+        }
+        assert!(matches!(
+            node_value_space(None, &[boolean(), not_xml_literal()]),
+            NodeValueSpace::Finite { count: 2, .. }
+        ));
+        // rdf:XMLLiteral has no facets: every XML literal, infinitely many, or
+        // none once rdf:XMLLiteral is negated. Excluded values leave infinitely many.
+        let xml = |lexical: &str| Constant::create(lexical, xml_literal_uri.clone());
+        let boolean_true = Constant::create("true", format!("{XSD}boolean"));
+        let excluded =
+            crate::model::ConstantEnumeration::create(vec![xml("<a/>"), xml("<b/>"), boolean_true]);
+        assert!(!xml_literal_space_is_empty(&[xml_literal()]));
+        assert!(!xml_literal_space_is_empty(&[xml_literal(), (rdfs_literal(), ()), xml_literal()]));
+        assert!(!xml_literal_space_is_empty(&[xml_literal(), (excluded.get_negation(), ())]));
+        assert!(xml_literal_space_is_empty(&[xml_literal(), not_xml_literal()]));
+        // A datatype outside the datatype map is not judged, and hides no
+        // disjoint pair.
+        let unknown = || (dtype("urn:issue31:unknown".to_string()), ());
+        assert!(!xml_literal_space_is_empty(&[unknown(), xml_literal()]));
+        assert!(xml_literal_space_is_empty(&[unknown(), xml_literal(), boolean()]));
+        // The clash depends on the two disjoint restrictions only, as in HermiT.
+        let deps = [(xml_literal().0, 1), (rdfs_literal(), 2), (boolean().0, 3)];
+        assert_eq!(disjoint_datatype_pair_deps(&deps), Some((1, 3)));
+
+        // Fixed values: an XML literal is in no other datatype but in the
+        // complement of each, and no value of another datatype is an XML literal.
+        let value = parse_value(&xml("<a>b</a>")).unwrap();
+        for other in &others {
+            assert_eq!(value_in_range(&value, &dtype(other.clone())), Some(false), "{other}");
+            assert_eq!(value_in_range(&value, &neg_dtype(other.clone())), Some(true), "{other}");
+        }
+        assert_eq!(value_in_range(&value, &xml_literal().0), Some(true));
+        assert_eq!(value_in_range(&value, &not_xml_literal().0), Some(false));
+        for constant in [
+            boolean_true,
+            Constant::create("<a>b</a>", format!("{XSD}string")),
+            Constant::create("<a>b</a>@en", format!("{RDF}PlainLiteral")),
+            Constant::create("1", format!("{XSD}integer")),
+        ] {
+            let (other, lexical) = (parse_value(&constant).unwrap(), constant.lexical_form());
+            assert_eq!(value_in_range(&other, &xml_literal().0), Some(false), "{lexical}");
+            assert_eq!(value_in_range(&other, &not_xml_literal().0), Some(true), "{lexical}");
+            assert!(!values_equal(&other, &value));
+        }
+        // Of an enumeration, only the XML literals are in rdf:XMLLiteral.
+        let mixed = crate::model::ConstantEnumeration::create(vec![
+            xml("<a/>"),
+            boolean_true,
+            Constant::create("<a/>", format!("{XSD}string")),
+        ]);
+        for (range, expected) in [(xml_literal(), 1), (not_xml_literal(), 2)] {
+            let ranges = [(LiteralDataRange::ConstantEnumeration(mixed), ()), range];
+            assert!(!conjunction_is_empty(&ranges));
+            assert!(matches!(
+                node_value_space(None, &ranges),
+                NodeValueSpace::Finite { count, .. } if count == expected
+            ));
+        }
     }
 
     // ----- Completeness: facet-restricted negation subsumption,

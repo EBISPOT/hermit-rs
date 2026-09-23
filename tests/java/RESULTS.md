@@ -3,24 +3,23 @@
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
 #10/#11 excluded-URI fix, the issue #12 binary-length fix, the issue #14
-dateTime-interval fix, the issue #15/#16 numeric value-space fix and the issue
-#17 string value-space fix. All 598 declared Java methods are accounted for;
-inherited methods also run under their individual-reuse and core-blocking
-suites.
+dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
+string value-space fix and the issue #31 XMLLiteral disjointness fix. All 598
+declared Java methods are accounted for; inherited methods also run under their
+individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 870 | 52 | 2 |
+| Query/structural replay | 871 | 51 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 920 | 55 | 2 |
+| Total, excluding OWL WG | 921 | 54 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 55 failures are:
+The Rust port does **not** yet have full Java test parity. The 54 failures are:
 
-* **35 Rust/Java discrepancies**, including inherited repetitions: datatype
-  consistency (XML literals); property hierarchy and entailment results;
-  direct results and hierarchy printing; three core-blocking Widmann scenarios;
-  and description-graph/SWRL integration.
+* **34 Rust/Java discrepancies**, including inherited repetitions: property
+  hierarchy and entailment results; direct results and hierarchy printing;
+  three core-blocking Widmann scenarios; and description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure
@@ -174,6 +173,21 @@ String lengths still count UTF-16 code units, as HermiT's do, while XSD 1.1
 counts characters (Part 2 §4.3.1), so a supplementary character has length 2.
 The count of a length window follows HermiT and XSD, one value per sequence of
 characters. Correcting the lengths is left to a separate change.
+
+Issue #31 was a gap in the disjointness of datatypes. rdf:XMLLiteral is
+disjoint from every other datatype of the OWL 2 datatype map: OWL 2 Structural
+Specification §4.8 takes it from RDF Concepts §5.1, whose XML values are
+disjoint from the value space of every XML Schema datatype and from the strings,
+and owl:real, owl:rational and rdf:PlainLiteral hold numbers, strings and pairs
+of a string and a language tag. The emptiness check of a fresh value kept its
+own list of datatype families, which lacked rdf:XMLLiteral, so a value of both
+rdf:XMLLiteral and xsd:boolean was taken to exist (`XMLLiteralTest.testRange_3`).
+The emptiness check and the count now read one disjointness test, which follows
+HermiT's `DatatypeRegistry.isDisjointWith` and already had rdf:XMLLiteral.
+rdf:XMLLiteral has no facets, so its value space holds every XML literal,
+infinitely many, unless rdf:XMLLiteral is negated. The complement of another
+datatype within the data domain holds every XML literal. Fixed XML literals
+were already checked correctly.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
