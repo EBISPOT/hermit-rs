@@ -12,8 +12,9 @@ properties, the issue #19 fix for the direct types of individuals, the issue
 core-blocking fix, which also resolved #29 and #30, the issue #32/#33
 blocking-validator fixture repair, the issue #34 description-graph rule
 fix, the semantic clause comparison for issues #35 to #50, and the issue #51
-key-normalization fix and expectation correction, and the dateTime `24:00:00`
-fix and expectation corrections. All 598
+key-normalization fix and expectation correction, the dateTime `24:00:00`
+fix and expectation corrections, and the base64Binary value-space fix and
+expectation correction. All 598
 declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
@@ -25,13 +26,13 @@ individual-reuse and core-blocking suites.
 
 These are strict-mode results, before applying expected-failure exceptions.
 Every executable imported case passes in strict mode, and
-`expected-failures.json` is empty. Eight passes use a documented correction
+`expected-failures.json` is empty. Nine passes use a documented correction
 instead of the recorded Java expectation (see below); the two empty upstream
 overrides have no assertions to run. The original controls and Java failure
 messages are retained as provenance, rather than rewritten to match Rust's
 output.
 
-Eight passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
+Nine passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
 `xsd:anyURI[minLength 1]` to be empty, but under XSD 1.1 and the OWL 2 Direct
 Semantics it contains exactly the empty URI (issue #9). Java misses it because
@@ -39,8 +40,10 @@ dk.brics `getFiniteStrings` omits the empty word of a non-singleton automaton.
 The trace keeps Java's `false`; [corrections.json](corrections.json) records the
 corrected `true`, its evidence and independent membership and cardinality
 regressions. `structural.NormalizationTest.testKeys2` is the second; see issue
-#51 below. The other six are dateTime cases that count `24:00:00` as a value of
-its own; see the dateTime value space below.
+#51 below. Six are dateTime cases that count `24:00:00` as a value of its own;
+see the dateTime value space below. The ninth, `BinaryDataTest.testBase64Parsing`,
+prints a parsed base64Binary literal as a hexBinary value; see the base64Binary
+value space below.
 
 Every case still executes in the default gate. `expected-failures.json` identifies
 each discrepancy and its failing assertion. A new failure, a changed failing
@@ -148,6 +151,19 @@ ones for all six cases, which the native datatype port applies too.
 `tests/datetime_24h.rs` checks equality, enumerations, interval bounds, counting,
 xsd:dateTimeStamp and the lexical edge cases (`24:00:00.0` and a timezone are
 valid; `24:00:01` is malformed).
+
+HermiT's `BinaryData.parseBase64Binary` tags a parsed base64Binary literal as
+hexBinary (`BinaryData.java:123`). So `"QQ=="^^xsd:base64Binary` was not a
+member of xsd:base64Binary and was the same value as `"41"^^xsd:hexBinary`.
+OWL 2 Structural Specification §4.6 makes the hexBinary and base64Binary value
+spaces disjoint, and XSD 1.1 Part 2 §3.3.16 maps a base64Binary literal into the
+base64Binary value space. Rust now parses it to a base64Binary value, so it lies
+in xsd:base64Binary and its length facets, not in xsd:hexBinary, and differs from
+every hexBinary value. This deliberately deviates from Java.
+`BinaryDataTest.testBase64Parsing` checks only the decoded octets, but its trace
+records a hexBinary value; [corrections.json](corrections.json) records the
+base64Binary value instead. `tests/base64_binary_value_space.rs` checks
+membership, length facets, enumerations, counting and constant inequalities.
 
 Issues #15 and #16 had one cause, in the numeric value spaces. owl:real,
 owl:rational, xsd:decimal and the integer datatypes share one value space, whose

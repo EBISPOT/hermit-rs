@@ -3236,8 +3236,6 @@ fn binary_length_window(dr: &DatatypeRestriction) -> Option<(u64, Option<u64>)> 
 ///
 /// The values are typed by the positive restrictions' datatype, and an excluded
 /// literal removes a value only when `parse_value` gives it that type.
-/// (`parse_value` follows HermiT in typing a base64Binary literal as
-/// hexBinary; see `parse_base64_binary`.)
 fn binary_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<NodeValueSpace> {
     let binary_kind = |dr: &DatatypeRestriction| -> Option<&'static str> {
         if is_hex_binary_datatype(dr.datatype_uri()) {
