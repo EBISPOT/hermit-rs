@@ -421,5 +421,47 @@
       "datetime_24h::single_instant_holds_one_value_per_offset",
       "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
     ]
+  },
+  "reasoner.BinaryDataTest.testBase64Parsing": {
+    "issue": "none (known bug without an issue): an xsd:base64Binary literal denotes a base64Binary value",
+    "operations": [
+      {
+        "operation": 0,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#hexBinary",
+          "lexical": "65777264"
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#base64Binary",
+          "lexical": "ZXdyZA=="
+        }
+      },
+      {
+        "operation": 1,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#hexBinary",
+          "lexical": "65777264"
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#base64Binary",
+          "lexical": " Z  X d y Z A ==  "
+        }
+      }
+    ],
+    "justification": [
+      "OWL 2 Structural Specification §4.6 (Binary Data): the datatype map provides xsd:hexBinary and xsd:base64Binary, and states that their value spaces are disjoint. XSD 1.1 Part 2 §3.3.16 (base64Binary) gives base64Binary its own value space of finite octet sequences and a lexical mapping onto it.",
+      "OWL 2 Direct Semantics §2.2 interprets a literal as the value its datatype's lexical mapping assigns, so \"ZXdyZA==\"^^xsd:base64Binary denotes the base64Binary value with octets 65 77 72 64. It is a member of xsd:base64Binary, not of xsd:hexBinary, and differs from \"65777264\"^^xsd:hexBinary.",
+      "Java's assertion only checks the decoded octets (BinaryDataTest.assertBinaryData), which still hold: the corrected expectation is a base64Binary literal of the same octets, and the whitespace spelling decodes to the same value.",
+      "HermiT's BinaryData.parseBase64Binary returns new BinaryData(BinaryDataType.HEX_BINARY, data) (BinaryData.java:123), so the recorded trace prints a hexBinary value. As a result HermiT puts a base64Binary literal outside xsd:base64Binary (BinaryDataLengthInterval.contains compares the binary data type) and makes it equal to the hexBinary literal with the same octets."
+    ],
+    "regressions": [
+      "base64_binary_value_space::base64_literal_is_a_base64_value_and_not_a_hex_value",
+      "base64_binary_value_space::base64_length_facets_count_octets",
+      "base64_binary_value_space::base64_literals_in_enumerations",
+      "base64_binary_value_space::base64_counting",
+      "base64_binary_value_space::base64_and_hex_constants_are_different_values"
+    ]
   }
 }

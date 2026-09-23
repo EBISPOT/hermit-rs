@@ -869,18 +869,6 @@ pub fn encode_base64(bytes: &[u8]) -> String {
     out
 }
 
-/// Validates an `xsd:base64Binary` lexical form, returning `(canonical,
-/// octet_count)`. Whitespace is ignored; the body must be the base64 alphabet
-/// with 0--2 trailing `=` and a total length that is a multiple of four.
-///
-/// Java's `BinaryData.parseBase64Binary` constructs `new
-/// BinaryData(BinaryDataType.HEX_BINARY, data)` (BinaryData.java:parseBase64Binary):
-/// a parsed base64 value is tagged HEX_BINARY, so its canonical `toString()` is the
-/// hex form of the decoded bytes and it is value-EQUAL to a hexBinary literal with
-/// the same bytes (`BinaryData.equals` compares the byte[] and the binaryDataType).
-/// The canonical form returned here is therefore the uppercase hex of the decoded
-/// bytes, matching `parse_hex_binary`'s canonical, and the parse branch tags the
-/// value with kind "hexBinary".
 /// `Character.isWhitespace`: the Java whitespace set used by
 /// `BinaryData.removeWhitespace` (space separators excluding the non-breaking
 /// ones, the line/paragraph separators, and the ASCII control whitespace).
@@ -892,6 +880,18 @@ fn is_java_whitespace(c: char) -> bool {
         | '\u{2028}' | '\u{2029}' | '\u{205F}' | '\u{3000}')
 }
 
+/// Validates an `xsd:base64Binary` lexical form, returning `(canonical,
+/// octet_count)`. Whitespace is ignored; the body must be the base64 alphabet
+/// with 0--2 trailing `=` and a total length that is a multiple of four.
+///
+/// The canonical form returned here is the uppercase hex of the decoded bytes,
+/// the same encoding as `parse_hex_binary`'s canonical, so two base64 lexical
+/// forms of the same octets are one value. The parse branch tags the value with
+/// kind "base64Binary", which keeps it apart from a hexBinary value with the same
+/// octets: OWL 2 Structural Specification §4.6 makes the two value spaces
+/// disjoint. (This deviates from Java, whose `BinaryData.parseBase64Binary` tags
+/// the parsed value HEX_BINARY, so a base64Binary literal lies outside
+/// xsd:base64Binary and equals the hexBinary literal with the same octets.)
 pub fn parse_base64_binary(lexical: &str) -> Option<(String, usize)> {
     // BinaryData.removeWhitespace: trim chars <= U+0020 from both ends, then drop
     // every interior Character.isWhitespace char.
@@ -934,8 +934,8 @@ pub fn parse_base64_binary(lexical: &str) -> Option<(String, usize)> {
 }
 
 /// Uppercase hex encoding of `bytes`, matching `BinaryData.toHexBinary`
-/// (BinaryData.java). Used as the canonical form for binary values tagged
-/// HEX_BINARY (both hexBinary literals and, per Java, parsed base64 literals).
+/// (BinaryData.java). Used as the canonical form of both binary datatypes; the
+/// value's kind keeps hexBinary and base64Binary values apart.
 fn encode_hex_upper(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -1327,12 +1327,11 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
             length,
         })
     } else if is_base64_datatype(datatype) {
-        // Java BinaryData.parseBase64Binary tags the parsed value HEX_BINARY,
-        // so a base64 literal is value-equal to a hexBinary literal with the same
-        // decoded bytes and is NOT a member of the base64Binary value space
-        // (BinaryDataLengthInterval.contains requires matching binaryDataType).
+        // A base64Binary value, disjoint from the hexBinary values (OWL 2
+        // Structural Specification §4.6). Java's BinaryData.parseBase64Binary
+        // tags it HEX_BINARY instead; see `parse_base64_binary`.
         parse_base64_binary(lexical).map(|(canonical, length)| DataValue::Typed {
-            kind: "hexBinary",
+            kind: "base64Binary",
             canonical,
             length,
         })
@@ -2109,9 +2108,8 @@ mod rescan_tests {
         assert!(parse_datetime("2020-01-01T00:00:00+0a:30", true).is_none()); // tz
     }
 
-    // A parsed base64 value is tagged HEX_BINARY (matching Java
-    // `BinaryData.parseBase64Binary`), so its canonical form is the uppercase hex
-    // of the decoded bytes and forms decoding to the same bytes compare equal.
+    // The canonical form of a base64 value is the uppercase hex of the decoded
+    // bytes, so forms decoding to the same bytes compare equal.
     #[test]
     fn base64_equality_is_by_decoded_bytes() {
         let (c1, n1) = parse_base64_binary("QQ==").unwrap(); // decodes to 0x41

@@ -87,6 +87,14 @@ both was inconsistent and each local midnight was counted twice. Six
 `DateTimeTest` expectations are corrected in [corrections.json](corrections.json);
 see `tests/datetime_24h.rs` and [RESULTS.md](RESULTS.md).
 
+An `xsd:base64Binary` literal denotes a base64Binary value (**resolved**, no
+issue, deliberately deviating from Java). HermiT's `BinaryData.parseBase64Binary`
+tagged it as hexBinary, so `"QQ=="^^xsd:base64Binary` was outside
+xsd:base64Binary and equal to `"41"^^xsd:hexBinary`, although OWL 2 makes the
+two value spaces disjoint. The `BinaryDataTest.testBase64Parsing` expectation is
+corrected in [corrections.json](corrections.json); see
+`tests/base64_binary_value_space.rs`.
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
@@ -109,8 +117,8 @@ are grouped; every issue lists its exact cases, reproduction command, findings,
 and acceptance criteria. At the release baseline, 912 imported cases pass and
 two overrides are empty in the original Java source. All 43 are now resolved.
 In strict mode, all 975 executable cases pass and `expected-failures.json` is
-empty. Eight of those passes use documented corrections of the Java expectation
-(#9, #51 and six dateTime `24:00:00` cases).
+empty. Nine of those passes use documented corrections of the Java expectation
+(#9, #51, six dateTime `24:00:00` cases and one base64Binary case).
 
 | Issue | Work | Cases |
 | --- | --- | ---: |
