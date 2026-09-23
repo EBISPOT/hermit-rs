@@ -443,19 +443,10 @@ fn special_float_order(value: &DataValue, facet: &str, facet_value: &Constant) -
             DataValue::Double(bits) => f64::from_bits(bits),
             _ => f64::NAN,
         });
-        // A NaN bound is handled like getIntervalFor does it, which differs by kind:
-        //   * xsd:double's mask is correct, so a NaN bound is dropped and the facet
-        //     is unconstraining: every value (incl. ±INF) satisfies it.
-        //   * xsd:float's FloatInterval.isNaN mask is bugged (0x003fffff), so the
-        //     canonical NaN bound 0x7fc00000 is mistaken for an ordinary positive
-        //     value above +INF: a min* facet yields an empty interval (no value
-        //     satisfies it), while a max* facet leaves the upper bound at +INF (the
-        //     bound is effectively dropped, so every value satisfies it).
+        // NaN is incomparable with every value (XSD 1.1 Part 2 §3.3.4.1,
+        // §3.3.5.1), so no value satisfies a NaN bound: see `nan_bound`.
         if bound_f.is_some_and(|b| b.is_nan()) {
-            return Some(match value {
-                DataValue::Float(_) => matches!(facet, "maxInclusive" | "maxExclusive"),
-                _ => true,
-            });
+            return Some(false);
         }
         // Java FloatInterval/DoubleInterval.isSmallerEqual: two infinities compare
         // equal when they have the same sign (same sign + same magnitude bits).
@@ -491,12 +482,11 @@ fn finite_float_order(value: &DataValue, facet: &str, facet_value: &Constant) ->
                 return None;
             };
             let b = f32::from_bits(bbits);
-            // A ±INF bound compares by the IEEE order key; a NaN bound is treated as
-            // Java's bugged FloatInterval.isNaN treats it — an ordinary positive
-            // value of magnitude 0x7fc00000 (above +INF) — so a finite value never
-            // satisfies a NaN min* bound and always satisfies a NaN max* bound,
-            // matching FloatInterval/getIntervalFor. Both flow through f32_order_key
-            // directly (no finite-bound bail).
+            // No value satisfies a NaN bound (see `float_restriction_key_window`); a ±INF bound
+            // compares by the IEEE order key.
+            if b.is_nan() {
+                return Some(false);
+            }
             let b = normalize_zero_for_facet_f32(b, facet);
             let (vk, bk) = (f32_order_key(v), f32_order_key(b));
             Some(match facet {
@@ -516,12 +506,10 @@ fn finite_float_order(value: &DataValue, facet: &str, facet_value: &Constant) ->
                 return None;
             };
             let b = f64::from_bits(bbits);
-            // xsd:double's DoubleInterval.isNaN mask is CORRECT (unlike float), so a
-            // NaN bound is dropped by getIntervalFor (the facet is unconstraining);
-            // returning None lets value_satisfies_facet fall through to `true`. A
-            // ±INF bound, however, must compare by the IEEE order key.
+            // No value satisfies a NaN bound (see `float_restriction_key_window`); a ±INF bound
+            // compares by the IEEE order key.
             if b.is_nan() {
-                return None;
+                return Some(false);
             }
             let b = normalize_zero_for_facet_f64(b, facet);
             let (vk, bk) = (f64_order_key(v), f64_order_key(b));
@@ -2647,8 +2635,18 @@ fn real_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<RealValueSpac
 
 /// FD-5: the order-key window `[lo, hi]` of a (positive) xsd:float datatype
 /// restriction's min/max facets, mirroring FloatDatatypeHandler.getIntervalFor
-/// (zero signs are normalised per facet; a NaN facet bound is handled exactly as
-/// Java's bugged FloatInterval.isNaN does — see the body).
+/// (zero signs are normalised per facet); `lo > hi` when it holds no value.
+///
+/// A NaN bound makes the window empty. NaN is incomparable with every float,
+/// itself included (XSD 1.1 Part 2 §3.3.4.1), so no value is `>=`, `>`, `<=` or
+/// `<` it, and the restricted value space is empty; §3.3.4.1 states this case
+/// in its note on the bounding facets. NaN is in the value space, so it is a
+/// valid bounding-facet value (§4.3.7-§4.3.10), and OWL 2 takes the facets of
+/// xsd:float and xsd:double from XML Schema (OWL 2 Structural Specification
+/// §4.2), so `(F, NaN)^FA` is empty. This deviates from Java, whose
+/// FloatInterval.isNaN mask (0x003fffff) misses the canonical NaN 0x7fc00000:
+/// its getIntervalFor treats a NaN bound as a value above +INF, so a NaN min*
+/// bound empties the interval but a NaN max* bound is dropped.
 fn float_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u32, u32)> {
     let mut lower_key = f32_order_key(f32::NEG_INFINITY);
     let mut upper_key = f32_order_key(f32::INFINITY);
@@ -2659,16 +2657,9 @@ fn float_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u32, u32)> 
         }
         let DataValue::Float(bits) = parse_value(dr.facet_value(i))? else { return None };
         let bound = f32::from_bits(bits);
-        // Faithful to Java FloatInterval.isNaN, whose mantissa mask is 0x003fffff
-        // (22 bits) instead of the correct 0x007fffff (23 bits). The canonical
-        // float NaN bits 0x7fc00000 satisfy `(bits & 0x003fffff)==0`, so Java does
-        // NOT recognise it as NaN inside getIntervalFor: it is treated as an
-        // ordinary positive value of magnitude 0x7fc00000 (above +INF). Letting it
-        // flow through f32_order_key (which keys it as 0xffc00000) reproduces this:
-        // a NaN min* bound pushes lower_key above +INF (empty interval), while a
-        // NaN max* bound leaves upper_key at +INF (the min() keeps +INF), exactly
-        // matching Java. (Double's mask is correct, so the double window below does
-        // drop a NaN bound.)
+        if bound.is_nan() {
+            return Some((1, 0));
+        }
         let bound = normalize_zero_for_facet_f32(bound, facet);
         let key = f32_order_key(bound);
         match facet {
@@ -2683,7 +2674,9 @@ fn float_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u32, u32)> 
 }
 
 /// The xsd:double analogue of `float_restriction_key_window`
-/// (DoubleDatatypeHandler.getIntervalFor), which drops a NaN facet bound.
+/// (DoubleDatatypeHandler.getIntervalFor). A NaN bound makes the window empty
+/// (XSD 1.1 Part 2 §3.3.5.1); Java's DoubleDatatypeHandler drops it instead,
+/// leaving the facet unconstraining.
 fn double_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u64, u64)> {
     let mut lower_key = f64_order_key(f64::NEG_INFINITY);
     let mut upper_key = f64_order_key(f64::INFINITY);
@@ -2695,7 +2688,7 @@ fn double_restriction_key_window(dr: &DatatypeRestriction) -> Option<(u64, u64)>
         let DataValue::Double(bits) = parse_value(dr.facet_value(i))? else { return None };
         let bound = f64::from_bits(bits);
         if bound.is_nan() {
-            continue;
+            return Some((1, 0));
         }
         let bound = normalize_zero_for_facet_f64(bound, facet);
         let key = f64_order_key(bound);
@@ -2864,8 +2857,9 @@ impl FloatValueSpace {
 /// restriction keeps it (OWL 2 Direct Semantics, Table 3). HermiT drops NaN when
 /// it subtracts a restriction with facets from the whole value space
 /// (`conjoinWithDRNegation` builds a `NoNaNFloatSubset`); this keeps it, as the
-/// membership test `value_in_range` does. A NaN facet bound keeps the reading
-/// of `float_restriction_key_window` and `double_restriction_key_window`.
+/// membership test `value_in_range` does. A restriction with a NaN bound holds
+/// no value (see `float_restriction_key_window`), so its complement keeps every
+/// value, NaN included.
 ///
 /// Any other positive range is left to the callers; it can only shrink the
 /// space. A negated restriction of another datatype removes nothing, since the
@@ -5971,50 +5965,38 @@ mod tests {
         }
     }
 
-    // Faithful to Java's bugged FloatInterval.isNaN (mantissa mask 0x003fffff): a
-    // NaN bound on xsd:float is NOT recognised as NaN inside getIntervalFor — it is
-    // mistaken for a positive value above +INF. A NaN min* facet therefore makes the
-    // interval EMPTY, while a NaN max* facet is effectively dropped. (xsd:double's
-    // mask is correct, so a NaN double bound is genuinely dropped in both cases.)
+    // NaN is incomparable with every value (XSD 1.1 Part 2 §3.3.4.1, §3.3.5.1),
+    // so a NaN bounding facet empties an xsd:float or xsd:double restriction,
+    // whichever facet it is. (Java drops a NaN double bound and a NaN float max*
+    // bound; see `float_restriction_key_window`.)
     #[test]
-    fn float_nan_bound_reproduces_java_isnan_bug() {
-        let float = |s: &str| Constant::create(s, format!("{XSD}float"));
-        // NaN minInclusive => empty window (lower_key pushed above upper_key).
-        let min_nan = crate::model::DatatypeRestriction::create(
-            format!("{XSD}float"),
-            vec![format!("{XSD}minInclusive")],
-            vec![float("NaN")],
-        );
-        let (lo, hi) = float_restriction_key_window(&min_nan).unwrap();
-        assert!(lo > hi, "NaN minInclusive must yield an empty float interval");
-        // NaN maxInclusive => the bound is dropped; the window stays the full space.
-        let max_nan = crate::model::DatatypeRestriction::create(
-            format!("{XSD}float"),
-            vec![format!("{XSD}maxInclusive")],
-            vec![float("NaN")],
-        );
-        let (lo, hi) = float_restriction_key_window(&max_nan).unwrap();
-        assert_eq!(lo, f32_order_key(f32::NEG_INFINITY));
-        assert_eq!(hi, f32_order_key(f32::INFINITY));
-        // The value-space cardinality of a NaN minInclusive float restriction is 0
-        // (empty), with no NaN (the faceted restriction is a NoNaN subset that is
-        // then empty).
-        let space = node_value_space(
-            None,
-            &[(LiteralDataRange::DatatypeRestriction(min_nan), ())],
-        );
-        assert!(matches!(space, NodeValueSpace::Finite { count: 0, .. }));
-        // A finite value never satisfies a NaN minInclusive float facet, but always
-        // satisfies a NaN maxInclusive one.
-        let v = parse_value(&float("1.0")).unwrap();
-        assert!(!value_satisfies_facet(&v, &format!("{XSD}minInclusive"), &float("NaN")));
-        assert!(value_satisfies_facet(&v, &format!("{XSD}maxInclusive"), &float("NaN")));
-        // For xsd:double (correct mask), a NaN bound is dropped: the value satisfies
-        // both a NaN minInclusive and a NaN maxInclusive facet.
-        let dbl = |s: &str| Constant::create(s, format!("{XSD}double"));
-        let dv = parse_value(&dbl("1.0")).unwrap();
-        assert!(value_satisfies_facet(&dv, &format!("{XSD}minInclusive"), &dbl("NaN")));
-        assert!(value_satisfies_facet(&dv, &format!("{XSD}maxInclusive"), &dbl("NaN")));
+    fn nan_bound_empties_float_and_double_restrictions() {
+        for (datatype, one) in [("float", "1.0"), ("double", "1.0")] {
+            let lit = |s: &str| Constant::create(s, format!("{XSD}{datatype}"));
+            for facet in ["minInclusive", "minExclusive", "maxInclusive", "maxExclusive"] {
+                let facet = format!("{XSD}{facet}");
+                let dr = crate::model::DatatypeRestriction::create(
+                    format!("{XSD}{datatype}"),
+                    vec![facet.clone()],
+                    vec![lit("NaN")],
+                );
+                let kind = FloatKind::of(dr.datatype_uri()).unwrap();
+                let (lo, hi) = kind.window(&dr).unwrap();
+                assert!(lo > hi, "{datatype} {facet} NaN must be empty");
+                let space = node_value_space(
+                    None,
+                    &[(LiteralDataRange::DatatypeRestriction(dr), ())],
+                );
+                assert!(matches!(space, NodeValueSpace::Finite { count: 0, .. }));
+                for value in [one, "INF", "-INF", "NaN", "-0"] {
+                    let v = parse_value(&lit(value)).unwrap();
+                    assert!(
+                        !value_satisfies_facet(&v, &facet, &lit("NaN")),
+                        "{value}^^{datatype} must not satisfy {facet} NaN"
+                    );
+                }
+            }
+        }
     }
 
     fn integer(lexical: &str) -> Constant {
@@ -6122,23 +6104,20 @@ mod tests {
     }
 
     #[test]
-    fn float_double_type_suffix_is_accepted() {
-        // Float.parseFloat/Double.parseDouble accept a trailing f/F/d/D.
+    fn float_double_type_suffix_is_ill_typed() {
+        // Float.parseFloat/Double.parseDouble accept a trailing f/F/d/D, but the
+        // XSD 1.1 lexical spaces (Part 2 §3.3.4.2, §3.3.5.2) do not.
         let flt = |l: &str| Constant::create(l, format!("{XSD}float"));
         let dbl = |l: &str| Constant::create(l, format!("{XSD}double"));
-        for s in ["1.0f", "1.0F", "1.0d", "1.0D"] {
-            assert!(!is_ill_typed(&flt(s)), "xsd:float {s} should be well-typed");
+        for s in ["1.0f", "1.0F", "1.0d", "1.0D", "1f"] {
+            assert!(is_ill_typed(&flt(s)), "xsd:float {s} should be ill-typed");
+            assert!(is_ill_typed(&dbl(s)), "xsd:double {s} should be ill-typed");
         }
-        for s in ["1.0f", "1.0F", "1.0d", "1.0D"] {
+        // The XSD numerals and special values are well-typed.
+        for s in ["1.0", "1.", ".5", "-1E4", "1e+5", "+1.5e-3", "INF", "+INF", "-INF", "NaN"] {
+            assert!(!is_ill_typed(&flt(s)), "xsd:float {s} should be well-typed");
             assert!(!is_ill_typed(&dbl(s)), "xsd:double {s} should be well-typed");
         }
-        // "1.0f"^^xsd:float denotes the same value as "1.0"^^xsd:float.
-        assert!(values_equal(
-            &parse_value(&flt("1.0f")).unwrap(),
-            &parse_value(&flt("1.0")).unwrap()
-        ));
-        // The special spellings still work and a bare suffix is still ill-typed.
-        assert!(!is_ill_typed(&flt("INF")));
         assert!(is_ill_typed(&flt("f")));
         assert!(is_ill_typed(&flt("abc")));
     }
@@ -6293,21 +6272,26 @@ mod tests {
             &parse_value(&Constant::create("1.0", format!("{XSD}decimal"))).unwrap()
         ));
         // HermiT parses doubles with `Double.parseDouble`, so `Infinity`/`NaN`
-        // spellings are valid too; but lowercase forms and `+INF` are rejected.
+        // spellings are valid too; lowercase forms are rejected. `+INF` is in
+        // the XSD 1.1 lexical space (Part 2 §3.3.5.2), although Java rejects it.
         assert_eq!(
             parse_value(&double("Infinity")),
             Some(DataValue::Double(f64::INFINITY.to_bits()))
         );
         assert!(parse_value(&double("nan")).is_none());
         assert!(parse_value(&double("infinity")).is_none());
-        assert!(parse_value(&double("+INF")).is_none());
+        assert_eq!(
+            parse_value(&double("+INF")),
+            Some(DataValue::Double(f64::INFINITY.to_bits()))
+        );
 
         // The specials are valid for the float types but ill-typed for decimal.
         assert!(!is_ill_typed(&double("INF")));
         assert!(is_ill_typed(&Constant::create("INF", format!("{XSD}decimal"))));
         assert!(is_ill_typed(&Constant::create("NaN", format!("{XSD}decimal"))));
-        // xsd:decimal accepts exponent notation (`new BigDecimal("1e3")`).
-        assert!(!is_ill_typed(&Constant::create("1e3", format!("{XSD}decimal"))));
+        // xsd:decimal has no exponent notation (XSD 1.1 Part 2 §3.3.3.1),
+        // although `new BigDecimal("1e3")` accepts it.
+        assert!(is_ill_typed(&Constant::create("1e3", format!("{XSD}decimal"))));
         // A NaN value is not in the xsd:decimal value space.
         assert!(!value_in_datatype(&nan, &format!("{XSD}decimal")));
         assert!(value_in_datatype(&nan, &format!("{XSD}double")));
@@ -6338,21 +6322,28 @@ mod tests {
         // Double special-value spellings follow Double.parseDouble (+ INF/-INF).
         assert!(!is_ill_typed(&c("Infinity", "double")));
         assert!(!is_ill_typed(&c("INF", "double")));
-        assert!(is_ill_typed(&c("+INF", "double")));
+        assert!(!is_ill_typed(&c("+INF", "double"))); // XSD 1.1 §3.3.5.2
         assert!(is_ill_typed(&c("infinity", "double")));
 
-        // Boolean is case-insensitive for true/false.
-        assert!(!is_ill_typed(&c("TRUE", "boolean")));
-        assert!(!is_ill_typed(&c("False", "boolean")));
+        // Boolean's lexical space is exactly true/false/1/0 (XSD 1.1 §3.3.2.2),
+        // so the other cases HermiT accepts are ill-typed.
+        assert!(is_ill_typed(&c("TRUE", "boolean")));
+        assert!(is_ill_typed(&c("False", "boolean")));
+        assert!(!is_ill_typed(&c("true", "boolean")));
         assert!(values_equal(
-            &parse_value(&c("TRUE", "boolean")).unwrap(),
+            &parse_value(&c("1", "boolean")).unwrap(),
             &parse_value(&c("true", "boolean")).unwrap()
         ));
 
-        // Decimal accepts exponent notation, kept exact.
-        assert!(!is_ill_typed(&c("1E2", "decimal")));
+        // Decimal has no exponent notation (XSD 1.1 §3.3.3.1), which HermiT's
+        // BigDecimal accepts; its other forms are kept exact.
+        assert!(is_ill_typed(&c("1E2", "decimal")));
+        assert!(is_ill_typed(&c("1e-2", "decimal")));
+        assert!(!is_ill_typed(&c("+.5", "decimal")));
+        assert!(!is_ill_typed(&c("5.", "decimal")));
+        assert!(is_ill_typed(&c(".", "decimal")));
         assert!(values_equal(
-            &parse_value(&c("1E2", "decimal")).unwrap(),
+            &parse_value(&c("100.00", "decimal")).unwrap(),
             &parse_value(&c("100", "decimal")).unwrap()
         ));
 
