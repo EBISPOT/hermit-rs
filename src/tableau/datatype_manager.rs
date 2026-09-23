@@ -168,8 +168,8 @@ fn values_equal(a: &DataValue, b: &DataValue) -> bool {
         // apart from `...T00:00:00` of the next day; XSD 1.1 Part 2 §3.3.7.2 and
         // §E.3.5 map both spellings to one value, so they are equal here.
         (
-            DataValue::DateTime { millis: x, has_tz: xt, tz_offset: xo },
-            DataValue::DateTime { millis: y, has_tz: yt, tz_offset: yo },
+            DataValue::DateTime { instant: x, has_tz: xt, tz_offset: xo },
+            DataValue::DateTime { instant: y, has_tz: yt, tz_offset: yo },
         ) => x == y && xt == yt && xo == yo,
         (
             DataValue::Typed { kind: k1, canonical: c1, .. },
@@ -332,19 +332,19 @@ fn value_satisfies_facet(value: &DataValue, facet_uri: &str, facet_value: &Const
             // (DateTimeDatatypeHandler.getIntervalsFor). This is symmetric in
             // which side carries the timezone.
             if let (
-                DataValue::DateTime { millis: v, has_tz: vt, .. },
-                Some(DataValue::DateTime { millis: bound, has_tz: bt, .. }),
+                DataValue::DateTime { instant: v, has_tz: vt, .. },
+                Some(DataValue::DateTime { instant: bound, has_tz: bt, .. }),
             ) = (value, parse_value(facet_value))
             {
                 if *vt == bt {
-                    return compare_order_i64(*v, bound, facet);
+                    return compare_order_ord(v, &bound, facet);
                 }
                 return match facet {
                     "minInclusive" | "minExclusive" => {
-                        *v > bound.saturating_add(MAX_TZ_CORRECTION_MILLIS)
+                        *v > bound.shifted(MAX_TZ_CORRECTION_SECONDS)
                     }
                     "maxInclusive" | "maxExclusive" => {
-                        *v < bound.saturating_sub(MAX_TZ_CORRECTION_MILLIS)
+                        *v < bound.shifted(-MAX_TZ_CORRECTION_SECONDS)
                     }
                     _ => true,
                 };
@@ -399,18 +399,21 @@ fn value_satisfies_facet(value: &DataValue, facet_uri: &str, facet_value: &Const
 /// Whether the XSD pattern matches the whole string, or `None` when the pattern
 /// cannot be translated. The automata are cached per pattern.
 fn pattern_matches(pattern: &str, s: &str) -> Option<bool> {
-    use crate::string_automaton::{xsd_pattern_to_automaton, Automaton};
+    use crate::string_automaton::{xsd_pattern_term, Automaton, LengthWindow};
     thread_local! {
-        static PATTERNS: std::cell::RefCell<std::collections::HashMap<String, Option<Automaton>>> =
+        static PATTERNS: std::cell::RefCell<std::collections::HashMap<String, Option<(Automaton, LengthWindow)>>> =
             std::cell::RefCell::new(std::collections::HashMap::new());
     }
     PATTERNS.with(|patterns| {
         patterns
             .borrow_mut()
             .entry(pattern.to_string())
-            .or_insert_with(|| xsd_pattern_to_automaton(pattern))
+            .or_insert_with(|| xsd_pattern_term(pattern))
             .as_ref()
-            .map(|automaton| automaton.run(s))
+            .map(|(automaton, (min, max))| {
+                let length = s.chars().count() as u64;
+                *min <= length && max.is_none_or(|max| length <= max) && automaton.run(s)
+            })
     })
 }
 
@@ -570,8 +573,8 @@ fn compare_order_exact(v: &(BigInt, BigInt), bound: &(BigInt, BigInt), facet: &s
     }
 }
 
-/// Compares `v` against `bound` for an ordering facet (datetime instants, f64).
-fn compare_order_i64(v: i64, bound: i64, facet: &str) -> bool {
+/// Compares `v` against `bound` for an ordering facet (datetime instants).
+fn compare_order_ord<T: Ord>(v: &T, bound: &T, facet: &str) -> bool {
     match facet {
         "minInclusive" => v >= bound,
         "maxInclusive" => v <= bound,
@@ -1665,59 +1668,198 @@ fn component_is_unsatisfiable(
             row
         })
         .collect();
-    // Smallest candidate set first (HermiT's SmallestEnumerationFirst).
-    let mut order: Vec<usize> = (0..survivors.len()).collect();
-    order.sort_by_key(|&k| candidate_sets[k].len());
-
-    // Each value by a key that is equal exactly when the values are
-    // (`values_equal` is structural equality of the parsed values), so a node
-    // finds the values its assigned neighbours hold in a hash set and a
-    // component of thousands of nodes is searched in quadratic time.
-    let mut keys_of: HashMap<*const Vec<DataValue>, std::rc::Rc<Vec<String>>> = HashMap::new();
-    let candidate_keys: Vec<std::rc::Rc<Vec<String>>> = candidate_sets
+    // Each value by an id that is equal exactly when the values are
+    // (`values_equal` is structural equality of the parsed values, and so is
+    // the `Debug` form used as the key), so a node finds the values its
+    // assigned neighbours hold in a hash set and a component of thousands of
+    // nodes is searched in quadratic time. Nodes sharing a list share its ids.
+    let mut id_of_key: HashMap<String, usize> = HashMap::new();
+    let mut ids_of: HashMap<*const Vec<DataValue>, std::rc::Rc<Vec<usize>>> = HashMap::new();
+    let candidate_ids: Vec<std::rc::Rc<Vec<usize>>> = candidate_sets
         .iter()
         .map(|values| {
-            keys_of
+            ids_of
                 .entry(std::rc::Rc::as_ptr(values))
-                .or_insert_with(|| std::rc::Rc::new(values.iter().map(|value| format!("{value:?}")).collect()))
+                .or_insert_with(|| {
+                    std::rc::Rc::new(
+                        values
+                            .iter()
+                            .map(|value| {
+                                let next = id_of_key.len();
+                                *id_of_key.entry(format!("{value:?}")).or_insert(next)
+                            })
+                            .collect(),
+                    )
+                })
                 .clone()
         })
         .collect();
-    fn search(
-        position: usize,
-        order: &[usize],
-        candidate_keys: &[std::rc::Rc<Vec<String>>],
-        radjacent: &[Vec<usize>],
-        chosen: &mut [Option<usize>],
-    ) -> bool {
-        if position == order.len() {
+    let value_count = id_of_key.len();
+    drop(id_of_key);
+
+    // Decide each connected component of the survivors on its own. A
+    // component whose nodes are pairwise distinct is an all-different
+    // constraint over value sets: it has an assignment exactly when there is
+    // a matching of its nodes into values (Hall's theorem), which
+    // Hopcroft–Karp decides in polynomial time. Any other component is
+    // searched.
+    let m = survivors.len();
+    let mut component = vec![usize::MAX; m];
+    for root in 0..m {
+        if component[root] != usize::MAX {
+            continue;
+        }
+        let mut members = vec![root];
+        component[root] = root;
+        let mut next = 0;
+        while next < members.len() {
+            let k = members[next];
+            next += 1;
+            for &nb in &radjacent[k] {
+                if component[nb] == usize::MAX {
+                    component[nb] = root;
+                    members.push(nb);
+                }
+            }
+        }
+        let is_clique = members.iter().all(|&k| {
+            let distinct: std::collections::HashSet<usize> =
+                radjacent[k].iter().copied().filter(|&nb| nb != k).collect();
+            distinct.len() == members.len() - 1
+        });
+        let satisfiable = if is_clique {
+            let lists: Vec<&[usize]> = members.iter().map(|&k| candidate_ids[k].as_slice()).collect();
+            has_distinct_assignment(&lists, value_count)
+        } else {
+            let mut order = members;
+            order.sort_by_key(|&k| candidate_ids[k].len());
+            let mut chosen: Vec<Option<usize>> = vec![None; m];
+            search(0, &order, &candidate_ids, &radjacent, &mut chosen)
+        };
+        if !satisfiable {
             return true;
         }
-        let k = order[position];
-        let mut next = 0;
-        loop {
-            // The next value no assigned neighbour holds. The set is rebuilt on
-            // each retry rather than kept, so a deep search holds no sets.
-            let free = {
-                let taken: std::collections::HashSet<&str> = radjacent[k]
-                    .iter()
-                    .filter_map(|&nb| chosen[nb].map(|v| candidate_keys[nb][v].as_str()))
-                    .collect();
-                (next..candidate_keys[k].len()).find(|&v| !taken.contains(candidate_keys[k][v].as_str()))
-            };
-            let Some(v) = free else {
-                return false;
-            };
-            chosen[k] = Some(v);
-            if search(position + 1, order, candidate_keys, radjacent, chosen) {
-                return true;
+    }
+    false
+}
+
+/// Backtracking distinct-assignment search (DatatypeChecker.checkAssignments
+/// / findAssignment) over the nodes in `order`: whether each can take one of
+/// its candidate values, none equal to a value an adjacent node takes.
+fn search(
+    position: usize,
+    order: &[usize],
+    candidate_ids: &[std::rc::Rc<Vec<usize>>],
+    radjacent: &[Vec<usize>],
+    chosen: &mut [Option<usize>],
+) -> bool {
+    if position == order.len() {
+        return true;
+    }
+    let k = order[position];
+    let mut next = 0;
+    loop {
+        // The next value no assigned neighbour holds. The set is rebuilt on
+        // each retry rather than kept, so a deep search holds no sets.
+        let free = {
+            let taken: std::collections::HashSet<usize> = radjacent[k]
+                .iter()
+                .filter_map(|&nb| chosen[nb].map(|v| candidate_ids[nb][v]))
+                .collect();
+            (next..candidate_ids[k].len()).find(|&v| !taken.contains(&candidate_ids[k][v]))
+        };
+        let Some(v) = free else {
+            return false;
+        };
+        chosen[k] = Some(v);
+        if search(position + 1, order, candidate_ids, radjacent, chosen) {
+            return true;
+        }
+        chosen[k] = None;
+        next = v + 1;
+    }
+}
+
+/// Whether nodes that must all take different values can each take one of
+/// their candidate values (`lists[i]`, value ids below `value_count`): a
+/// bipartite matching of every node into values, found by Hopcroft–Karp in
+/// O(E √V) time. By Hall's theorem it fails exactly when some set of nodes
+/// has fewer candidate values between them than it has nodes.
+fn has_distinct_assignment(lists: &[&[usize]], value_count: usize) -> bool {
+    const FREE: usize = usize::MAX;
+    let n = lists.len();
+    if n > value_count {
+        return false;
+    }
+    let mut node_of_value = vec![FREE; value_count];
+    let mut value_of_node = vec![FREE; n];
+    let mut layer = vec![usize::MAX; n];
+    loop {
+        // Breadth-first layers from the unmatched nodes along alternating
+        // paths; `found` when a free value is reachable.
+        let mut queue: Vec<usize> = Vec::new();
+        for i in 0..n {
+            if value_of_node[i] == FREE {
+                layer[i] = 0;
+                queue.push(i);
+            } else {
+                layer[i] = usize::MAX;
             }
-            chosen[k] = None;
-            next = v + 1;
+        }
+        let mut found = false;
+        let mut head = 0;
+        while head < queue.len() {
+            let i = queue[head];
+            head += 1;
+            for &v in lists[i] {
+                let j = node_of_value[v];
+                if j == FREE {
+                    found = true;
+                } else if layer[j] == usize::MAX {
+                    layer[j] = layer[i] + 1;
+                    queue.push(j);
+                }
+            }
+        }
+        if !found {
+            return value_of_node.iter().all(|&v| v != FREE);
+        }
+        // Augment along vertex-disjoint shortest paths, depth first with an
+        // explicit stack of (node, next candidate index).
+        let mut next_candidate = vec![0usize; n];
+        for root in 0..n {
+            if value_of_node[root] != FREE {
+                continue;
+            }
+            let mut stack: Vec<usize> = vec![root];
+            while let Some(&i) = stack.last() {
+                if next_candidate[i] == lists[i].len() {
+                    layer[i] = usize::MAX; // a dead end in this phase
+                    stack.pop();
+                    continue;
+                }
+                let v = lists[i][next_candidate[i]];
+                next_candidate[i] += 1;
+                let j = node_of_value[v];
+                if j == FREE {
+                    // Flip the path: each node on the stack takes the value
+                    // it last tried.
+                    for &node in stack.iter().rev() {
+                        let value = lists[node][next_candidate[node] - 1];
+                        value_of_node[node] = value;
+                        node_of_value[value] = node;
+                    }
+                    for &node in &stack {
+                        layer[node] = usize::MAX;
+                    }
+                    break;
+                }
+                if layer[j] != usize::MAX && layer[j] == layer[i] + 1 {
+                    stack.push(j);
+                }
+            }
         }
     }
-    let mut chosen: Vec<Option<usize>> = vec![None; survivors.len()];
-    !search(0, &order, &candidate_keys, &radjacent, &mut chosen)
 }
 
 /// A datatype's *value-space class*: the (facet-free) set of values its base
@@ -3500,8 +3642,12 @@ fn automaton_for_string_restriction(dr: &DatatypeRestriction) -> Option<Option<S
         let facet = dr.facet_uri(i);
         let lexical = dr.facet_value(i).lexical_form();
         if facet == format!("{XSD}pattern") {
-            let pat = sa::pattern_automaton(lexical)?;
+            let (pat, (min, max)) = sa::pattern_term(lexical)?;
             automaton = automaton.intersection(&pat);
+            min_length = min_length.max(min);
+            if let Some(max) = max {
+                max_length = Some(max_length.map_or(max, |m| m.min(max)));
+            }
         } else if facet == format!("{RDF}langRange") {
             let lr = sa::language_range_automaton(lexical);
             automaton = automaton.intersection(&lr);
@@ -3980,66 +4126,68 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     }
 }
 
-/// Maximum timezone correction, in MILLISECONDS: XSD timezone offsets range over
+/// Maximum timezone correction, in seconds: XSD timezone offsets range over
 /// ±14:00, so a timezone-less instant maps to a window of width
-/// `2 * MAX_TZ_CORRECTION_MILLIS` on the timeline. Mirrors Java's
+/// `2 * MAX_TZ_CORRECTION_SECONDS` on the timeline. Mirrors Java's
 /// `DateTime.MAX_TIME_ZONE_CORRECTION` (14h, in milliseconds).
-const MAX_TZ_CORRECTION_MILLIS: i64 = 14 * 60 * 60 * 1000;
+const MAX_TZ_CORRECTION_SECONDS: i64 = 14 * 60 * 60;
 
 /// A single dateTime interval on the timeline: `[lower, upper]` with each bound
 /// inclusive or exclusive. Mirrors Java `DateTimeInterval` (one per interval
 /// type — WITH_TIMEZONE / WITHOUT_TIMEZONE). `None` represents an empty
 /// interval (Java models this as a `null` interval after `intersectWith`).
 ///
-/// The bounds are EXACT integer milliseconds (mirroring Java `DateTimeInterval`'s
-/// `long` bounds). `i64::MIN` / `i64::MAX` serve as the −∞ / +∞ sentinels for an
-/// unbounded side (the real instants for years in [-9999, 9999] are far from
-/// these extremes, so the sentinels never collide with a genuine instant).
-#[derive(Clone, Copy)]
+/// The bounds are EXACT instants; `None` is −∞ for `lower` and +∞ for
+/// `upper` (an unbounded side, always exclusive). Java bounds them by `long`
+/// milliseconds within years ±9999.
+#[derive(Clone)]
 struct DtInterval {
-    lower: i64,
+    lower: Option<DtInstant>,
     lower_inclusive: bool,
-    upper: i64,
+    upper: Option<DtInstant>,
     upper_inclusive: bool,
 }
 
 impl DtInterval {
     fn all() -> Self {
-        DtInterval {
-            lower: i64::MIN,
-            lower_inclusive: false,
-            upper: i64::MAX,
-            upper_inclusive: false,
-        }
+        DtInterval { lower: None, lower_inclusive: false, upper: None, upper_inclusive: false }
     }
     /// DateTimeInterval.isIntervalEmpty: empty when `lower > upper`, or
     /// `lower == upper` with either bound exclusive.
     fn is_empty(&self) -> bool {
-        self.lower > self.upper
-            || (self.lower == self.upper && (!self.lower_inclusive || !self.upper_inclusive))
+        match (&self.lower, &self.upper) {
+            (Some(lower), Some(upper)) => {
+                lower > upper || (lower == upper && (!self.lower_inclusive || !self.upper_inclusive))
+            }
+            _ => false,
+        }
+    }
+    /// Whether the interval holds a single instant.
+    fn is_point(&self) -> bool {
+        self.lower.is_some() && self.lower == self.upper
     }
     /// DateTimeInterval.containsDateTime, for an instant of the interval's type.
-    fn contains(&self, millis: i64) -> bool {
-        (self.lower < millis || (self.lower == millis && self.lower_inclusive))
-            && (millis < self.upper || (millis == self.upper && self.upper_inclusive))
+    fn contains(&self, instant: &DtInstant) -> bool {
+        self.lower.as_ref().is_none_or(|lower| lower < instant || (lower == instant && self.lower_inclusive))
+            && self.upper.as_ref().is_none_or(|upper| instant < upper || (instant == upper && self.upper_inclusive))
     }
     /// DateTimeInterval.intersectWith: take the more restrictive of each bound;
     /// `None` (empty) on an empty result.
-    fn intersect(self, other: DtInterval) -> Option<DtInterval> {
-        let (lower, lower_inclusive) = if self.lower > other.lower {
-            (self.lower, self.lower_inclusive)
-        } else if self.lower < other.lower {
-            (other.lower, other.lower_inclusive)
-        } else {
+    fn intersect(&self, other: &DtInterval) -> Option<DtInterval> {
+        let (lower, lower_inclusive) = match (&self.lower, &other.lower) {
+            (None, _) => (other.lower.clone(), other.lower_inclusive),
+            (_, None) => (self.lower.clone(), self.lower_inclusive),
+            (Some(a), Some(b)) if a > b => (self.lower.clone(), self.lower_inclusive),
+            (Some(a), Some(b)) if a < b => (other.lower.clone(), other.lower_inclusive),
             // Equal lower bounds: exclusive is the more restrictive.
-            (self.lower, self.lower_inclusive && other.lower_inclusive)
+            _ => (self.lower.clone(), self.lower_inclusive && other.lower_inclusive),
         };
-        let (upper, upper_inclusive) = if self.upper < other.upper {
-            (self.upper, self.upper_inclusive)
-        } else if self.upper > other.upper {
-            (other.upper, other.upper_inclusive)
-        } else {
-            (self.upper, self.upper_inclusive && other.upper_inclusive)
+        let (upper, upper_inclusive) = match (&self.upper, &other.upper) {
+            (None, _) => (other.upper.clone(), other.upper_inclusive),
+            (_, None) => (self.upper.clone(), self.upper_inclusive),
+            (Some(a), Some(b)) if a < b => (self.upper.clone(), self.upper_inclusive),
+            (Some(a), Some(b)) if a > b => (other.upper.clone(), other.upper_inclusive),
+            _ => (self.upper.clone(), self.upper_inclusive && other.upper_inclusive),
         };
         let result = DtInterval { lower, lower_inclusive, upper, upper_inclusive };
         if result.is_empty() {
@@ -4059,24 +4207,22 @@ fn complement_dt_interval(iv: Option<DtInterval>) -> Vec<DtInterval> {
         return vec![DtInterval::all()];
     };
     let mut out = Vec::new();
-    // Before part: (-INF, lower) with flipped lower inclusivity. `i64::MIN` is the
-    // −∞ sentinel, so a lower bound equal to it means the interval is unbounded
-    // below and there is no "before" complement part.
-    if iv.lower != i64::MIN {
+    // Before part: (-INF, lower) with flipped lower inclusivity; none when the
+    // interval is unbounded below.
+    if iv.lower.is_some() {
         out.push(DtInterval {
-            lower: i64::MIN,
+            lower: None,
             lower_inclusive: false,
             upper: iv.lower,
             upper_inclusive: !iv.lower_inclusive,
         });
     }
-    // After part: (upper, +INF) with flipped upper inclusivity. `i64::MAX` is the
-    // +∞ sentinel.
-    if iv.upper != i64::MAX {
+    // After part: (upper, +INF) with flipped upper inclusivity.
+    if iv.upper.is_some() {
         out.push(DtInterval {
             lower: iv.upper,
             lower_inclusive: !iv.upper_inclusive,
-            upper: i64::MAX,
+            upper: None,
             upper_inclusive: false,
         });
     }
@@ -4114,7 +4260,7 @@ fn datetime_intervals(
                 _ => return None,
             };
             let is_min = matches!(facet, "minInclusive" | "minExclusive");
-            let Some(DataValue::DateTime { millis, has_tz, .. }) = parse_value(r.facet_value(i)) else {
+            let Some(DataValue::DateTime { instant, has_tz, .. }) = parse_value(r.facet_value(i)) else {
                 return None;
             };
             // For each interval type, build the half-bounded interval the facet
@@ -4124,32 +4270,32 @@ fn datetime_intervals(
             for (interval, interval_has_tz) in
                 [(&mut with_tz, true), (&mut without_tz, false)]
             {
-                let Some(current) = *interval else {
+                let Some(current) = interval.as_ref() else {
                     continue; // already empty for this interval type
                 };
                 let (bound, bound_inclusive) = if has_tz == interval_has_tz {
-                    (millis, inclusive)
+                    (instant.clone(), inclusive)
                 } else if is_min {
-                    (millis.saturating_add(MAX_TZ_CORRECTION_MILLIS), false)
+                    (instant.shifted(MAX_TZ_CORRECTION_SECONDS), false)
                 } else {
-                    (millis.saturating_sub(MAX_TZ_CORRECTION_MILLIS), false)
+                    (instant.shifted(-MAX_TZ_CORRECTION_SECONDS), false)
                 };
                 let half = if is_min {
                     DtInterval {
-                        lower: bound,
+                        lower: Some(bound),
                         lower_inclusive: bound_inclusive,
-                        upper: i64::MAX,
+                        upper: None,
                         upper_inclusive: false,
                     }
                 } else {
                     DtInterval {
-                        lower: i64::MIN,
+                        lower: None,
                         lower_inclusive: false,
-                        upper: bound,
+                        upper: Some(bound),
                         upper_inclusive: bound_inclusive,
                     }
                 };
-                *interval = current.intersect(half);
+                *interval = current.intersect(&half);
             }
         }
     }
@@ -4182,13 +4328,14 @@ impl DateTimeValueSpace {
     /// spans two instants holds infinitely many values, because seconds are
     /// decimal numbers (`DateTimeInterval.subtractSizeFrom`).
     fn values(&self) -> Option<impl Iterator<Item = DataValue> + '_> {
-        if self.intervals.iter().any(|(interval, _)| interval.lower != interval.upper) {
+        if self.intervals.iter().any(|(interval, _)| !interval.is_point()) {
             return None;
         }
         Some(
             self.intervals
                 .iter()
-                .flat_map(|&(interval, has_tz)| datetime_values_at(interval.lower, has_tz))
+                .filter_map(|(interval, has_tz)| Some(datetime_values_at(interval.lower.clone()?, *has_tz)))
+                .flatten()
                 .filter(|value| !self.excluded.iter().any(|e| values_equal(e, value))),
         )
     }
@@ -4214,16 +4361,16 @@ impl DateTimeValueSpace {
     }
 }
 
-/// The distinct values at the instant `millis` of one kind, as
+/// The distinct values at the instant `instant` of one kind, as
 /// `DateTimeInterval.enumerateDateTimes` lists them. Without a timezone offset
 /// there is one value; with one there is a value for each offset from -14:00 to
 /// +14:00, 1681 in all. A local midnight also has the spelling `24:00:00` of
 /// the previous day, which is the same value (XSD 1.1 Part 2 §3.3.7.2 and
 /// §E.3.5), so it is not listed again, unlike in HermiT, whose `DateTime.equals`
 /// tells the two spellings apart by a last-day flag.
-fn datetime_values_at(millis: i64, has_tz: bool) -> impl Iterator<Item = DataValue> {
+fn datetime_values_at(instant: DtInstant, has_tz: bool) -> impl Iterator<Item = DataValue> {
     let offsets = if has_tz { -840..=840 } else { 0..=0 };
-    offsets.map(move |tz_offset: i32| DataValue::DateTime { millis, has_tz, tz_offset })
+    offsets.map(move |tz_offset: i32| DataValue::DateTime { instant: instant.clone(), has_tz, tz_offset })
 }
 
 /// The dateTime value space of a conjunction of data ranges, mirroring
@@ -4286,7 +4433,7 @@ fn datetime_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<DateTimeV
         let mut rest = Vec::with_capacity(intervals.len() * 2);
         for (interval, has_tz) in intervals {
             let complement = if has_tz { &with_tz } else { &without_tz };
-            rest.extend(complement.iter().filter_map(|c| interval.intersect(*c)).map(|i| (i, has_tz)));
+            rest.extend(complement.iter().filter_map(|c| interval.intersect(c)).map(|i| (i, has_tz)));
         }
         intervals = rest;
     }
@@ -4294,12 +4441,12 @@ fn datetime_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<DateTimeV
     // DVariable.m_forbiddenDataValues keeps them.
     let mut excluded: Vec<DataValue> = Vec::new();
     for value in forbidden {
-        let DataValue::DateTime { millis, has_tz, .. } = value else {
+        let DataValue::DateTime { instant, has_tz, .. } = &value else {
             continue;
         };
         let inside = intervals
             .iter()
-            .any(|&(interval, kind)| kind == has_tz && interval.contains(millis));
+            .any(|(interval, kind)| kind == has_tz && interval.contains(instant));
         if inside && !excluded.iter().any(|e| values_equal(e, &value)) {
             excluded.push(value);
         }
@@ -6492,6 +6639,57 @@ mod tests {
     }
 
     #[test]
+    fn all_different_components_are_decided_by_matching() {
+        // A clique of 30 nodes: 20 of them over the 19 integers 0..=18 (half
+        // over 0..=17, so the ranges differ and the equal-space shortcut does
+        // not apply) and 10 over 19..=47. Every node has at most 29 values, so
+        // none is eliminated, and the 20 pigeons for 19 holes make it
+        // unsatisfiable (Hall's theorem). The backtracking search took
+        // exponential time here; the matching answers at once.
+        let pigeonhole = |high: i64| -> Vec<NodeValueSpace> {
+            (0..30)
+                .map(|i| match i {
+                    0..10 => int_range_space(0, 17),
+                    10..20 => int_range_space(0, high),
+                    _ => int_range_space(19, 47),
+                })
+                .collect()
+        };
+        let spaces = pigeonhole(18);
+        let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
+        let started = std::time::Instant::now();
+        assert!(component_is_unsatisfiable(&refs, &clique(30), &no_specifics(30), &[], &|_, _| None));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        // With one more value, 0..=19, the first 20 nodes take 0..=19 and the
+        // last ten fit in 20..=47, which the matching finds by moving value
+        // 19 off the last ten nodes.
+        let spaces = pigeonhole(19);
+        let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
+        assert!(!component_is_unsatisfiable(&refs, &clique(30), &no_specifics(30), &[], &|_, _| None));
+
+        // Hopcroft–Karp on its own: augmenting paths that reassign values.
+        assert!(has_distinct_assignment(&[&[0, 1], &[0], &[1, 2]], 3));
+        assert!(!has_distinct_assignment(&[&[0, 1], &[0], &[1]], 3));
+        assert!(!has_distinct_assignment(&[&[0], &[0], &[1, 2, 3]], 4));
+        assert!(has_distinct_assignment(&[&[2, 1, 0], &[1, 0], &[0]], 3));
+        assert!(has_distinct_assignment(&[], 0));
+
+        // A component that is not a clique is still searched: a path of three
+        // nodes over one value each, the middle one apart, is satisfiable when
+        // the ends share a value, and a triangle over two values is not.
+        let one = || int_range_space(0, 0);
+        let spaces = [one(), int_range_space(1, 1), one()];
+        let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
+        assert!(!component_is_unsatisfiable(&refs, &[vec![1], vec![0, 2], vec![1]], &no_specifics(3), &[], &|_, _| None));
+        let two = || int_range_space(0, 1);
+        let spaces = [two(), two(), int_range_space(1, 2), int_range_space(0, 1)];
+        let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
+        // 0-1-3 is a triangle over {0, 1}; node 2 hangs off node 0.
+        let adjacency = [vec![1, 2, 3], vec![0, 3], vec![0], vec![0, 1]];
+        assert!(component_is_unsatisfiable(&refs, &adjacency, &no_specifics(4), &[], &|_, _| None));
+    }
+
+    #[test]
     fn a2_infinite_value_spaces_never_clash() {
         // An infinite value space (unbounded integer / dense decimal / string)
         // trivially satisfies any number of distinct nodes — no enumeration, no
@@ -7602,11 +7800,11 @@ mod tests {
         // `DateTimeInterval.subtractSizeFrom` counts it again: 1683 for 12:30Z
         // (offsets +11:30 and -12:30 reach local midnight) and 2 without a
         // timezone at midnight.
-        let count = |millis, has_tz| datetime_values_at(millis, has_tz).count();
-        for instant in ["2020-06-15T12:30:00Z", "2020-06-15T00:00:00Z", "2020-06-15T12:30:30Z"] {
-            let millis = datetime_millis(instant);
-            assert_eq!(count(millis, false), 1, "{instant}");
-            assert_eq!(count(millis, true), 1681, "{instant}");
+        let count = |instant: &DtInstant, has_tz| datetime_values_at(instant.clone(), has_tz).count();
+        for lexical in ["2020-06-15T12:30:00Z", "2020-06-15T00:00:00Z", "2020-06-15T12:30:30Z"] {
+            let instant = datetime_instant(lexical);
+            assert_eq!(count(&instant, false), 1, "{lexical}");
+            assert_eq!(count(&instant, true), 1681, "{lexical}");
         }
     }
 
@@ -7770,7 +7968,9 @@ mod tests {
                 .unwrap()
                 .intervals
                 .iter()
-                .map(|&(interval, has_tz)| (interval.lower, interval.upper, has_tz))
+                .map(|(interval, has_tz)| {
+                    (instant_millis(interval.lower.as_ref().unwrap()), instant_millis(interval.upper.as_ref().unwrap()), *has_tz)
+                })
                 .collect()
         };
         // The count, checked against the enumerated values and the emptiness test.
@@ -7800,7 +8000,7 @@ mod tests {
         let (a_ms, b_ms) = (datetime_millis(a), datetime_millis(b));
         assert_eq!(intervals(&bounds_only), [(a_ms, a_ms, false), (b_ms, b_ms, false)]);
         let at_bounds =
-            datetime_values_at(a_ms, false).chain(datetime_values_at(b_ms, false)).count();
+            datetime_values_at(datetime_instant(a), false).chain(datetime_values_at(datetime_instant(b), false)).count();
         assert_eq!(count(&bounds_only), Some(at_bounds as u128));
         let space = || node_value_space(None, &bounds_only);
         let fit: Vec<NodeValueSpace> = (0..2).map(|_| space()).collect();
@@ -7907,13 +8107,25 @@ mod tests {
         ));
     }
 
-    /// The UTC-normalized instant (exact integer milliseconds) of a dateTime
-    /// lexical form.
-    fn datetime_millis(lexical: &str) -> i64 {
+    /// The UTC-normalized instant of a dateTime lexical form.
+    fn datetime_instant(lexical: &str) -> DtInstant {
         match parse_value(&Constant::create(lexical, format!("{XSD}dateTime"))).unwrap() {
-            DataValue::DateTime { millis, .. } => millis,
+            DataValue::DateTime { instant, .. } => instant,
             _ => unreachable!(),
         }
+    }
+
+    /// An instant in whole milliseconds since the epoch (for instants that
+    /// have a whole number of them).
+    fn instant_millis(instant: &DtInstant) -> i64 {
+        let fraction = format!("{:0<3}", instant.fraction);
+        assert!(fraction.len() == 3, "{instant:?}");
+        i64::try_from(&instant.seconds).unwrap() * 1000 + fraction.parse::<i64>().unwrap()
+    }
+
+    /// The UTC-normalized instant, in milliseconds, of a dateTime lexical form.
+    fn datetime_millis(lexical: &str) -> i64 {
+        instant_millis(&datetime_instant(lexical))
     }
 
     /// A string restriction `datatype[facets]`. `datatype` is `PlainLiteral` or

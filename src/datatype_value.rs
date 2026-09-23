@@ -56,23 +56,23 @@ pub enum DataValue {
     /// The tag is in lowercase, as the value space holds it (rdf:PlainLiteral
     /// §3), so `"a@EN"` and `"a@en"` are one value.
     LangString { string: String, lang: String },
-    /// An instant on the timeline, held as an EXACT integer count of
-    /// MILLISECONDS since the Unix epoch (UTC), plus whether the lexical form
-    /// carried a timezone (datetimes with and without a timezone are never
-    /// comparable, per XSD). This mirrors Java `DateTime.m_timeOnTimeline`, a
-    /// `long` in milliseconds: using an integer (rather than `f64` seconds)
-    /// keeps the instant exact even at extreme years, where sub-second fractions
-    /// would otherwise be lost to floating-point rounding. Mirroring Java
+    /// An instant on the timeline, held EXACTLY (see [`DtInstant`]), plus
+    /// whether the lexical form carried a timezone (datetimes with and without
+    /// a timezone are never comparable, per XSD). XSD 1.1 Part 2 §3.3.7 allows
+    /// any number of year digits and any number of fraction digits, so the
+    /// instant is unbounded; Java `DateTime` holds a `long` of milliseconds
+    /// within years ±9999 and rejects everything else. Mirroring Java
     /// `DateTime.equals`, the value identity is the instant on the timeline and
     /// the timezone offset in minutes (so `...Z` is a distinct value from
-    /// `...+01:00` even at the same instant). `tz_offset` is only meaningful
-    /// when `has_tz`; it is held at `0` otherwise (mirroring Java's fixed
-    /// `NO_TIMEZONE` sentinel, which keeps tz-less values equal).
+    /// `...+01:00` even at the same instant; OWL 2 §4.7: equal but not
+    /// identical). `tz_offset` is only meaningful when `has_tz`; it is held at
+    /// `0` otherwise (mirroring Java's fixed `NO_TIMEZONE` sentinel, which keeps
+    /// tz-less values equal).
     ///
     /// Unlike Java, which also compares a last-day flag, `...T24:00:00` is the
     /// same value as `...T00:00:00` of the next day: XSD 1.1 Part 2 §3.3.7.2
     /// and the lexical mapping of §E.3.5 map both spellings to one value.
-    DateTime { millis: i64, has_tz: bool, tz_offset: i32 },
+    DateTime { instant: DtInstant, has_tz: bool, tz_offset: i32 },
     /// A datatype with its own value space disjoint from the others
     /// (`xsd:anyURI`, `xsd:hexBinary`, `xsd:base64Binary`, `rdf:XMLLiteral`):
     /// compared by canonical form, with a value-space `length` for the length
@@ -80,6 +80,25 @@ pub enum DataValue {
     /// `rdf:XMLLiteral` is registered as its own disjoint kind with no
     /// length (it admits no facets).
     Typed { kind: &'static str, canonical: String, length: usize },
+}
+
+/// An exact instant on the timeline: whole `seconds` since the Unix epoch
+/// (UTC) plus a `fraction` of a second in `[0, 1)`, as its decimal digits
+/// with trailing zeros removed (so `""` is zero and each instant has one
+/// representation). With that normalisation the derived order, seconds first
+/// and then the fraction digits lexicographically, is the timeline order.
+/// (A `Box<str>` rather than a `String` keeps `DataValue` as small as before.)
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DtInstant {
+    pub seconds: BigInt,
+    pub fraction: Box<str>,
+}
+
+impl DtInstant {
+    /// This instant moved by a whole number of seconds.
+    pub fn shifted(&self, seconds: i64) -> DtInstant {
+        DtInstant { seconds: &self.seconds + seconds, fraction: self.fraction.clone() }
+    }
 }
 
 pub fn is_integer_datatype(uri: &str) -> bool {
@@ -942,66 +961,10 @@ fn encode_hex_upper(bytes: &[u8]) -> String {
     out
 }
 
-/// Maximum number of days in `month` of `year` (proleptic Gregorian).
-/// Whether `lexical` is a valid XSD 1.1 xsd:dateTime (or xsd:dateTimeStamp)
-/// lexical form whose value is not supported: a year beyond ±9999 or a
-/// fraction of a second finer than milliseconds. XSD 1.1 Part 2 §3.3.7 allows
-/// both (yearFrag has any number of digits, secondFrag any number of fraction
-/// digits), but values are held as milliseconds within HermiT's years, so
-/// such a literal is rejected with its own error instead of being called
-/// malformed or rounded to a different value.
-pub fn is_unsupported_datetime_lexical(lexical: &str, datatype_uri: &str) -> bool {
-    if !is_datetime_datatype(datatype_uri) || parse_value(lexical, datatype_uri).is_some() {
-        return false;
-    }
-    let s = lexical.trim();
-    if !s.is_ascii() {
-        return false;
-    }
-    let (sign, rest) = match s.strip_prefix('-') {
-        Some(rest) => ("-", rest),
-        None => ("", s),
-    };
-    let Some(year_end) = rest.find('-') else {
-        return false;
-    };
-    let year = &rest[..year_end];
-    if year.len() < 4 || !year.bytes().all(|b| b.is_ascii_digit()) || (year.len() > 4 && year.starts_with('0')) {
-        return false;
-    }
-    // A year with the same leap-year rule (the Gregorian calendar repeats
-    // every 400 years) and four digits.
-    let cycle = year.bytes().fold(0u32, |r, b| (r * 10 + u32::from(b - b'0')) % 400);
-    let mut normalized = format!("{sign}{}{}", 2000 + cycle, &rest[year_end..]);
-    // Keep three fraction digits; 24:00:00 allows a zero fraction only.
-    if let Some(t) = normalized.find('T') {
-        let time = normalized[t..].to_string();
-        if let Some(dot) = time.find('.') {
-            let digits = time[dot + 1..].bytes().take_while(u8::is_ascii_digit).count();
-            if digits > 3 {
-                if time.starts_with("T24") && time[dot + 4..dot + 1 + digits].bytes().any(|b| b != b'0') {
-                    return false;
-                }
-                normalized = format!("{}{}{}", &normalized[..t], &time[..dot + 4], &time[dot + 1 + digits..]);
-            }
-        }
-    }
-    parse_value(&normalized, datatype_uri).is_some()
-}
-
-/// The error for a literal that `parse_value` rejects: an unsupported
-/// dateTime value (see `is_unsupported_datetime_lexical`), or else a
-/// malformed literal (HermiT's `MalformedLiteralException`).
+/// The error for a literal that `parse_value` rejects, HermiT's
+/// `MalformedLiteralException`.
 pub fn literal_error(lexical: &str, datatype_uri: &str) -> String {
-    if is_unsupported_datetime_lexical(lexical, datatype_uri) {
-        format!(
-            "UnsupportedDatatypeValue: \"{lexical}\" is a valid value of datatype <{datatype_uri}>, \
-             but only dateTime values with a year from -9999 to 9999 and at most millisecond \
-             precision are supported"
-        )
-    } else {
-        format!("MalformedLiteralException: \"{lexical}\" is not a well-formed value of datatype <{datatype_uri}>")
-    }
+    format!("MalformedLiteralException: \"{lexical}\" is not a well-formed value of datatype <{datatype_uri}>")
 }
 
 /// Direct port of `DateTime.java:266-277` `daysInMonth(year, month)`.
@@ -1034,14 +997,14 @@ pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 }
 
 /// Parses an `xsd:dateTime` / `xsd:date` lexical form into
-/// `(instant_millis, has_timezone, tz_offset_minutes)`, where the
-/// instant is an EXACT integer count of MILLISECONDS since the Unix epoch,
-/// normalized to UTC. This mirrors Java `DateTime.getTimeOnTimelineRaw`, which
-/// computes whole seconds and then `seconds*1000 + millisecond` as a `long`.
-/// Returns `None` on anything it does not recognize, so a parse failure is
-/// always treated as "undecided" (never a false clash). `has_time` distinguishes
-/// `dateTime` (with a `T` time part) from `date`.
-pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)> {
+/// `(instant, has_timezone, tz_offset_minutes)`, where the instant is EXACT
+/// and normalized to UTC. XSD 1.1 Part 2 §3.3.7 allows a year of any number of
+/// digits and a fraction of any number of digits, so both are kept exactly;
+/// Java `DateTime.parse` accepts only years within ±9999 and at most three
+/// fraction digits and holds the instant as a `long` of milliseconds.
+/// Returns `None` on anything it does not recognize. `has_time`
+/// distinguishes `dateTime` (with a `T` time part) from `date`.
+pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(DtInstant, bool, i32)> {
     // Java parses every numeric subfield with digit-only regex classes
     // (`[0-9]{...}`), so a leading `+`/`-` inside a subfield makes
     // `matcher.matches()` fail. Rust's `str::parse` would instead accept a
@@ -1071,7 +1034,7 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
     if !digits_only(&rest[..year_end]) {
         return None;
     }
-    let year_abs: i64 = rest[..year_end].parse().ok()?;
+    let year_abs: BigInt = rest[..year_end].parse().ok()?;
     let year = if neg_year { -year_abs } else { year_abs };
     rest = &rest[year_end + 1..];
 
@@ -1092,10 +1055,9 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
     let day: i64 = rest[..2].parse().ok()?;
     rest = &rest[2..];
 
-    // Whole seconds and the millisecond part are kept as exact integers, exactly
-    // like Java (which parses seconds and milliseconds separately and combines
-    // them as `seconds*1000 + millisecond` in a `long`).
-    let (mut hour, mut minute, mut second, mut millisecond) = (0i64, 0i64, 0i64, 0i64);
+    // Whole seconds and the fraction digits, kept exactly.
+    let (mut hour, mut minute, mut second) = (0i64, 0i64, 0i64);
+    let mut fraction: Box<str> = Box::from("");
     if has_time {
         if !rest.starts_with('T') || rest.len() < 9 {
             return None;
@@ -1116,55 +1078,49 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
             return None;
         }
         rest = &rest[6..];
-        // Whole seconds: exactly two digits (Java regex `([0-9]{2})`).
+        // Whole seconds: exactly two digits.
         if rest.len() < 2 || !digits_only(&rest[..2]) { return None; }
         second = rest[..2].parse().ok()?;
         rest = &rest[2..];
-        // Optional fraction: '.' followed by 1..=3 digits ONLY (Java `[.]([0-9]{1,3})`).
-        // A bare '.' or 4+ digits causes Java's matcher.matches() to return null.
+        // Optional fraction: '.' followed by one or more digits (secondFrag,
+        // XSD 1.1 Part 2 §D.3.3). A bare '.' is malformed.
         if let Some(after_dot) = rest.strip_prefix('.') {
             let frac_len = after_dot
                 .find(|c: char| !c.is_ascii_digit())
                 .unwrap_or(after_dot.len());
-            if frac_len == 0 || frac_len > 3 {
+            if frac_len == 0 {
                 return None;
             }
-            // Java pads to exactly 3 digits and treats as integer milliseconds.
-            let mut ms_str = after_dot[..frac_len].to_string();
-            while ms_str.len() < 3 { ms_str.push('0'); }
-            millisecond = ms_str.parse().ok()?;
+            fraction = Box::from(after_dot[..frac_len].trim_end_matches('0'));
             rest = &after_dot[frac_len..];
         }
     }
 
-    if // DateTime.java:209: year must be within [-9999, 9999]
-        year < -9999 || year > 9999
-        || !(1..=12).contains(&month)
+    // The calendar repeats every 400 years (146097 days), so the year is split
+    // into whole 400-year cycles and a year within [0, 400).
+    let (cycles, year_in_cycle) = year.div_mod_floor(&BigInt::from(400));
+    let year_in_cycle: i64 = i64::try_from(&year_in_cycle).ok()?;
+    if !(1..=12).contains(&month)
         // DateTime.java:211: day must not exceed the real number of days in that month/year
-        || day < 1 || day > days_in_month(year, month)
+        || day < 1 || day > days_in_month(year_in_cycle, month)
         || hour > 24
         // DateTime.java:212: hour==24 is only valid as the exact end-of-day instant 24:00:00(.0)
-        || (hour == 24 && (minute != 0 || second != 0 || millisecond != 0))
+        || (hour == 24 && (minute != 0 || second != 0 || !fraction.is_empty()))
         || minute > 59
         || !(0..60).contains(&second) // Java DateTime.java:214: second>=60 => null (no leap seconds in XSD dateTime)
-        || !(0..1000).contains(&millisecond)
     {
         return None;
     }
 
     let mut has_tz = false;
-    // The timezone correction applied to the timeline instant, in MILLISECONDS
-    // (Java subtracts `timeZoneOffset*60*1000` from the raw timeline value).
-    let mut tz_offset_millis: i64 = 0;
+    // The timezone correction applied to the timeline instant, in seconds.
+    let mut tz_offset_seconds: i64 = 0;
     // The timezone offset in minutes (part of the value identity, mirroring
     // Java `DateTime.m_timeZoneOffset`); only meaningful when `has_tz`.
     let mut tz_offset_minutes: i32 = 0;
     if !rest.is_empty() {
         has_tz = true;
-        if rest == "Z" {
-            tz_offset_millis = 0;
-            tz_offset_minutes = 0;
-        } else {
+        if rest != "Z" {
             let (sign, sign_minutes) = match rest.as_bytes()[0] {
                 b'+' => (1i64, 1i32),
                 b'-' => (-1i64, -1i32),
@@ -1183,10 +1139,8 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
             if th > 14 || (th == 14 && tm != 0) || tm >= 60 {
                 return None;
             }
-            // Java DateTime.parse: timeZoneOffset = sign*(hour*60+minute) (minutes);
-            // the timeline correction subtracts timeZoneOffset*60*1000 ms.
             tz_offset_minutes = sign_minutes * (th as i32 * 60 + tm as i32);
-            tz_offset_millis = sign * (th as i64 * 3600 + tm as i64 * 60) * 1000;
+            tz_offset_seconds = sign * (th as i64 * 3600 + tm as i64 * 60);
         }
     }
 
@@ -1194,15 +1148,9 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)>
     // (XSD 1.1 Part 2 §3.3.7.2, §E.3.5: the lexical mapping adds the 24 hours
     // to the day). Java instead keeps it apart with `m_lastDayInstant`
     // (DateTime.java:66); the instant computed below is the same either way.
-
-    // Exact integer milliseconds since the Unix epoch (UTC). Java computes whole
-    // seconds first and then `*1000 + millisecond`; we mirror that exactly.
-    let seconds = days_from_civil(year, month, day) * 86400
-        + hour * 3600
-        + minute * 60
-        + second;
-    let millis = seconds * 1000 + millisecond - tz_offset_millis;
-    Some((millis, has_tz, tz_offset_minutes))
+    let days = cycles * 146097 + days_from_civil(year_in_cycle, month, day);
+    let seconds = days * 86400 + (hour * 3600 + minute * 60 + second - tz_offset_seconds);
+    Some((DtInstant { seconds, fraction }, has_tz, tz_offset_minutes))
 }
 
 /// Parses `lexical_form` against `datatype_uri`, returning the parsed value or
@@ -1357,11 +1305,11 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         // Mirror DateTimeDatatypeHandler.parseLiteral: xsd:dateTimeStamp REQUIRES
         // a timezone offset (unlike xsd:dateTime), so a timezone-less
         // dateTimeStamp lexical form is malformed ⇒ ill-typed.
-        let (millis, has_tz, tz_offset) = parse_datetime(lexical, true)?;
+        let (instant, has_tz, tz_offset) = parse_datetime(lexical, true)?;
         if datatype.strip_prefix(XSD) == Some("dateTimeStamp") && !has_tz {
             return None;
         }
-        Some(DataValue::DateTime { millis, has_tz, tz_offset })
+        Some(DataValue::DateTime { instant, has_tz, tz_offset })
     } else if is_anyuri_datatype(datatype) {
         if !is_valid_any_uri(lexical) {
             return None;

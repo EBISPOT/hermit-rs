@@ -118,10 +118,17 @@ from Java and corrects `DatatypesTest.testINF`). Cliques of more than 4096
 nodes compared unlisted value spaces by count, survivors were listed only up to
 4096 values, a string count over more than 160 states saturated, and a
 `DataOneOf` holding an anonymous constant was infinite. See
-`tests/datatype_robustness.rs` and [RESULTS.md](RESULTS.md). Still open: a
-bounded repetition in a pattern (`a{2147483000}`) builds one automaton state
-per repetition, and dateTime values beyond ±9999 or finer than milliseconds are
-rejected rather than represented.
+`tests/datatype_robustness.rs` and [RESULTS.md](RESULTS.md).
+
+Exact dateTime values, large bounded repetitions and the exponential
+assignment search (**resolved**, no issue; accepting years beyond ±9999 and
+fractions finer than milliseconds deviates from Java, which rejects them).
+Instants are exact, a top-level `R{m,n}` among fixed-length pieces is a length
+window, and an all-different component is decided by bipartite matching. Still
+open: a large repetition nested in a group or beside a piece of varying length
+builds one state per copy, a string count over a large, dense automaton
+saturates at the work budget, and an anyURI space too large to list is counted
+by an upper bound.
 
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,

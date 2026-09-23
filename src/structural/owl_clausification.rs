@@ -387,13 +387,9 @@ impl<'a> DataRangeConverter<'a> {
                                 "minInclusive" | "maxInclusive"
                                 | "minExclusive" | "maxExclusive",
                             ) if is_datetime_datatype(&datatype_uri) => {
-                                // A valid but unsupported dateTime is reported by the
-                                // literal check, with its own error.
                                 !matches!(
                                     crate::datatype_value::parse_value(fv_lexical, fv_dtype),
                                     Some(DataValue::DateTime { .. })
-                                ) && !crate::datatype_value::is_unsupported_datetime_lexical(
-                                    fv_lexical, fv_dtype,
                                 )
                             }
                             // xsd:pattern: value must be a string AND a valid regex.
@@ -406,9 +402,13 @@ impl<'a> DataRangeConverter<'a> {
                                 ) {
                                     true // non-string facet value
                                 } else {
-                                    regex::Regex::new(
-                                        &format!("^(?:{})$", fv_lexical)
-                                    ).is_err()
+                                    // The syntax alone: the `regex` crate's
+                                    // limit on the compiled size would reject
+                                    // a valid large repetition like
+                                    // `a{2147483000}`.
+                                    regex_syntax::Parser::new()
+                                        .parse(&format!("^(?:{})$", fv_lexical))
+                                        .is_err()
                                 }
                             }
                             // rdf:langRange: value must be a string.

@@ -11,8 +11,9 @@
 //!   equal only to itself and in no supported datatype. A `DataOneOf` holding
 //!   one was taken to have infinitely many values.
 //! * dateTime values beyond ±9999 or finer than milliseconds are valid XSD 1.1
-//!   values that are not supported; they are rejected with their own error,
-//!   not as malformed literals.
+//!   values. They were rejected; their instants are now held exactly.
+//! * A large bounded repetition in a pattern, such as `a{2147483000}`, built
+//!   one automaton state per copy; it is now a length window.
 //! * `"Infinity"` is not an XSD 1.1 spelling of xsd:double or xsd:float (Part 2
 //!   §3.3.4.2, §3.3.5.2); `INF` is. HermiT accepts Java's spelling.
 use hermit_rs::reasoner::Reasoner;
@@ -80,6 +81,38 @@ fn long_windows_over_large_automata_are_counted_exactly() {
 }
 
 #[test]
+fn large_bounded_repetitions_are_reasoned_about_symbolically() {
+    // a{2147483000} holds one string. Its automaton had a state per copy and
+    // exhausted memory.
+    let range = "DatatypeRestriction(xsd:string xsd:pattern \"a{2147483000}\")";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(1));
+    assert!(!values(2));
+    // Emptiness: the string is too long for maxLength, and not in b*.
+    for other in [
+        "DatatypeRestriction(xsd:string xsd:maxLength \"2147482999\"^^xsd:integer)",
+        "DatatypeRestriction(xsd:string xsd:pattern \"b*\")",
+    ] {
+        let axiom = format!("ClassAssertion(DataSomeValuesFrom(:dp DataIntersectionOf({range} {other})) :a)");
+        assert!(!consistent(&axiom).unwrap(), "{other}");
+    }
+    // Membership: x, 300 to 3000000 digits and y.
+    let digits = "DatatypeRestriction(xsd:string xsd:pattern \"x[0-9]{300,3000000}y\")";
+    let member = |value: &str| {
+        consistent(&format!("DataPropertyRange(:dp {digits}) DataPropertyAssertion(:dp :a \"{value}\")")).unwrap()
+    };
+    assert!(member(&format!("x{}y", "7".repeat(300))));
+    assert!(member(&format!("x{}y", "0".repeat(4000))));
+    assert!(!member(&format!("x{}y", "7".repeat(299))));
+    assert!(!member(&format!("x{}zy", "7".repeat(300))));
+    // Counting: x, 300 or 301 copies of `a` and y are two strings.
+    let two = "DatatypeRestriction(xsd:string xsd:pattern \"xa{300,301}y\")";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {two}) :a)")).unwrap();
+    assert!(values(2));
+    assert!(!values(3));
+}
+
+#[test]
 fn anonymous_constants_are_values_of_no_supported_datatype() {
     let at_least = |n: usize, range: &str| {
         consistent_ignoring_unsupported(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)"))
@@ -99,7 +132,7 @@ fn anonymous_constants_are_values_of_no_supported_datatype() {
 }
 
 #[test]
-fn unsupported_datetime_values_are_rejected_explicitly() {
+fn datetime_values_are_exact_beyond_milliseconds_and_four_digit_years() {
     let assert_value = |literal: &str| format!("DataPropertyAssertion(:dp :a {literal})");
     for lexical in [
         "10000-01-01T00:00:00Z",
@@ -107,21 +140,82 @@ fn unsupported_datetime_values_are_rejected_explicitly() {
         "2000-01-01T00:00:00.0001Z",
         "123456-02-29T12:00:00.1234567+01:00",
     ] {
-        let error = consistent(&assert_value(&format!("\"{lexical}\"^^xsd:dateTime"))).unwrap_err();
-        assert!(error.starts_with("UnsupportedDatatypeValue"), "{lexical}: {error}");
-        let error = consistent(&format!(
-            "DataPropertyRange(:dp DatatypeRestriction(xsd:dateTime xsd:minInclusive \"{lexical}\"^^xsd:dateTime))"
-        ))
-        .unwrap_err();
-        assert!(error.starts_with("UnsupportedDatatypeValue"), "{lexical}: {error}");
+        assert_eq!(consistent(&assert_value(&format!("\"{lexical}\"^^xsd:dateTime"))), Ok(true), "{lexical}");
+        assert_eq!(
+            consistent(&format!(
+                "DataPropertyRange(:dp DatatypeRestriction(xsd:dateTime xsd:minInclusive \"{lexical}\"^^xsd:dateTime))"
+            )),
+            Ok(true),
+            "{lexical}"
+        );
     }
     // Invalid forms stay malformed: a padded year, a February 29 of a common
     // year and a nonzero fraction at 24:00:00.
-    for lexical in ["010000-01-01T00:00:00", "10001-02-29T00:00:00", "2000-01-01T24:00:00.0001"] {
+    for lexical in ["010000-01-01T00:00:00", "10100-02-29T00:00:00", "2000-01-01T24:00:00.0001"] {
         let error = consistent(&assert_value(&format!("\"{lexical}\"^^xsd:dateTime"))).unwrap_err();
         assert!(error.starts_with("MalformedLiteralException"), "{lexical}: {error}");
     }
-    assert_eq!(consistent(&assert_value("\"2000-01-01T00:00:00.123Z\"^^xsd:dateTime")), Ok(true));
+    // Whether two literals are one value: with a functional property, the
+    // ontology is consistent exactly when they are.
+    let same_value = |x: &str, y: &str| {
+        consistent(&format!(
+            "FunctionalDataProperty(:dp)
+             DataPropertyAssertion(:dp :a \"{x}\"^^xsd:dateTime)
+             DataPropertyAssertion(:dp :a \"{y}\"^^xsd:dateTime)"
+        ))
+        .unwrap()
+    };
+    // Fractions are exact: trailing zeros do not matter, a tenth of a
+    // millisecond does.
+    assert!(same_value("2000-01-01T00:00:00.0001Z", "2000-01-01T00:00:00.000100Z"));
+    assert!(!same_value("2000-01-01T00:00:00.0001Z", "2000-01-01T00:00:00.0002Z"));
+    assert!(!same_value("2000-01-01T00:00:00.0001Z", "2000-01-01T00:00:00Z"));
+    // Years beyond 9999, with the 24:00:00 normalisation and the 400-year
+    // leap rule (10000 is a leap year).
+    assert!(same_value("10000-12-31T24:00:00Z", "10001-01-01T00:00:00Z"));
+    assert!(same_value("10000-02-28T24:00:00Z", "10000-02-29T00:00:00Z"));
+    assert!(!same_value("10000-02-29T00:00:00Z", "10000-03-01T00:00:00Z"));
+    assert!(!same_value("-123456-01-01T00:00:00", "-123455-01-01T00:00:00"));
+    // The same instant at another offset is equal but not identical (OWL 2
+    // §4.7), so it is another value.
+    assert!(!same_value("10000-01-01T00:00:00Z", "10000-01-01T01:00:00+01:00"));
+
+    // A bound finer than a millisecond: 0.0001 s lies strictly between 0 and
+    // 0.001 s, 0.0011 s does not.
+    let between = |x: &str| {
+        consistent(&format!(
+            "DataPropertyRange(:dp DatatypeRestriction(xsd:dateTime
+                xsd:minExclusive \"2000-01-01T00:00:00Z\"^^xsd:dateTime
+                xsd:maxExclusive \"2000-01-01T00:00:00.001Z\"^^xsd:dateTime))
+             DataPropertyAssertion(:dp :a \"{x}\"^^xsd:dateTime)"
+        ))
+        .unwrap()
+    };
+    assert!(between("2000-01-01T00:00:00.0001Z"));
+    assert!(between("2000-01-01T00:00:00.0009999999999Z"));
+    assert!(!between("2000-01-01T00:00:00.0011Z"));
+    // Far years are ordered too.
+    assert!(!consistent(
+        "DataPropertyRange(:dp DatatypeRestriction(xsd:dateTime xsd:maxInclusive \"9999-12-31T23:59:59Z\"^^xsd:dateTime))
+         DataPropertyAssertion(:dp :a \"123456-01-01T00:00:00Z\"^^xsd:dateTime)"
+    )
+    .unwrap());
+
+    // A single instant without an offset is one value, however far and fine
+    // it is (the values with an offset lie more than 14 hours inside the
+    // bounds, so none does); two instants a ten-millionth of a second apart
+    // are two.
+    let values = |n: usize, upper: &str| {
+        consistent(&format!(
+            "ClassAssertion(DataMinCardinality({n} :dp DatatypeRestriction(xsd:dateTime
+                xsd:minInclusive \"-123456-01-01T00:00:00.0000001\"^^xsd:dateTime
+                xsd:maxInclusive \"{upper}\"^^xsd:dateTime)) :a)"
+        ))
+        .unwrap()
+    };
+    assert!(values(1, "-123456-01-01T00:00:00.0000001"));
+    assert!(!values(2, "-123456-01-01T00:00:00.0000001"));
+    assert!(values(2, "-123456-01-01T00:00:00.0000002"));
 }
 
 #[test]
