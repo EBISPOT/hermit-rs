@@ -1,6 +1,7 @@
 # Java test parity
 
-Remaining work is indexed in [HANDOFF.md](HANDOFF.md), with a GitHub issue for every outstanding item.
+Every executable imported case passes in strict mode; see [RESULTS.md](RESULTS.md).
+The history of the fixes and deliberate deviations is in [HANDOFF.md](HANDOFF.md).
 
 
 These tests are ported from the `java` branch of EBISPOT/hermit-rs at

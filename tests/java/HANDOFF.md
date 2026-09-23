@@ -1,7 +1,9 @@
 # Java parity handoff
 
-The implementation work is paused at the user's request to conserve credits.
-Continue on `rust`; the remaining work is recorded in the issues below.
+All issues indexed below are resolved on `rust`: every executable imported Java
+case passes in strict mode and all scoped OWL WG cases pass (see
+[RESULTS.md](RESULTS.md)). This file is kept as the record of how each was fixed
+and of the deliberate deviations from Java.
 
 ## Completed and released
 
