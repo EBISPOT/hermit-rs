@@ -36,12 +36,18 @@ fn dl_with_graph(axioms: &str, g: DescriptionGraph) -> DLOntology {
         _,
     ) = horned_owl::io::ofn::reader::read(&mut std::io::Cursor::new(text), Default::default())
         .unwrap();
-    let dl = clausify_ontology(&o).unwrap();
-    let mut clauses = dl.get_dl_clauses().clone();
-    g.produce_start_dl_clauses(&mut clauses);
+    // Java's createReasoner(configuration, descriptionGraphs): the graphs reach
+    // the production clausifier, which adds their start clauses and decides
+    // which SWRL rules range over anonymous graph vertices.
+    let (dl, _) = clausify_ontology_with_description_graphs(
+        &o,
+        &crate::configuration::Configuration::default(),
+        &[g],
+    )
+    .unwrap();
     DLOntology::new(
         "opaque:test",
-        clauses,
+        dl.get_dl_clauses().clone(),
         dl.get_positive_facts().clone(),
         dl.get_negative_facts().clone(),
         None,

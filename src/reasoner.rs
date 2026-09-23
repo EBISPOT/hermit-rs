@@ -7089,6 +7089,24 @@ fn clausify_ontology_with_role_automata(
     ),
     String,
 > {
+    clausify_ontology_with_description_graphs(ontology, configuration, &[])
+}
+
+/// `OWLClausification.preprocessAndClausify(ontology, descriptionGraphs)`: the
+/// front-end pipeline of [`clausify_ontology_with_role_automata`], clausifying
+/// with `description_graphs` so their start clauses are added and SWRL rules
+/// over graph object properties also apply to anonymous graph vertices.
+fn clausify_ontology_with_description_graphs(
+    ontology: &SetOntology<crate::structural::A>,
+    configuration: &crate::configuration::Configuration,
+    description_graphs: &[crate::model::DescriptionGraph],
+) -> Result<
+    (
+        DLOntology,
+        crate::structural::ObjectPropertyInclusionManager,
+    ),
+    String,
+> {
     use crate::structural::{
         BuiltInPropertyManager, Configuration, OWLAxioms, OWLAxiomsExpressivity, OWLClausification,
         OWLNormalization, ObjectPropertyInclusionManager,
@@ -7113,10 +7131,11 @@ fn clausify_ontology_with_role_automata(
     let dl = OWLClausification::new(Configuration {
         ignore_unsupported_datatypes: configuration.ignore_unsupported_datatypes,
     })
-    .clausify(
+    .clausify_with_description_graphs(
         "http://hermit-rs/anonymous-ontology",
         &axioms,
         &expressivity,
+        description_graphs,
     )?;
     Ok((dl, manager))
 }
@@ -9494,13 +9513,13 @@ impl IncrementalReasoner {
 
 /// Description-graph reasoning at the reasoner (`is_consistent`) level.
 ///
-/// There is NO front-end (horned-owl / structural / clausification) input path
-/// for description graphs -- `DescriptionGraph` appears only in the model/tableau
-/// layers, never in `src/structural/`. So a description graph is reachable only by
-/// constructing a `DLOntology` directly (its constructor harvests the graphs from
-/// the `ExistsDescriptionGraph`/`DescriptionGraph` predicates in clauses/facts).
-/// These tests drive that internal-API path end to end through the now-wired
-/// `DescriptionGraphManager`.
+/// OWL syntax cannot express description graphs, so the public API has no input
+/// path for them. A graph reaches the reasoner either through a `DLOntology`
+/// built directly (its constructor harvests the graphs from the
+/// `ExistsDescriptionGraph`/`DescriptionGraph` predicates in clauses/facts) or
+/// through the crate-internal [`clausify_ontology_with_description_graphs`],
+/// which also decides which SWRL rules apply to anonymous graph vertices. These
+/// tests drive both paths end to end through the `DescriptionGraphManager`.
 #[cfg(test)]
 mod description_graph_reasoner_tests {
     use super::*;
@@ -9610,6 +9629,107 @@ mod description_graph_reasoner_tests {
             false, false, false, false,
         );
         assert!(Reasoner::new(&dl).is_consistent());
+    }
+
+    /// Clausifies functional-syntax `axioms` over `http://example.org/` with the
+    /// description graph `G`: vertices `C0 -r-> C1`, started by `C0`.
+    fn clausify_with_graph(axioms: &str) -> Result<DLOntology, String> {
+        let (g, c0, c1, r) = graph();
+        let g = DescriptionGraph::new(
+            g.name(),
+            vec![c0.clone(), c1],
+            vec![Edge::new(r, 0, 1)],
+            [c0].into_iter().collect(),
+        );
+        let text = format!("Prefix(:=<http://example.org/>) Ontology({axioms})");
+        let (o, _): (SetOntology<crate::structural::A>, _) =
+            horned_owl::io::ofn::reader::read(&mut std::io::Cursor::new(text), Default::default())
+                .unwrap();
+        clausify_ontology_with_description_graphs(
+            &o,
+            &crate::configuration::Configuration::default(),
+            &[g],
+        )
+        .map(|(dl, _)| dl)
+    }
+
+    /// The named individual `:i` has an anonymous `:t`-successor that starts a
+    /// graph instance, so both graph vertices are anonymous. A rule over the
+    /// graph property `:r` applies to them and makes `:i` a `:B`, clashing with
+    /// `not :B`; a DL-safe rule over the ordinary property `:q` binds only named
+    /// individuals, so it does not fire on the anonymous vertex and the ontology
+    /// stays consistent.
+    #[test]
+    fn graph_rules_apply_to_anonymous_vertices_but_dl_safe_rules_do_not() {
+        let base = "ClassAssertion(:A :i) ClassAssertion(ObjectComplementOf(:B) :i) \
+            SubClassOf(:A ObjectSomeValuesFrom(:t :C0)) \
+            SubClassOf(ObjectSomeValuesFrom(:t :Bad) :B) \
+            SubClassOf(:C0 ObjectSomeValuesFrom(:q :E))";
+        let graph_rule = "DLSafeRule(Body(ObjectPropertyAtom(:r Variable(:x) Variable(:y))) \
+            Head(ClassAtom(:Bad Variable(:x))))";
+        let dl = clausify_with_graph(&format!("{base} {graph_rule}")).unwrap();
+        assert!(!dl.get_all_description_graphs().is_empty());
+        assert!(!Reasoner::new(&dl).is_consistent(), "the graph rule must fire on the anonymous vertex");
+
+        let dl_safe_rule = "DLSafeRule(Body(ObjectPropertyAtom(:q Variable(:x) Variable(:y))) \
+            Head(ClassAtom(:Bad Variable(:x))))";
+        let dl = clausify_with_graph(&format!("{base} {dl_safe_rule}")).unwrap();
+        assert!(Reasoner::new(&dl).is_consistent(), "a DL-safe rule must not fire on anonymous nodes");
+    }
+
+    /// A property used only in rules takes the kind of the rule it occurs in:
+    /// `:conn` is a graph property because it occurs with `:r`, so the second
+    /// rule is unrestricted too; `:u` occurs with no graph property, so its rule
+    /// stays DL-safe. Without graphs every rule is guarded by `internal:named`.
+    #[test]
+    fn rule_only_properties_inherit_the_kind_of_their_rule() {
+        let rules = "DLSafeRule(Body(ClassAtom(:D Variable(:x)) ObjectPropertyAtom(:conn Variable(:x) Variable(:y))) \
+                Head(ClassAtom(:E Variable(:y)))) \
+            DLSafeRule(Body(ObjectPropertyAtom(:r Variable(:x) Variable(:y))) \
+                Head(ObjectPropertyAtom(:conn Variable(:y) Variable(:x)))) \
+            DLSafeRule(Body(ObjectPropertyAtom(:u Variable(:x) Variable(:y))) \
+                Head(ClassAtom(:E Variable(:y))))";
+        let guarded = |dl: &DLOntology, role: &str| {
+            let clause = dl
+                .get_dl_clauses()
+                .iter()
+                .find(|c| {
+                    c.get_body_atoms().iter().any(|a| {
+                        a.get_dl_predicate()
+                            == &DLPredicate::AtomicRole(AtomicRole::create(format!("http://example.org/{role}")))
+                    })
+                })
+                .unwrap();
+            clause.get_body_atoms().iter().any(|a| {
+                a.get_dl_predicate() == &DLPredicate::AtomicConcept(AtomicConcept::internal_named().clone())
+            })
+        };
+        let dl = clausify_with_graph(rules).unwrap();
+        assert!(!guarded(&dl, "r"));
+        assert!(!guarded(&dl, "conn"));
+        assert!(guarded(&dl, "u"));
+
+        let text = format!("Prefix(:=<http://example.org/>) Ontology({rules})");
+        let (o, _): (SetOntology<crate::structural::A>, _) =
+            horned_owl::io::ofn::reader::read(&mut std::io::Cursor::new(text), Default::default())
+                .unwrap();
+        let dl = clausify_ontology(&o).unwrap();
+        for role in ["r", "conn", "u"] {
+            assert!(guarded(&dl, role), "{role}: rules are DL-safe without description graphs");
+        }
+    }
+
+    /// Java rejects graph properties in OWL axioms and rules that mix graph and
+    /// ordinary properties.
+    #[test]
+    fn mixing_graph_and_ordinary_properties_is_rejected() {
+        assert!(clausify_with_graph("SubClassOf(:A ObjectSomeValuesFrom(:r :B))").is_err());
+        assert!(clausify_with_graph(
+            "SubClassOf(:A ObjectSomeValuesFrom(:q :B)) \
+             DLSafeRule(Body(ObjectPropertyAtom(:r Variable(:x) Variable(:y)) \
+                 ObjectPropertyAtom(:q Variable(:y) Variable(:z))) Head(ClassAtom(:E Variable(:x))))"
+        )
+        .is_err());
     }
 }
 

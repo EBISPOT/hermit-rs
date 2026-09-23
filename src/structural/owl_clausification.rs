@@ -12,7 +12,9 @@
 // this point `OWLNormalization.RuleNormalizer` has fully normalized every rule
 // (all arguments are variables; class atoms use only named classes), so the
 // clausifier just maps atoms to DL atoms, collects abstract (object) variables,
-// and guards them with `internal:named` for DL-safety. The data-property
+// and guards them with `internal:named` for DL-safety, except in rules over
+// description-graph properties, which also apply to anonymous graph vertices
+// (`order_rules_for_description_graphs`). The data-property
 // subject is DL-safety-restricted but the object (a data value) is not.
 
 use std::collections::{BTreeSet, HashSet};
@@ -27,9 +29,9 @@ use super::{
 
 use crate::model::{
     AnnotatedEquality, AtLeastConcept, AtLeastDataRange, Atom, AtomicConcept, AtomicRole, Constant,
-    ConstantEnumeration, DLClause, DLOntology, DLPredicate, DatatypeRestriction, Individual,
-    InternalDatatype, LiteralConcept, LiteralDataRange, NodeIDsAscendingOrEqual, Role, Term,
-    Variable,
+    ConstantEnumeration, DLClause, DLOntology, DLPredicate, DatatypeRestriction, DescriptionGraph,
+    Individual, InternalDatatype, LiteralConcept, LiteralDataRange, NodeIDsAscendingOrEqual, Role,
+    Term, Variable,
 };
 use crate::prefixes::Prefixes;
 
@@ -585,15 +587,15 @@ impl AxiomClausifier {
     /// this mirror maps atoms to DL atoms, collects the abstract (object)
     /// variables, and -- when `restrict_to_named` -- guards each abstract variable
     /// with `internal:named` for DL-safety, then emits a single DLClause whose
-    /// (possibly multi-atom, disjunctive) head matches Java exactly. We pass
-    /// `restrict_to_named = true`: HermiT's `processRules` only relaxes this for
-    /// description-graph object properties, which this port does not support.
+    /// (possibly multi-atom, disjunctive) head matches Java exactly.
+    /// `restrict_to_named` is chosen by [`order_rules_for_description_graphs`]:
+    /// only rules over description-graph object properties are unrestricted.
     fn clausify_rule(
         &mut self,
         rule: &super::owl_axioms::DisjunctiveRule,
+        restrict_to_named: bool,
         converter: &mut DataRangeConverter,
     ) -> Result<DLClause, String> {
-        let restrict_to_named = true;
         let mut body_atoms: Vec<Atom> = Vec::new();
         let mut head_atoms: Vec<Atom> = Vec::new();
         let mut abstract_variables: Vec<Variable> = Vec::new();
@@ -1232,6 +1234,84 @@ fn clausify_fact(
 // OWLClausification (the clausify entry point)
 // ---------------------------------------------------------------------------
 
+/// Port of `NormalizedRuleClausifier.processRules`: decides, for each SWRL
+/// rule, whether its abstract variables are guarded with `internal:named`, and
+/// returns the rules in Java's clausification order.
+///
+/// Description graphs (Motik et al., "Representing Ontologies Using Description
+/// Logics, Description Graphs, and Rules", AIJ 2009) keep their object
+/// properties apart from those of the OWL axioms, and rules over graph
+/// properties range over all graph vertices, including the anonymous ones a
+/// graph instance creates. Every other rule stays DL-safe: a rule that mentions
+/// a property of the OWL axioms, or no object property at all, binds only
+/// named individuals. A property that occurs only in rules takes the kind of
+/// the other properties in its rule, iterated to a fixpoint; properties that
+/// stay undetermined are treated as ordinary ones. Without description graphs
+/// every rule is therefore restricted to named individuals.
+fn order_rules_for_description_graphs<'r>(
+    rules: &[&'r super::owl_axioms::DisjunctiveRule],
+    object_properties_in_owl_axioms: &HashSet<horned_owl::model::ObjectProperty<A>>,
+    description_graphs: &[DescriptionGraph],
+) -> Result<Vec<(&'r super::owl_axioms::DisjunctiveRule, bool)>, String> {
+    use horned_owl::model::ObjectProperty;
+    let property_iri = |p: &ObjectProperty<A>| p.0.to_string();
+    let mut non_graph: HashSet<String> =
+        object_properties_in_owl_axioms.iter().map(property_iri).collect();
+    let mut graph: HashSet<String> = HashSet::new();
+    for description_graph in description_graphs {
+        for edge_index in 0..description_graph.number_of_edges() {
+            let iri = description_graph.get_edge(edge_index).get_atomic_role().iri().to_string();
+            if non_graph.contains(&iri) {
+                return Err("Mixing graph and non-graph object properties is not supported.".into());
+            }
+            graph.insert(iri);
+        }
+    }
+    let rule_properties = |rule: &super::owl_axioms::DisjunctiveRule| -> Vec<String> {
+        rule.body
+            .iter()
+            .chain(rule.head.iter())
+            .filter_map(|atom| match atom {
+                horned_owl::model::Atom::ObjectPropertyAtom { pred, .. } => {
+                    Some(property_iri(super::named_property(pred)))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let mut result = Vec::with_capacity(rules.len());
+    let mut unprocessed: Vec<&super::owl_axioms::DisjunctiveRule> = rules.to_vec();
+    let mut changed = true;
+    while !unprocessed.is_empty() && changed {
+        changed = false;
+        let mut remaining = Vec::with_capacity(unprocessed.len());
+        for rule in unprocessed {
+            let properties = rule_properties(rule);
+            let contains_graph = properties.iter().any(|p| graph.contains(p));
+            let contains_non_graph = properties.iter().any(|p| non_graph.contains(p));
+            if contains_graph && contains_non_graph {
+                return Err("A SWRL rule mixes graph and non-graph object properties, which is \
+                            not supported."
+                    .into());
+            }
+            if contains_graph {
+                graph.extend(properties.iter().cloned());
+            } else if contains_non_graph {
+                non_graph.extend(properties.iter().cloned());
+            } else if !properties.is_empty() {
+                // Only undetermined properties: revisit once others are known.
+                remaining.push(rule);
+                continue;
+            }
+            result.push((rule, !contains_graph));
+            changed = true;
+        }
+        unprocessed = remaining;
+    }
+    result.extend(unprocessed.into_iter().map(|rule| (rule, true)));
+    Ok(result)
+}
+
 pub struct OWLClausification {
     configuration: Configuration,
 }
@@ -1246,6 +1326,19 @@ impl OWLClausification {
         ontology_iri: &str,
         axioms: &OWLAxioms,
         axioms_expressivity: &OWLAxiomsExpressivity,
+    ) -> Result<DLOntology, String> {
+        self.clausify_with_description_graphs(ontology_iri, axioms, axioms_expressivity, &[])
+    }
+
+    /// `OWLClausification.clausify(..., descriptionGraphs)`: as [`Self::clausify`],
+    /// plus the graphs' start clauses, and SWRL rules over graph object
+    /// properties are applied to anonymous graph vertices as well.
+    pub fn clausify_with_description_graphs(
+        &self,
+        ontology_iri: &str,
+        axioms: &OWLAxioms,
+        axioms_expressivity: &OWLAxiomsExpressivity,
+        description_graphs: &[DescriptionGraph],
     ) -> Result<DLOntology, String> {
         // Complex object-property inclusions (role chains / transitivity) are
         // not clausified directly: the `ObjectPropertyInclusionManager` rewrites
@@ -1377,9 +1470,18 @@ impl OWLClausification {
             clausify_fact(fact, &mut converter, &mut positive_facts, &mut negative_facts)?;
         }
 
+        for description_graph in description_graphs {
+            description_graph.produce_start_dl_clauses(&mut dl_clauses);
+        }
+
         // SWRL rules (already fully normalized by OWLNormalization.RuleNormalizer).
-        for rule in unique_rules.iter().copied() {
-            let clause = clausifier.clausify_rule(rule, &mut converter)?;
+        let ordered_rules = order_rules_for_description_graphs(
+            &unique_rules,
+            &axioms.object_properties_occurring_in_owl_axioms,
+            description_graphs,
+        )?;
+        for (rule, restrict_to_named) in ordered_rules {
+            let clause = clausifier.clausify_rule(rule, restrict_to_named, &mut converter)?;
             dl_clauses.insert(clause);
         }
 
