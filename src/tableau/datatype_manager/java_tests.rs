@@ -26,13 +26,16 @@ fn expected_value(v: &Value) -> DataValue {
 // and BCE calendars internally, so raw implementation timestamps are not an oracle.
 fn date_lexical(value: &DataValue) -> String {
     let DataValue::DateTime {
-        millis,
+        instant,
         has_tz,
         tz_offset,
     } = value
     else {
         panic!("dateTime")
     };
+    let fraction = format!("{:0<3}", instant.fraction);
+    assert_eq!(fraction.len(), 3, "millisecond instant");
+    let millis = i64::try_from(&instant.seconds).unwrap() * 1000 + fraction.parse::<i64>().unwrap();
     let local = millis + i64::from(*tz_offset) * 60_000;
     let days = local.div_euclid(86_400_000);
     let day_ms = local.rem_euclid(86_400_000);

@@ -317,8 +317,8 @@ Datatype robustness fixes followed (no issue); one deviates from Java, and
 - dateTime values beyond years ±9999 or finer than milliseconds are valid XSD
   1.1 values (Part 2 §3.3.7: yearFrag and secondFrag have any number of
   digits) that the millisecond representation cannot hold. They were rejected
-  as malformed literals; they are now rejected with an
-  `UnsupportedDatatypeValue` error that says so, in literals and facet values.
+  as malformed literals, and then with an `UnsupportedDatatypeValue` error; a
+  later fix represents them exactly (below).
 - `"Infinity"`, `"+Infinity"` and `"-Infinity"` are no XSD 1.1 lexical forms of
   xsd:float or xsd:double (Part 2 §3.3.4.2, §3.3.5.2 spell the special values
   `INF`, `+INF`, `-INF` and `NaN`); HermiT accepts them through Java's
@@ -330,8 +330,45 @@ Datatype robustness fixes followed (no issue); one deviates from Java, and
   XSD spelling `INF` the ontology is inconsistent, as Java answered.
 
 `tests/datatype_robustness.rs` and the datatype manager's and string automata's
-unit tests check each fix. A bounded repetition in a pattern, such as
-`a{2147483000}`, still builds one automaton state per repetition.
+unit tests check each fix.
+
+Three leftovers of those fixes followed (no issue); the first deviates from Java.
+
+- Exact dateTime values. An instant is now whole seconds since the epoch, an
+  unbounded integer, plus the exact decimal fraction of a second, so every
+  XSD 1.1 dateTime literal has its value: `"123456-02-29T12:00:00.1234567+01:00"`
+  is accepted, `.0001` and `.000100` are one value and `.0002` another, and
+  `.0001` lies strictly between `00:00:00` and `00:00:00.001`. The calendar
+  repeats every 400 years, so a far year is computed from its cycle. The
+  timezone offset stays part of the identity (OWL 2 §4.7), `24:00:00` stays
+  the next day's `00:00:00`, and the intervals, counts and listed values use
+  the exact instants. HermiT accepts only years within ±9999 and at most three
+  fraction digits and rejects the rest as malformed, a deliberate deviation.
+- Exponential assignment search. The distinct-value assignment searched by
+  backtracking, so a clique of 30 nodes, 20 over the 19 integers [0, 18] and
+  10 over [19, 47], none eliminated, did not finish. Each connected component
+  of the survivors is now decided on its own; one whose nodes are pairwise
+  distinct is an all-different constraint, satisfiable exactly when its nodes
+  can be matched to distinct values (Hall's theorem), which Hopcroft–Karp
+  decides in O(E √V). Other components are still searched. Values are interned
+  as integer ids, one list per shared value space.
+- Large bounded repetitions. `xsd:pattern "a{2147483000}"` built one automaton
+  state per copy; the clausifier even rejected it as an unsupported facet,
+  since it checked the pattern by compiling it with the `regex` crate, whose
+  size limit it exceeds. The syntax is now checked on its own. A pattern that
+  is a concatenation with one repetition of more than 256 copies of a body
+  whose words have one length `l`, beside pieces whose words have one length
+  each, is the body's star with a window on the string length: `F1 R{m,n} F2`
+  is `F1 R* F2` of the lengths `l1 + l2 + k·l`, `k` in `[m, n]`, exactly, and
+  the window is reasoned about over the automaton's cycles as the length
+  facets are. Emptiness, membership and counts stay exact.
+
+Still open: a large repetition inside a group, beside a piece of varying
+length or next to another large repetition (`(a{2147483000})?`, `a*b{100000}`)
+still builds one state per copy. A string count over a large, densely
+connected automaton that exceeds the budget of 2^29 multiplications is
+reported as `u128::MAX`, and an anyURI space too large to list is counted by
+its words, an upper bound; both are sound but can miss a clash.
 
 Issue #31 was a gap in the disjointness of datatypes. rdf:XMLLiteral is
 disjoint from every other datatype of the OWL 2 datatype map: OWL 2 Structural
