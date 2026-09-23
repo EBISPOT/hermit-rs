@@ -1,8 +1,4 @@
 {
-  "reasoner::java_graph_tests::testGraph2": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "\nassertion failed: !r.is_consistent_with_pos_neg_test_atoms(&mut manager, &[a], &[b])"
-  },
   "structural.ClausificationDatatypesTest.testDataComplementOf3": {
     "origin": "upstream assertion also fails",
     "signature": "\"structural.ClausificationDatatypesTest.testDataComplementOf3\" operation 0: \"clausify\"\nassertion `left == right` failed"

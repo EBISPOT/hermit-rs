@@ -9,25 +9,24 @@ string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #25 and #27, the issue #26 fix for the inverses of the built-in object
 properties, the issue #19 fix for the direct types of individuals, the issue
 #21 fix for the declarations in printed hierarchies, the issue #28
-core-blocking fix, which also resolved #29 and #30, and the issue #32/#33
-blocking-validator fixture repair. All 598 declared Java
+core-blocking fix, which also resolved #29 and #30, the issue #32/#33
+blocking-validator fixture repair, and the issue #34 description-graph rule
+fix. All 598 declared Java
 methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
 | Query/structural replay | 905 | 17 | 2 |
-| Native internal tests | 52 | 1 | 0 |
-| Total, excluding OWL WG | 957 | 18 | 2 |
+| Native internal tests | 53 | 0 | 0 |
+| Total, excluding OWL WG | 958 | 17 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 18 failures are:
-
-* **1 Rust/Java discrepancy**: description-graph/SWRL integration.
-* **17 assertions that also fail in the pinned Java checkout**: structural
-  control comparisons. The original Java aggregate suites exclude these
-  classes. The original controls and Java failure
-  messages are retained, rather than rewritten to match Rust's output.
+The Rust port does **not** yet have full Java test parity. The 17 failures are
+assertions that also fail in the pinned Java checkout: structural control
+comparisons. The original Java aggregate suites exclude these classes. The
+original controls and Java failure messages are retained, rather than rewritten
+to match Rust's output.
 
 One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
@@ -381,6 +380,24 @@ and b3 are both `R`-successors of the `C` node b and would both copy a1's `D`
 against `C <= <=1 R.D`, so exactly one of their blocks is valid; the blocks of
 a2, a111, b1 and a121 respect every clause. Nothing deviates from Java's
 blocking or validation; only the fixture changed.
+
+Issue #34 was a missing description-graph context in the SWRL clausifier. In
+the description-graph formalism (Motik et al., "Representing Ontologies Using
+Description Logics, Description Graphs, and Rules", AIJ 2009), rules over graph
+properties range over every graph vertex, including the anonymous vertices of
+a graph instance, while the other rules stay DL-safe. Rust guarded every rule
+variable with `internal:named`, so in `graph.GraphTest.testGraph2` the rule
+deriving `conn` never matched the anonymous graph under `:A`'s `:T`-successor
+and `A <= B` was missed. The clausifier now takes the description graphs and
+ports `NormalizedRuleClausifier.processRules`: a rule over graph properties is
+unguarded, a property used only in rules takes the kind of its rule's other
+properties, iterated to a fixpoint, and every other rule, including every rule
+of an ontology without graphs, keeps its guards. Graph properties in OWL
+axioms and rules that mix both kinds are rejected, as in Java. The native test
+now clausifies through this path rather than adding start clauses by hand.
+Regressions check that a graph rule fires on an anonymous vertex while a
+DL-safe rule over an ordinary property does not, the kind inference for
+rule-only properties, and the rejections. Nothing deviates from Java.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

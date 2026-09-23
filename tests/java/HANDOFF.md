@@ -114,7 +114,7 @@ two overrides are empty in the original Java source.
 | [#31](https://github.com/EBISPOT/hermit-rs/issues/31) | Reject intersections of XMLLiteral and disjoint datatype spaces (**resolved**) | 1 |
 | [#32](https://github.com/EBISPOT/hermit-rs/issues/32) | Repair the obsolete annotated-equality blocking-validator fixture (**resolved**; see `corrected/`) | 1 |
 | [#33](https://github.com/EBISPOT/hermit-rs/issues/33) | Repair the obsolete one-invalid-block validator fixture and check its assertions (**resolved** with #32) | 1 |
-| [#34](https://github.com/EBISPOT/hermit-rs/issues/34) | Apply description-graph rules to anonymous graph vertices | 1 |
+| [#34](https://github.com/EBISPOT/hermit-rs/issues/34) | Apply description-graph rules to anonymous graph vertices (**resolved**) | 1 |
 | [#35](https://github.com/EBISPOT/hermit-rs/issues/35) | Compare datatype clausification semantically: testDataComplementOf3 | 1 |
 | [#36](https://github.com/EBISPOT/hermit-rs/issues/36) | Compare datatype clausification semantically: testDataComplementOf4 | 1 |
 | [#37](https://github.com/EBISPOT/hermit-rs/issues/37) | Compare datatype clausification semantically: testDataPropertiesDataComplementOf1 | 1 |
