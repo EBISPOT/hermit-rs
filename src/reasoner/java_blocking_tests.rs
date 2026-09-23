@@ -1,4 +1,5 @@
-// Direct translation of Java BlockingValidatorTest; regenerate with port_blocking.py.
+// Direct translation of the corrected Java BlockingValidatorTest
+// (tests/java/corrected/); regenerate with port_blocking.py.
 #![allow(non_snake_case, unused_variables)]
 use super::java_tableau_tests::*;
 use super::*;
@@ -62,8 +63,9 @@ fn testOneInvalidBlock() {
     let dl = test_dl(clauses.into_iter().collect());
     let (mut t, _manager) = tableau(&dl, true);
     let emptySet = DependencySet::Permanent(t.dependency_set_factory.empty_set());
-    let a = t.create_new_ni_node(&emptySet);
-    let b = t.create_new_ni_node(&emptySet);
+    let r = t.create_new_ni_node(&emptySet);
+    let a = t.create_new_tree_node(&emptySet, r);
+    let b = t.create_new_tree_node(&emptySet, r);
     let a1 = t.create_new_tree_node(&emptySet, a);
     let a2 = t.create_new_tree_node(&emptySet, a);
     let a11 = t.create_new_tree_node(&emptySet, a1);
@@ -214,7 +216,8 @@ fn testInvalidBlockWithAnnotatedEqualities() {
     let dl = test_dl(clauses.into_iter().collect());
     let (mut t, _manager) = tableau(&dl, true);
     let emptySet = DependencySet::Permanent(t.dependency_set_factory.empty_set());
-    let a = t.create_new_ni_node(&emptySet);
+    let r = t.create_new_ni_node(&emptySet);
+    let a = t.create_new_tree_node(&emptySet, r);
     let a1 = t.create_new_tree_node(&emptySet, a);
     let a2 = t.create_new_tree_node(&emptySet, a);
     let a11 = t.create_new_tree_node(&emptySet, a1);

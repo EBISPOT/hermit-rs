@@ -1,12 +1,4 @@
 {
-  "reasoner::java_blocking_tests::testInvalidBlockWithAnnotatedEqualities": {
-    "origin": "upstream assertion also fails",
-    "signature": "\nassertion failed: t.nodes[a2].is_directly_blocked() && t.nodes[a2].get_blocker() == Some(a1)"
-  },
-  "reasoner::java_blocking_tests::testOneInvalidBlock": {
-    "origin": "upstream assertion also fails",
-    "signature": "\nassertion failed: t.nodes[a111].is_directly_blocked() && t.nodes[a111].get_blocker() == Some(a1)"
-  },
   "reasoner::java_graph_tests::testGraph2": {
     "origin": "Rust/Java discrepancy",
     "signature": "\nassertion failed: !r.is_consistent_with_pos_neg_test_atoms(&mut manager, &[a], &[b])"

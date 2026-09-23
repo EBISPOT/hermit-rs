@@ -43,7 +43,9 @@ records that Java value. The inventory check validates every entry.
 Missing operations, empty recordings, unexpected exceptions, timeouts, and
 allocation failures are failures, with the same explicit exception policy. `upstream-failures.json` separately preserves assertions that already fail
 in the pinned Java checkout; the original Java aggregate suite excludes the
-structural tests and `BlockingValidatorTest`.
+structural tests and `BlockingValidatorTest`. `corrected/` holds repaired copies
+of obsolete upstream fixtures, each with a header explaining the repair; the
+native port reads the corrected `BlockingValidatorTest` (issues #32 and #33).
 
 Run the inventory check and tests:
 
