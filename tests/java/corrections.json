@@ -463,5 +463,25 @@
       "base64_binary_value_space::base64_counting",
       "base64_binary_value_space::base64_and_hex_constants_are_different_values"
     ]
+  },
+  "reasoner.DatatypesTest.testINF": {
+    "issue": "none (known bug without an issue): Infinity is not an XSD lexical form of xsd:double",
+    "operation": 1,
+    "op": "isConsistent",
+    "java": false,
+    "corrected": {
+      "invalid": "MalformedLiteralException: \"Infinity\" is not a well-formed value of datatype <http://www.w3.org/2001/XMLSchema#double>"
+    },
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.5.1-§3.3.5.2: the lexical space of xsd:double is doubleRep, the decimal and scientific numerals plus the special values spelled INF, +INF, -INF and NaN (§3.3.5.2 lists these four spellings; doubleRep is noDecimalPtNumeral | decimalPtNumeral | scientificNotationNumeral | numericalSpecialRep, with numericalSpecialRep = '+INF' | '-INF' | 'INF' | 'NaN'). \"Infinity\" matches none of them, so \"Infinity\"^^xsd:double is not in the lexical space.",
+      "OWL 2 Structural Specification §4 and §5.7: OWL 2 takes xsd:double's lexical space and lexical-to-value mapping from XML Schema, and a literal whose lexical form is not in the lexical space of its datatype denotes no data value of the datatype map; it is ill-typed.",
+      "This project rejects an ontology holding an ill-typed literal of a supported datatype, as HermiT does with MalformedLiteralException for the literals its own parser refuses (DatatypesTest.testParsingError records that rejection for \"4a\"^^xsd:int). The test's ontology uses \"Infinity\"^^xsd:double in a DataOneOf and a NegativeDataPropertyAssertion, so it is rejected when the reasoner is created, and isConsistent has no answer: the replay expects the rejection (an invalid ontology, as recorded for testParsingError) instead of Java's false. The test meant the positive infinity; with the XSD spelling \"INF\"^^xsd:double the same axioms are inconsistent, as Java answered.",
+      "Java cause: DoubleDatatypeHandler.parseLiteral tries Double.parseDouble first, which accepts Java's own spellings Infinity, +Infinity and -Infinity (and surrounding whitespace), and falls back to INF and -INF only when it fails."
+    ],
+    "regressions": [
+      "tableau::datatype_manager::tests::lexical_validation_matches_hermit",
+      "tableau::datatype_manager::tests::float_special_values",
+      "datatype_robustness::infinity_is_not_an_xsd_spelling"
+    ]
   }
 }

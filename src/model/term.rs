@@ -96,6 +96,11 @@ impl Ord for Individual {
 // on demand via `data_value()` -- never participates in identity.
 
 const ANONYMOUS_CONSTANTS_DATATYPE: &str = "internal:anonymous-constants";
+/// The anonymous constants that stand for literals of unsupported datatypes
+/// under `ignoreUnsupportedDatatypes` (HermiT's `Constant.createAnonymous`).
+/// They are kept apart from the anonymous constants of the reasoner's own
+/// entailment reductions, which stand for any value.
+const UNSUPPORTED_LITERAL_DATATYPE: &str = "internal:anonymous-constants#unsupported-literal";
 
 /// The shared parsed-constant value type (Java's `Object m_dataValue` produced
 /// by `DatatypeRegistry.parseLiteral`), re-exported from the canonical
@@ -146,13 +151,21 @@ impl Constant {
         {
             Ok(Constant::create(lexical_form, datatype_uri))
         } else {
-            Err(format!(
-                "MalformedLiteralException: \"{lexical_form}\" is not a well-formed value of datatype <{datatype_uri}>"
-            ))
+            Err(crate::datatype_value::literal_error(&lexical_form, &datatype_uri))
         }
     }
     pub fn create_anonymous(id: &str) -> Constant {
         Constant::create(id, ANONYMOUS_CONSTANTS_DATATYPE)
+    }
+    /// The anonymous constant that stands for a literal of an unsupported
+    /// datatype, named by its lexical form, as HermiT's
+    /// `Constant.createAnonymous(literal)`.
+    pub fn create_unsupported_literal(lexical_form: &str) -> Constant {
+        Constant::create(lexical_form, UNSUPPORTED_LITERAL_DATATYPE)
+    }
+    /// Whether this constant stands for a literal of an unsupported datatype.
+    pub fn is_unsupported_literal(&self) -> bool {
+        self.0.datatype_uri == UNSUPPORTED_LITERAL_DATATYPE
     }
     pub fn lexical_form(&self) -> &str {
         &self.0.lexical_form
@@ -171,7 +184,7 @@ impl Constant {
         parse_data_value(&self.0.lexical_form, &self.0.datatype_uri)
     }
     pub fn is_anonymous(&self) -> bool {
-        self.0.datatype_uri == ANONYMOUS_CONSTANTS_DATATYPE
+        self.0.datatype_uri == ANONYMOUS_CONSTANTS_DATATYPE || self.is_unsupported_literal()
     }
     pub fn to_string_prefixes(&self, prefixes: &Prefixes) -> String {
         let mut buffer = String::new();

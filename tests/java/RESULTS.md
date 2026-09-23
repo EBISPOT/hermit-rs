@@ -13,8 +13,9 @@ core-blocking fix, which also resolved #29 and #30, the issue #32/#33
 blocking-validator fixture repair, the issue #34 description-graph rule
 fix, the semantic clause comparison for issues #35 to #50, and the issue #51
 key-normalization fix and expectation correction, the dateTime `24:00:00`
-fix and expectation corrections, and the base64Binary value-space fix and
-expectation correction. All 598
+fix and expectation corrections, the base64Binary value-space fix and
+expectation correction, and the datatype robustness fixes with the
+`DatatypesTest.testINF` expectation correction. All 598
 declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
@@ -26,13 +27,13 @@ individual-reuse and core-blocking suites.
 
 These are strict-mode results, before applying expected-failure exceptions.
 Every executable imported case passes in strict mode, and
-`expected-failures.json` is empty. Nine passes use a documented correction
+`expected-failures.json` is empty. Ten passes use a documented correction
 instead of the recorded Java expectation (see below); the two empty upstream
 overrides have no assertions to run. The original controls and Java failure
 messages are retained as provenance, rather than rewritten to match Rust's
 output.
 
-Nine passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
+Ten passes deliberately deviate from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
 `xsd:anyURI[minLength 1]` to be empty, but under XSD 1.1 and the OWL 2 Direct
 Semantics it contains exactly the empty URI (issue #9). Java misses it because
@@ -43,7 +44,8 @@ regressions. `structural.NormalizationTest.testKeys2` is the second; see issue
 #51 below. Six are dateTime cases that count `24:00:00` as a value of its own;
 see the dateTime value space below. The ninth, `BinaryDataTest.testBase64Parsing`,
 prints a parsed base64Binary literal as a hexBinary value; see the base64Binary
-value space below.
+value space below. The tenth, `DatatypesTest.testINF`, uses `"Infinity"^^xsd:double`,
+which is not an XSD 1.1 lexical form; see the datatype robustness fixes below.
 
 Every case still executes in the default gate. `expected-failures.json` identifies
 each discrepancy and its failing assertion. A new failure, a changed failing
@@ -188,11 +190,10 @@ decimal exponents (`"1E2"`, §3.3.3.1), a float/double `f`/`d` type suffix
 It rejects `"+INF"`, which §3.3.4.2 lists; Rust now accepts it. A non-ASCII
 character in a dateTime made the Rust parser panic; it is now ill-typed. Left
 as they are: surrounding whitespace, which the `collapse` whiteSpace facet of
-these datatypes removes; the `Infinity`/`+Infinity`/`-Infinity` spellings of
-`Double.parseDouble`, which `DatatypesTest.testINF` uses; dateTime years beyond
-±9999 and fractions beyond milliseconds, which are valid but unsupported; and
-anyURI, whose check is stricter than XSD 1.1 (any string). No imported case
-changes.
+these datatypes removes; and anyURI, whose check is stricter than XSD 1.1
+(any string). No imported case changed then; the `Infinity` spellings and the
+unsupported dateTime values were settled later (see the datatype robustness
+fixes below).
 
 Issues #15 and #16 had one cause, in the numeric value spaces. owl:real,
 owl:rational, xsd:decimal and the integer datatypes share one value space, whose
@@ -281,6 +282,56 @@ squaring) and how far they are from acceptance, and a count sums matrix powers.
 HermiT; it now takes milliseconds. A negated restriction splits the words by
 whether their length lies in its windows. `tests/string_datatype_edge_cases.rs`
 checks all three.
+
+Datatype robustness fixes followed (no issue); one deviates from Java, and
+`DatatypesTest.testINF` needs a corrected expectation.
+
+- Large value spaces. The pigeonhole shortcut for a clique of mutually
+  distinct nodes took two value spaces too large to list (more than 4096
+  values) as equal when their counts were, so 4200 nodes, half over the
+  integers [0, 4198] and half over [5000, 9198], clashed. Nodes now share a
+  value space when they have the same ranges (HermiT's `hasSameRestrictions`);
+  others are compared by their listed values. A survivor of the elimination
+  has fewer values than the component has nodes, so it is listed up to that
+  size rather than 4096 values, and never partially: a dateTime space had been
+  cut at 4096 values. Nodes with the same ranges share one list, and the
+  assignment search finds its neighbours' values in a hash set. A string count
+  over a window longer than 4096 characters used dense matrix powers and gave
+  up above 160 automaton states with `u128::MAX`, so
+  `xsd:string[pattern "(a{200})*", length 5000]`, which holds one string, took
+  two distinct values. The powers are now sparse, within a budget of 2^29
+  multiplications, so a cycle or a chain of choices of any length is counted
+  exactly; only a large, densely connected automaton still saturates. An
+  anyURI space too large to list was counted over an ASCII alphabet, a lower
+  bound, so 100 distinct values of `xsd:anyURI[maxLength 1]` clashed although
+  a URI may hold any character above U+0080 that is no space or control
+  character; the automaton's count of words, an upper bound, is used instead.
+- `ignoreUnsupportedDatatypes`. A literal of an unsupported datatype becomes an
+  anonymous constant, which HermiT parses to an `AnonymousConstantValue`, equal
+  only to itself and in no supported datatype. The datatype manager took it
+  for an unknown value, so a `DataOneOf` holding one had infinitely many
+  values: `DataOneOf("x"^^:U "true"^^xsd:boolean "false"^^xsd:boolean)` took
+  four distinct values, and three booleans fitted in
+  `xsd:boolean ⊓ DataOneOf("x"^^:U "true"^^xsd:boolean "false"^^xsd:boolean)`.
+  Restrictions over an unsupported datatype were already skipped.
+- dateTime values beyond years ±9999 or finer than milliseconds are valid XSD
+  1.1 values (Part 2 §3.3.7: yearFrag and secondFrag have any number of
+  digits) that the millisecond representation cannot hold. They were rejected
+  as malformed literals; they are now rejected with an
+  `UnsupportedDatatypeValue` error that says so, in literals and facet values.
+- `"Infinity"`, `"+Infinity"` and `"-Infinity"` are no XSD 1.1 lexical forms of
+  xsd:float or xsd:double (Part 2 §3.3.4.2, §3.3.5.2 spell the special values
+  `INF`, `+INF`, `-INF` and `NaN`); HermiT accepts them through Java's
+  `Float.parseFloat` and `Double.parseDouble`. They are now ill-typed, a
+  deliberate deviation from Java, and reject the ontology like every ill-typed
+  literal. `DatatypesTest.testINF` asserts that an ontology using
+  `"Infinity"^^xsd:double` is inconsistent; [corrections.json](corrections.json)
+  records the corrected expectation, the rejection, with its evidence. With the
+  XSD spelling `INF` the ontology is inconsistent, as Java answered.
+
+`tests/datatype_robustness.rs` and the datatype manager's and string automata's
+unit tests check each fix. A bounded repetition in a pattern, such as
+`a{2147483000}`, still builds one automaton state per repetition.
 
 Issue #31 was a gap in the disjointness of datatypes. rdf:XMLLiteral is
 disjoint from every other datatype of the OWL 2 datatype map: OWL 2 Structural

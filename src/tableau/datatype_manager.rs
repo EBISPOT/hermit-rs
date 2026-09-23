@@ -65,7 +65,19 @@ const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 /// Parses a [`Constant`]'s lexical form against its datatype, via the shared
 /// [`crate::datatype_value::parse_value`]. A thin `&Constant` adapter so the
 /// value-space reasoning can keep calling `parse_value(constant)`.
+///
+/// The anonymous constant of a literal of an unsupported datatype, under
+/// `ignoreUnsupportedDatatypes`, is HermiT's `AnonymousConstantValue`: a value
+/// equal only to the anonymous constant of the same name, in the value space
+/// of no supported datatype. It is not a value that may be anything, so a
+/// `DataOneOf` holding one still has at most as many values as members. (The
+/// anonymous constants of the reasoner's entailment reductions stand for any
+/// value and stay unparsed.)
 fn parse_value(constant: &Constant) -> Option<DataValue> {
+    if constant.is_unsupported_literal() {
+        let name = constant.lexical_form().trim().to_string();
+        return Some(DataValue::Typed { kind: "anonymous", length: 0, canonical: name });
+    }
     crate::datatype_value::parse_value(constant.lexical_form(), constant.datatype_uri())
 }
 
@@ -1162,21 +1174,55 @@ impl Tableau {
         let most_specific_refs: Vec<Option<&str>> =
             most_specific.iter().map(|o| o.as_deref()).collect();
 
-        // CHK-3: for each node whose value space is finite-but-unmaterialized,
-        // enumerate its canonical distinct values (bounded by the cap) so the
-        // backtracking assignment search can run over them, mirroring Java's
-        // enumerateValueSpaceSubset().
-        let materialized: Vec<Option<Vec<DataValue>>> = nodes
-            .iter()
-            .map(|m| match value_space.get(m) {
+        // CHK-3: a node whose value space is finite but was not listed is
+        // enumerated on demand, for the survivors of elimination only, so the
+        // backtracking assignment search can run over its values, mirroring
+        // Java's enumerateValueSpaceSubset().
+        let materialize = |i: usize, cap: usize| -> Option<Vec<DataValue>> {
+            match value_space.get(&nodes[i]) {
                 Some(NodeValueSpace::Finite { values: None, .. }) => ranges_by_node
-                    .get(m)
-                    .and_then(|r| materialize_finite_value_space(r, MAX_ENUMERATED_VALUES)),
+                    .get(&nodes[i])
+                    .and_then(|r| materialize_finite_value_space(r, cap)),
                 _ => None,
-            })
-            .collect();
+            }
+        };
+        // For each node, the first node with the same ranges (HermiT's
+        // `hasSameRestrictions`), hence the same value space, whether or not it
+        // was listed. The sets are bucketed by an order-independent hash. A
+        // constant node's value space is its value, whatever its ranges, so it
+        // is its own representative.
+        let range_set = |m: &NodeId| -> std::collections::HashSet<&LiteralDataRange> {
+            ranges_by_node.get(m).into_iter().flatten().map(|(r, _)| r).collect()
+        };
+        let sets: Vec<std::collections::HashSet<&LiteralDataRange>> = nodes.iter().map(range_set).collect();
+        let mut buckets: HashMap<u64, Vec<usize>> = HashMap::new();
+        let mut representative: Vec<usize> = Vec::with_capacity(n);
+        for (i, set) in sets.iter().enumerate() {
+            use std::hash::{Hash, Hasher};
+            let key = set.iter().fold(0u64, |sum, range| {
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                range.hash(&mut h);
+                sum.wrapping_add(h.finish())
+            });
+            if self.nodes[nodes[i]].get_node_type() == NodeType::RootConstantNode {
+                representative.push(i);
+                continue;
+            }
+            let bucket = buckets.entry(key).or_default();
+            let same = bucket.iter().copied().find(|&j| sets[j] == *set);
+            if same.is_none() {
+                bucket.push(i);
+            }
+            representative.push(same.unwrap_or(i));
+        }
 
-        if component_is_unsatisfiable(&spaces, &adjacency_vec, &most_specific_refs, &materialized) {
+        if component_is_unsatisfiable(
+            &spaces,
+            &adjacency_vec,
+            &most_specific_refs,
+            &representative,
+            &materialize,
+        ) {
             let dep = clash_dep(self);
             self.set_clash(&dep);
             return true;
@@ -1407,9 +1453,13 @@ fn materialize_finite_value_space<D>(
     }
 
     // A finite dateTime value space: the values at its instants, less the
-    // excluded values (see `datetime_value_space`).
+    // excluded values (see `datetime_value_space`). As for the other families,
+    // a space of more than `cap` values is not listed: a partial list could
+    // leave out the value that fits.
     if restrictions.iter().all(|r| is_datetime_datatype(r.datatype_uri())) {
-        return Some(datetime_value_space(ranges)?.values()?.take(cap).collect());
+        let space = datetime_value_space(ranges)?;
+        let values: Vec<DataValue> = space.values()?.take(cap.saturating_add(1)).collect();
+        return (values.len() <= cap).then_some(values);
     }
 
     // A finite numeric value space, less the excluded values (see
@@ -1445,13 +1495,16 @@ fn component_is_unsatisfiable(
     spaces: &[&NodeValueSpace],
     adjacency: &[Vec<usize>],
     most_specific: &[Option<&str>],
-    // CHK-3: per-node materialized value lists for finite value spaces whose
-    // `NodeValueSpace` did not carry an explicit list (length-strings, etc.).
-    // Java's `enumerateValueSpaceSubset()` materializes these before the
-    // assignment search; this parallel array supplies the same explicit values
-    // (bounded by a cap) so the backtracking search can run over them. An empty
-    // slice means "nothing pre-materialized" (used by unit tests).
-    materialized: &[Option<Vec<DataValue>>],
+    // For each node, the first node with the same ranges, whose value space
+    // is therefore the same even when it was not listed (HermiT's
+    // `hasSameRestrictions`). Nodes with one representative share one list of
+    // values. An empty slice makes every node its own representative.
+    representative: &[usize],
+    // CHK-3: lists the values of node `i`'s finite value space when its
+    // `NodeValueSpace` did not carry an explicit list and it has at most `cap`
+    // values (Java's `enumerateValueSpaceSubset()`), or `None`. Unit tests
+    // pass a function that lists nothing.
+    materialize: &dyn Fn(usize, usize) -> Option<Vec<DataValue>>,
 ) -> bool {
     use std::collections::HashMap;
     let n = spaces.len();
@@ -1468,10 +1521,12 @@ fn component_is_unsatisfiable(
     // --- 1. Symmetric-clique shortcut.
     // `DatatypeChecker.getUnsatisfiabilityCauseOrCauses` takes the clique branch
     // BEFORE `eliminateTrivialInequalities`, so the full adjacency is used here.
+    let representative = |i: usize| representative.get(i).copied().unwrap_or(i);
+    let same_restrictions = (0..n).all(|i| representative(i) == 0);
     let is_clique = (0..n).all(|i| adjacency[i].len() == n - 1);
     if is_clique {
-        let same_value_space =
-            (1..n).all(|i| node_value_spaces_equal(Some(spaces[0]), Some(spaces[i])));
+        let same_value_space = same_restrictions
+            || (1..n).all(|i| node_value_spaces_equal(Some(spaces[0]), Some(spaces[i])));
         if same_value_space {
             return match cardinality(0) {
                 Cardinality::Finite(c) => (c as usize) < n,
@@ -1484,25 +1539,18 @@ fn component_is_unsatisfiable(
     // every inequality edge between two nodes whose most-specific datatype
     // restrictions are disjoint datatypes — such nodes are automatically distinct,
     // so the edge cannot contribute to a clash and must not inflate node degree.
-    let mut adjacency: Vec<std::collections::BTreeSet<usize>> =
-        adjacency.iter().map(|a| a.iter().copied().collect()).collect();
-    for i in 0..n {
-        let Some(uri_i) = most_specific[i] else {
-            continue;
-        };
-        let neighbors: Vec<usize> = adjacency[i].iter().copied().collect();
-        for j in neighbors {
-            if let Some(uri_j) = most_specific[j] {
-                if datatypes_disjoint(uri_i, uri_j) {
-                    adjacency[i].remove(&j);
-                    adjacency[j].remove(&i);
-                }
-            }
-        }
-    }
-    let adjacency: Vec<Vec<usize>> =
-        adjacency.iter().map(|a| a.iter().copied().collect()).collect();
-    let adjacency = &adjacency;
+    // The adjacency is copied only when an edge goes, since a large clique's
+    // adjacency is large.
+    let disjoint = |i: usize, j: usize| match (most_specific.get(i), most_specific.get(j)) {
+        (Some(Some(uri_i)), Some(Some(uri_j))) => datatypes_disjoint(uri_i, uri_j),
+        _ => false,
+    };
+    let trimmed: Option<Vec<Vec<usize>>> = (0..n)
+        .any(|i| most_specific.get(i).is_some_and(Option::is_some) && adjacency[i].iter().any(|&j| disjoint(i, j)))
+        .then(|| {
+            (0..n).map(|i| adjacency[i].iter().copied().filter(|&j| !disjoint(i, j)).collect()).collect()
+        });
+    let adjacency: &[Vec<usize>] = trimmed.as_deref().unwrap_or(adjacency);
 
     // --- 2. Eliminate trivially-satisfiable variables to a fixpoint.
     let mut alive = vec![true; n];
@@ -1541,33 +1589,42 @@ fn component_is_unsatisfiable(
     // values; a survivor that enumerates to the empty set is itself the clash.
     // CHK-3: a finite value space not materialized at construction (length-strings,
     // etc.) is supplied here via the parallel `materialized` array.
-    let mut explicit: Vec<Option<Vec<DataValue>>> = vec![None; n];
+    let mut explicit: Vec<Option<std::rc::Rc<Vec<DataValue>>>> = vec![None; n];
+    let mut listed: HashMap<usize, std::rc::Rc<Vec<DataValue>>> = HashMap::new();
     for &i in &survivors {
-        match spaces[i] {
-            NodeValueSpace::Finite { values: Some(vals), .. } => {
-                explicit[i] = Some(vals.clone());
-            }
+        if let Some(values) = listed.get(&representative(i)) {
+            explicit[i] = Some(values.clone());
+            continue;
+        }
+        let values = match spaces[i] {
+            NodeValueSpace::Finite { values: Some(vals), .. } => vals.clone(),
             NodeValueSpace::Finite { values: None, .. } => {
-                match materialized.get(i).and_then(|m| m.clone()) {
+                // A survivor has fewer values than its degree + 1, which is at
+                // most the component size, so a cap of the component size
+                // lists every one of them however large the component is.
+                match materialize(i, n.max(MAX_ENUMERATED_VALUES)) {
                     // An empty enumeration ⇒ empty value space ⇒ the component
                     // clashes (Java: enumerateValueSpaceSubset returns false ⇒
                     // getUnsatisfiabilityCauseOrCauses returns the variable).
                     Some(vals) if vals.is_empty() => return true,
-                    Some(vals) => explicit[i] = Some(vals),
+                    Some(vals) => vals,
                     // A finite value space we could not materialize: stay sound.
                     None => return false,
                 }
             }
             // An infinite survivor cannot occur after elimination; stay sound.
             NodeValueSpace::Infinite => return false,
-        }
+        };
+        let values = std::rc::Rc::new(values);
+        listed.insert(representative(i), values.clone());
+        explicit[i] = Some(values);
     }
 
     // --- 4. eliminateTriviallySatisfiableVariables AGAIN (CHK-2,
     // DatatypeChecker.java:178): after enumeration some variables may now have a
     // value-set large enough to dominate their residual degree, so re-run the
     // elimination to a fixpoint over the (newly materialized) cardinalities.
-    let card_after = |i: usize, explicit: &[Option<Vec<DataValue>>]| -> usize {
+    let card_after = |i: usize, explicit: &[Option<std::rc::Rc<Vec<DataValue>>>]| -> usize {
         explicit[i].as_ref().map_or(0, |v| v.len())
     };
     let mut queue2: Vec<usize> = survivors.clone();
@@ -1594,53 +1651,73 @@ fn component_is_unsatisfiable(
 
     // --- 5. Backtracking distinct-assignment search over the survivors
     // (DatatypeChecker.checkAssignments / findAssignment, smallest-set-first).
-    let candidate_sets: Vec<Vec<DataValue>> = survivors
+    let candidate_sets: Vec<std::rc::Rc<Vec<DataValue>>> = survivors
         .iter()
         .map(|&i| explicit[i].clone().unwrap_or_default())
         .collect();
     let pos: HashMap<usize, usize> =
         survivors.iter().enumerate().map(|(k, &i)| (i, k)).collect();
-    let mut radjacent: Vec<Vec<usize>> = vec![Vec::new(); survivors.len()];
-    for (k, &i) in survivors.iter().enumerate() {
-        for &j in &adjacency[i] {
-            if let Some(&kj) = pos.get(&j) {
-                radjacent[k].push(kj);
-            }
-        }
-    }
+    let radjacent: Vec<Vec<usize>> = survivors
+        .iter()
+        .map(|&i| {
+            let mut row = Vec::with_capacity(adjacency[i].len());
+            row.extend(adjacency[i].iter().filter_map(|j| pos.get(j).copied()));
+            row
+        })
+        .collect();
     // Smallest candidate set first (HermiT's SmallestEnumerationFirst).
     let mut order: Vec<usize> = (0..survivors.len()).collect();
     order.sort_by_key(|&k| candidate_sets[k].len());
 
+    // Each value by a key that is equal exactly when the values are
+    // (`values_equal` is structural equality of the parsed values), so a node
+    // finds the values its assigned neighbours hold in a hash set and a
+    // component of thousands of nodes is searched in quadratic time.
+    let mut keys_of: HashMap<*const Vec<DataValue>, std::rc::Rc<Vec<String>>> = HashMap::new();
+    let candidate_keys: Vec<std::rc::Rc<Vec<String>>> = candidate_sets
+        .iter()
+        .map(|values| {
+            keys_of
+                .entry(std::rc::Rc::as_ptr(values))
+                .or_insert_with(|| std::rc::Rc::new(values.iter().map(|value| format!("{value:?}")).collect()))
+                .clone()
+        })
+        .collect();
     fn search(
         position: usize,
         order: &[usize],
-        candidate_sets: &[Vec<DataValue>],
+        candidate_keys: &[std::rc::Rc<Vec<String>>],
         radjacent: &[Vec<usize>],
-        chosen: &mut [Option<DataValue>],
+        chosen: &mut [Option<usize>],
     ) -> bool {
         if position == order.len() {
             return true;
         }
         let k = order[position];
-        'next: for value in &candidate_sets[k] {
-            for &nb in &radjacent[k] {
-                if let Some(other) = &chosen[nb] {
-                    if values_equal(value, other) {
-                        continue 'next;
-                    }
-                }
-            }
-            chosen[k] = Some(value.clone());
-            if search(position + 1, order, candidate_sets, radjacent, chosen) {
+        let mut next = 0;
+        loop {
+            // The next value no assigned neighbour holds. The set is rebuilt on
+            // each retry rather than kept, so a deep search holds no sets.
+            let free = {
+                let taken: std::collections::HashSet<&str> = radjacent[k]
+                    .iter()
+                    .filter_map(|&nb| chosen[nb].map(|v| candidate_keys[nb][v].as_str()))
+                    .collect();
+                (next..candidate_keys[k].len()).find(|&v| !taken.contains(candidate_keys[k][v].as_str()))
+            };
+            let Some(v) = free else {
+                return false;
+            };
+            chosen[k] = Some(v);
+            if search(position + 1, order, candidate_keys, radjacent, chosen) {
                 return true;
             }
             chosen[k] = None;
+            next = v + 1;
         }
-        false
     }
-    let mut chosen: Vec<Option<DataValue>> = vec![None; survivors.len()];
-    !search(0, &order, &candidate_sets, &radjacent, &mut chosen)
+    let mut chosen: Vec<Option<usize>> = vec![None; survivors.len()];
+    !search(0, &order, &candidate_keys, &radjacent, &mut chosen)
 }
 
 /// A datatype's *value-space class*: the (facet-free) set of values its base
@@ -4258,12 +4335,13 @@ enum NodeValueSpace {
 /// pigeonhole/cardinality decision is always available for them.
 const MAX_ENUMERATED_VALUES: usize = 4096;
 
-/// Whether two node value spaces are equal in the sense HermiT's
-/// `hasSameRestrictions` requires for the symmetric-clique shortcut: same exact
-/// cardinality and, when materialized, the same value set (as a value-space
-/// multiset of points). Two infinite value spaces are treated as equal (a
-/// clique over them is always satisfiable regardless, so the shortcut returns
-/// "no clash" either way).
+/// Whether two node value spaces are known to be equal, for the
+/// symmetric-clique shortcut: the same exact cardinality and the same listed
+/// values. Two value spaces that were not listed are not compared by count,
+/// since equal counts do not make equal sets; the shortcut takes nodes with
+/// the same ranges as equal instead (HermiT's `hasSameRestrictions`). Two
+/// infinite value spaces are treated as equal (a clique over them is always
+/// satisfiable regardless, so the shortcut returns "no clash" either way).
 fn node_value_spaces_equal(a: Option<&NodeValueSpace>, b: Option<&NodeValueSpace>) -> bool {
     match (a, b) {
         (Some(NodeValueSpace::Infinite), Some(NodeValueSpace::Infinite)) | (None, None) => true,
@@ -4283,8 +4361,9 @@ fn node_value_spaces_equal(a: Option<&NodeValueSpace>, b: Option<&NodeValueSpace
                             || (va.iter().all(|x| vb.iter().any(|y| values_equal(x, y)))
                                 && vb.iter().all(|y| va.iter().any(|x| values_equal(x, y)))))
                 }
-                // Same (huge) cardinality but unmaterialized: treat as equal.
-                _ => true,
+                // Unlisted value spaces with the same count need not be the
+                // same set; the caller knows when their ranges are the same.
+                _ => false,
             }
         }
         _ => false,
@@ -4417,16 +4496,13 @@ fn node_value_space<D>(
         return NodeValueSpace::Infinite;
     }
 
-    // URI-1: xsd:anyURI with a length facet. Java AnyURIValueSpaceSubset.hasCardinalityAtLeast
-    // intersects the URI automaton with the length/pattern facets and counts via
-    // getFiniteStrings, so a length-bounded anyURI value space is FINITE. We compute
-    // an exact finite cardinality over the canonical (ASCII) URI alphabet -- the
-    // single-character URIs that `is_valid_any_uri` admits without %-escapes -- and
-    // enumerate them when the count fits the cap. The true anyURI value space also
-    // contains %-escaped and non-ASCII forms, so this is a (large) lower bound on
-    // the cardinality; since any length>=1 already yields ~80 URIs per position
-    // (far exceeding any tableau component), the pigeonhole decision is sound (no
-    // false clash) and detects the degenerate small cases (notably maxLength 0).
+    // URI-1: xsd:anyURI with length or pattern facets. Java
+    // AnyURIValueSpaceSubset.hasCardinalityAtLeast intersects the URI automaton
+    // with the length/pattern facets and counts via getFiniteStrings, so a
+    // length-bounded anyURI value space is FINITE. The words of the automaton
+    // over the characters a URI may hold are listed when few (keeping the valid
+    // URIs, an exact value space) and otherwise counted, which bounds the URIs
+    // from above: a clash then needs fewer words than nodes, so it is real.
     if restrictions.iter().all(|r| is_anyuri_datatype(r.datatype_uri())) {
         // Intersect patterns with length restrictions before asking whether the
         // language is finite: an unbounded pattern can become finite after a
@@ -4464,105 +4540,29 @@ fn node_value_space<D>(
         }).collect();
         // The words over the characters an anyURI may contain
         // (`any_uri_string_automaton`); the valid URIs among them are the values.
+        // Too many words to list: their count bounds the URIs from above, so
+        // it can clash only when the URIs are fewer than the nodes too. (The
+        // URIs over an ASCII alphabet, counted before, bound them from below,
+        // but a URI may hold any character above U+0080 that is no space or
+        // control character, so a clique over anyURI[maxLength 1] clashed.)
         if let Some(mapped) = string_ranges {
-            if let Some(NodeValueSpace::Finite { values: Some(values), .. }) = string_value_space(&mapped, is_anyuri_datatype).map(|space| space.node_value_space()) {
-                let values: Vec<_> = values.into_iter().filter_map(|v| match v {
-                    DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.chars().count(),canonical:s}),
-                    _ => None,
-                }).collect();
-                return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
-            }
-        }
-        let mut min_len: u64 = 0;
-        let mut max_len: Option<u64> = None;
-        let mut patterns: Vec<String> = Vec::new();
-        for r in &restrictions {
-            for i in 0..r.number_of_facet_restrictions() {
-                match r.facet_uri(i).strip_prefix(XSD) {
-                    // URI-2 (FIX B): collect pattern facets — Java
-                    // AnyURIDatatypeHandler.getAutomatonFor intersects the URI
-                    // automaton with EACH pattern automaton, so a pattern can make
-                    // the (otherwise length-unbounded) language finite.
-                    Some("pattern") => patterns.push(r.facet_value(i).lexical_form().to_string()),
-                    facet => {
-                        let Ok(b) = r.facet_value(i).lexical_form().trim().parse::<u64>() else { return NodeValueSpace::Infinite; };
-                        match facet {
-                            Some("minLength") => min_len = min_len.max(b),
-                            Some("maxLength") => max_len = Some(max_len.map_or(b, |m| m.min(b))),
-                            Some("length") => { min_len = min_len.max(b); max_len = Some(max_len.map_or(b, |m| m.min(b))); }
-                            _ => return NodeValueSpace::Infinite,
-                        }
-                    }
+            match string_value_space(&mapped, is_anyuri_datatype).map(|space| space.node_value_space()) {
+                Some(NodeValueSpace::Finite { values: Some(values), .. }) => {
+                    let values: Vec<_> = values.into_iter().filter_map(|v| match v {
+                        DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.chars().count(),canonical:s}),
+                        _ => None,
+                    }).collect();
+                    return NodeValueSpace::Finite {count:values.len() as u128,values:Some(values)};
                 }
-            }
-        }
-        // A pattern whose words are too many to enumerate, or infinitely many:
-        // the automata above cannot tell how many of them are URIs, so the
-        // value space is taken as infinite, which never causes a clash.
-        if !patterns.is_empty() {
-            return NodeValueSpace::Infinite;
-        }
-        if let Some(max) = max_len {
-            if min_len > max { return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) }; }
-            let alphabet: Vec<char> = uri_ascii_alphabet();
-            let a = alphabet.len() as u128;
-            let mut count: u128 = 0;
-            for l in min_len..=max {
-                count = count.saturating_add(a.saturating_pow(l.min(64) as u32));
-            }
-            if count <= MAX_ENUMERATED_VALUES as u128 {
-                let mut out: Vec<DataValue> = Vec::new();
-                let mut frontier: Vec<String> = vec![String::new()];
-                for l in 0..=max {
-                    if l >= min_len {
-                        for s in &frontier {
-                            let candidate = DataValue::Typed {
-                                kind: "anyURI",
-                                canonical: s.clone(),
-                                length: s.chars().count(),
-                            };
-                            if !excluded(&candidate) {
-                                out.push(candidate);
-                            }
-                        }
-                    }
-                    if l == max {
-                        break;
-                    }
-                    let mut next = Vec::with_capacity(frontier.len() * alphabet.len());
-                    for s in &frontier {
-                        for &ch in &alphabet {
-                            let mut t = s.clone();
-                            t.push(ch);
-                            next.push(t);
-                        }
-                    }
-                    frontier = next;
+                Some(NodeValueSpace::Finite { count, values: None }) => {
+                    return NodeValueSpace::Finite { count, values: None };
                 }
-                return NodeValueSpace::Finite { count: out.len() as u128, values: Some(out) };
+                _ => {}
             }
-            return NodeValueSpace::Finite { count, values: None };
         }
     }
 
     NodeValueSpace::Infinite
-}
-
-/// URI-1: the single-character ASCII alphabet that `is_valid_any_uri` admits for a
-/// URI (the unreserved/mark and reserved/punctuation characters of RFC 2396, kept
-/// in sync with `crate::datatype_value::is_valid_any_uri`). Used to count and
-/// enumerate canonical length-bounded anyURI value spaces.
-fn uri_ascii_alphabet() -> Vec<char> {
-    let mut out: Vec<char> = Vec::new();
-    out.extend('A'..='Z');
-    out.extend('a'..='z');
-    out.extend('0'..='9');
-    out.extend([
-        '-', '_', '.', '!', '~', '*', '\'', '(', ')',
-        ',', ';', ':', '$', '&', '+', '=', '?', '/', '[', ']', '@',
-        '#',
-    ]);
-    out
 }
 
 /// A monotone bijection from the non-NaN `f32`s onto a `u32` order key:
@@ -4660,14 +4660,14 @@ mod tests {
             &eleven.iter().collect::<Vec<_>>(),
             &clique(11),
             &no_specifics(11),
-            &[],
+            &[], &|_, _| None,
         ));
         let ten: Vec<NodeValueSpace> = (0..10).map(|_| space()).collect();
         assert!(!component_is_unsatisfiable(
             &ten.iter().collect::<Vec<_>>(),
             &clique(10),
             &no_specifics(10),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -4839,7 +4839,7 @@ mod tests {
             &two.iter().collect::<Vec<_>>(),
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         // maxLength 1: finite, and strictly larger than 1 (empty + alphabet).
         let len1 = LiteralDataRange::DatatypeRestriction(crate::model::DatatypeRestriction::create(
@@ -4881,7 +4881,7 @@ mod tests {
             &two.iter().collect::<Vec<_>>(),
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         // An ill-typed word the pattern matches but is NOT a valid URI is filtered
         // out (URI alphabet intersection). `a b` (with a space) matches `.* .*`-ish
@@ -4954,14 +4954,14 @@ mod tests {
             &[&one],
             &clique(1),
             &no_specifics(1),
-            &[]
+            &[], &|_, _| None
         ));
         let two: Vec<NodeValueSpace> = (0..2).map(|_| node_value_space(None, &ranges)).collect();
         assert!(component_is_unsatisfiable(
             &two.iter().collect::<Vec<_>>(),
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -5057,24 +5057,24 @@ mod tests {
         let one_left = [(window, ()), (excluded(vec![uri("abcc")]), ())];
         let space = || node_value_space(None, &one_left);
         let constant = |s: &str| node_value_space::<()>(parse_value(&uri(s)).as_ref(), &[]);
-        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[]));
+        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[], &|_, _| None));
         assert!(component_is_unsatisfiable(
             &[&space(), &space()],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(component_is_unsatisfiable(
             &[&space(), &constant("abccc")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(!component_is_unsatisfiable(
             &[&space(), &constant("abcc")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -5259,24 +5259,24 @@ mod tests {
         let space = || node_value_space(None, &only_empty);
         let constant =
             |lexical: &str| node_value_space::<()>(parse_value(&hex_value(lexical)).as_ref(), &[]);
-        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[]));
+        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[], &|_, _| None));
         assert!(component_is_unsatisfiable(
             &[&space(), &space()],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(component_is_unsatisfiable(
             &[&space(), &constant("")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(!component_is_unsatisfiable(
             &[&space(), &constant("00")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -5836,13 +5836,14 @@ mod tests {
             &parse_value(&double("1.0")).unwrap(),
             &parse_value(&Constant::create("1.0", format!("{XSD}decimal"))).unwrap()
         ));
-        // HermiT parses doubles with `Double.parseDouble`, so `Infinity`/`NaN`
-        // spellings are valid too; lowercase forms are rejected. `+INF` is in
-        // the XSD 1.1 lexical space (Part 2 §3.3.5.2), although Java rejects it.
-        assert_eq!(
-            parse_value(&double("Infinity")),
-            Some(DataValue::Double(f64::INFINITY.to_bits()))
-        );
+        // The special values are spelled INF, +INF, -INF and NaN (XSD 1.1 Part 2
+        // §3.3.5.2). HermiT's `Double.parseDouble` also takes `Infinity`, which
+        // is ill-typed here; lowercase forms are rejected. `+INF` is valid,
+        // although Java rejects it.
+        for java_only in ["Infinity", "+Infinity", "-Infinity"] {
+            assert!(parse_value(&double(java_only)).is_none());
+            assert!(parse_value(&Constant::create(java_only, format!("{XSD}float"))).is_none());
+        }
         assert!(parse_value(&double("nan")).is_none());
         assert!(parse_value(&double("infinity")).is_none());
         assert_eq!(
@@ -5884,8 +5885,8 @@ mod tests {
         assert!(is_ill_typed(&c("http://a b", "anyURI")));
         assert!(!is_ill_typed(&c("http://example.org/x#y", "anyURI")));
 
-        // Double special-value spellings follow Double.parseDouble (+ INF/-INF).
-        assert!(!is_ill_typed(&c("Infinity", "double")));
+        // Double special values have their XSD spellings only.
+        assert!(is_ill_typed(&c("Infinity", "double")));
         assert!(!is_ill_typed(&c("INF", "double")));
         assert!(!is_ill_typed(&c("+INF", "double"))); // XSD 1.1 §3.3.5.2
         assert!(is_ill_typed(&c("infinity", "double")));
@@ -6079,7 +6080,7 @@ mod tests {
         // satisfiable — an infinite value space never clashes by pigeonhole.
         let spaces: Vec<NodeValueSpace> =
             (0..5).map(|_| node_value_space(None, &[(in_range(), ())])).collect();
-        assert!(!component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(5), &no_specifics(5), &[]));
+        assert!(!component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(5), &no_specifics(5), &[], &|_, _| None));
 
         // Equal bounds, both inclusive: a single-point (still "non-empty") range.
         assert!(!conj(vec![datetime_restriction(
@@ -6451,7 +6452,7 @@ mod tests {
             &four.iter().collect::<Vec<_>>(),
             &clique(4),
             &no_specifics(4),
-            &[]
+            &[], &|_, _| None
         ));
     }
 
@@ -6464,12 +6465,12 @@ mod tests {
         // would silently miss it.
         let spaces: Vec<NodeValueSpace> = (0..13).map(|_| boolean_space()).collect();
         let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
-        assert!(component_is_unsatisfiable(&refs, &clique(13), &no_specifics(13), &[]));
+        assert!(component_is_unsatisfiable(&refs, &clique(13), &no_specifics(13), &[], &|_, _| None));
         // Exactly 2 distinct booleans is satisfiable; 3 already over-fills it.
         let two: Vec<NodeValueSpace> = (0..2).map(|_| boolean_space()).collect();
-        assert!(!component_is_unsatisfiable(&two.iter().collect::<Vec<_>>(), &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&two.iter().collect::<Vec<_>>(), &clique(2), &no_specifics(2), &[], &|_, _| None));
         let three: Vec<NodeValueSpace> = (0..3).map(|_| boolean_space()).collect();
-        assert!(component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[]));
+        assert!(component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[], &|_, _| None));
     }
 
     #[test]
@@ -6477,9 +6478,9 @@ mod tests {
         // 4 mutually-distinct nodes each constrained to the integer range [1..3]
         // (value space size 3) is INCONSISTENT (4 > 3); 3 nodes fit exactly.
         let four: Vec<NodeValueSpace> = (0..4).map(|_| int_range_space(1, 3)).collect();
-        assert!(component_is_unsatisfiable(&four.iter().collect::<Vec<_>>(), &clique(4), &no_specifics(4), &[]));
+        assert!(component_is_unsatisfiable(&four.iter().collect::<Vec<_>>(), &clique(4), &no_specifics(4), &[], &|_, _| None));
         let three: Vec<NodeValueSpace> = (0..3).map(|_| int_range_space(1, 3)).collect();
-        assert!(!component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[]));
+        assert!(!component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[], &|_, _| None));
     }
 
     #[test]
@@ -6487,7 +6488,7 @@ mod tests {
         // 20 mutually-distinct booleans (> the old MAX_COMPONENT_NODES = 12 cap):
         // still decided as a clash. No component is skipped for being large.
         let spaces: Vec<NodeValueSpace> = (0..20).map(|_| boolean_space()).collect();
-        assert!(component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(20), &no_specifics(20), &[]));
+        assert!(component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(20), &no_specifics(20), &[], &|_, _| None));
     }
 
     #[test]
@@ -6501,7 +6502,7 @@ mod tests {
             ))
         };
         let spaces: Vec<NodeValueSpace> = (0..100).map(|_| unbounded_int()).collect();
-        assert!(!component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(100), &no_specifics(100), &[]));
+        assert!(!component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(100), &no_specifics(100), &[], &|_, _| None));
     }
 
     #[test]
@@ -6513,11 +6514,11 @@ mod tests {
         // Path graph 0-1, 1-2: not a clique. Node 2 is the fixed value {0}.
         let adjacency = vec![vec![1], vec![0, 2], vec![1]];
         let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
-        assert!(!component_is_unsatisfiable(&refs, &adjacency, &no_specifics(refs.len()), &[]));
+        assert!(!component_is_unsatisfiable(&refs, &adjacency, &no_specifics(refs.len()), &[], &|_, _| None));
         // But three nodes ALL fixed to the same singleton value {0}, pairwise
         // distinct, is a clash (3 nodes, 1 value).
         let singletons = [int_range_space(0, 0), int_range_space(0, 0), int_range_space(0, 0)];
-        assert!(component_is_unsatisfiable(&singletons.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[]));
+        assert!(component_is_unsatisfiable(&singletons.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[], &|_, _| None));
     }
 
     // ----- Negated-datatype emptiness over infinite value spaces. -----
@@ -7194,9 +7195,9 @@ mod tests {
         // INCONSISTENT; 3 fit exactly.
         let space = || node_value_space(None, &ranges);
         let four: Vec<NodeValueSpace> = (0..4).map(|_| space()).collect();
-        assert!(component_is_unsatisfiable(&four.iter().collect::<Vec<_>>(), &clique(4), &no_specifics(4), &[]));
+        assert!(component_is_unsatisfiable(&four.iter().collect::<Vec<_>>(), &clique(4), &no_specifics(4), &[], &|_, _| None));
         let three: Vec<NodeValueSpace> = (0..3).map(|_| space()).collect();
-        assert!(!component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[]));
+        assert!(!component_is_unsatisfiable(&three.iter().collect::<Vec<_>>(), &clique(3), &no_specifics(3), &[], &|_, _| None));
 
         // The same with a negated *enumeration* removing two points from a wide
         // range: integer[0 .. 1_000_000] minus ¬{0, 1_000_000} has exactly
@@ -7246,6 +7247,40 @@ mod tests {
             facets.iter().map(|(_, value)| *value).collect(),
         )
     }
+    /// A clique of more than `MAX_ENUMERATED_VALUES` nodes whose value spaces
+    /// are too large to list. Two different spaces with one count are not one
+    /// space: 4200 nodes, half over [0, 4198] and half over [5000, 9198] (4199
+    /// integers each), can take distinct values. A count-only comparison took
+    /// the spaces as equal and found a pigeonhole clash. With the same ranges
+    /// on every node, the clash is real.
+    #[test]
+    fn large_cliques_compare_value_spaces_by_ranges_not_counts() {
+        let n = 4200;
+        let low = vec![numeric_range("integer", &numeric_between(integer("0"), integer("4198")))];
+        let high = vec![numeric_range("integer", &numeric_between(integer("5000"), integer("9198")))];
+        let ranges: Vec<&Vec<(LiteralDataRange, ())>> =
+            (0..n).map(|i| if i % 2 == 0 { &low } else { &high }).collect();
+        let spaces: Vec<NodeValueSpace> = ranges.iter().map(|r| node_value_space(None, r)).collect();
+        assert!(matches!(spaces[0], NodeValueSpace::Finite { count: 4199, values: None }));
+        let refs: Vec<&NodeValueSpace> = spaces.iter().collect();
+        let materialize = |i: usize, cap: usize| materialize_finite_value_space(ranges[i], cap);
+        let alternating: Vec<usize> = (0..n).map(|i| i % 2).collect();
+        assert!(!component_is_unsatisfiable(&refs, &clique(n), &no_specifics(n), &alternating, &materialize));
+        let same: Vec<&NodeValueSpace> = (0..n).map(|_| &spaces[0]).collect();
+        let materialize_low = |_: usize, cap: usize| materialize_finite_value_space(&low, cap);
+        assert!(component_is_unsatisfiable(&same, &clique(n), &no_specifics(n), &vec![0; n], &materialize_low));
+        // A survivor is listed in full, above the default cap: a node over
+        // [0, 4198] distinct from 4199 nodes holding 0, ..., 4198 has no value
+        // left. The search had given up on the unlisted space.
+        let singletons: Vec<NodeValueSpace> = (0..4199)
+            .map(|i| NodeValueSpace::Finite { count: 1, values: Some(vec![DataValue::Integer(i.into())]) })
+            .collect();
+        let refs: Vec<&NodeValueSpace> = std::iter::once(&spaces[0]).chain(&singletons).collect();
+        assert!(component_is_unsatisfiable(&refs, &clique(n), &no_specifics(n), &[], &materialize_low));
+        let refs: Vec<&NodeValueSpace> = std::iter::once(&spaces[0]).chain(&singletons[1..]).collect();
+        assert!(!component_is_unsatisfiable(&refs, &clique(n - 1), &no_specifics(n - 1), &[], &materialize_low));
+    }
+
     /// The complement of an enumeration of `(lexical form, datatype)` literals.
     fn numeric_exclusions(members: &[(&str, &str)]) -> (LiteralDataRange, ()) {
         let members = members
@@ -7405,13 +7440,13 @@ mod tests {
             &three.iter().collect::<Vec<_>>(),
             &clique(3),
             &no_specifics(3),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(component_is_unsatisfiable(
             &[&space(), &space(), &space(), &space()],
             &clique(4),
             &no_specifics(4),
-            &[],
+            &[], &|_, _| None,
         ));
         let star = |n: usize| -> Vec<Vec<usize>> {
             (0..n).map(|i| if i == 0 { (1..n).collect() } else { vec![0] }).collect()
@@ -7419,17 +7454,17 @@ mod tests {
         let two = constant("2", "integer");
         let (six, seven) = (constant("6.0", "decimal"), constant("7.0", "decimal"));
         let all_taken = [&space(), &two, &six, &seven];
-        assert!(component_is_unsatisfiable(&all_taken, &star(4), &no_specifics(4), &[]));
+        assert!(component_is_unsatisfiable(&all_taken, &star(4), &no_specifics(4), &[], &|_, _| None));
         let seven_free = [&space(), &two, &six];
-        assert!(!component_is_unsatisfiable(&seven_free, &star(3), &no_specifics(3), &[]));
+        assert!(!component_is_unsatisfiable(&seven_free, &star(3), &no_specifics(3), &[], &|_, _| None));
         // Two single numbers of a dense range are two values, so two distinct
         // nodes, one confined to each, fit.
         let point = |n: &str| {
             node_value_space(None, &[range("decimal", &between(decimal(n), decimal(n)))])
         };
         let (one, two) = (point("1.0"), point("2.0"));
-        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[]));
-        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[], &|_, _| None));
+        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[], &|_, _| None));
     }
 
     #[test]
@@ -7504,8 +7539,8 @@ mod tests {
         // Cardinality and assignment agree: two distinct nodes, one confined to 1
         // and the other to 2, fit; two confined to 1 do not.
         let (one, two) = (node_value_space(None, &one), node_value_space(None, &only("2")));
-        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[]));
-        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&[&one, &two], &clique(2), &no_specifics(2), &[], &|_, _| None));
+        assert!(component_is_unsatisfiable(&[&one, &one.clone()], &clique(2), &no_specifics(2), &[], &|_, _| None));
     }
 
     #[test]
@@ -7537,11 +7572,11 @@ mod tests {
         let n = (count as usize) + 1;
         let spaces: Vec<NodeValueSpace> =
             (0..n).map(|_| node_value_space(None, &[(point(), ())])).collect();
-        assert!(component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(n), &no_specifics(n), &[]));
+        assert!(component_is_unsatisfiable(&spaces.iter().collect::<Vec<_>>(), &clique(n), &no_specifics(n), &[], &|_, _| None));
         // Exactly `count` distinct nodes fit.
         let fit: Vec<NodeValueSpace> =
             (0..count as usize).map(|_| node_value_space(None, &[(point(), ())])).collect();
-        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(count as usize), &no_specifics(count as usize), &[]));
+        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(count as usize), &no_specifics(count as usize), &[], &|_, _| None));
 
         // A MULTI-instant range stays dense/infinite (regression guard for the
         // must-stay-consistent direction).
@@ -7662,9 +7697,9 @@ mod tests {
         ];
         let space = || node_value_space(None, &ranges);
         let over: Vec<NodeValueSpace> = (0..1681).map(|_| space()).collect();
-        assert!(component_is_unsatisfiable(&over.iter().collect::<Vec<_>>(), &clique(1681), &no_specifics(1681), &[]));
+        assert!(component_is_unsatisfiable(&over.iter().collect::<Vec<_>>(), &clique(1681), &no_specifics(1681), &[], &|_, _| None));
         let fit: Vec<NodeValueSpace> = (0..1680).map(|_| space()).collect();
-        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(1680), &no_specifics(1680), &[]));
+        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(1680), &no_specifics(1680), &[], &|_, _| None));
 
         // CONTRAST (must stay sound — no false clash): excluding a literal that
         // does NOT map to this instant removes nothing; the count stays 1681.
@@ -7769,9 +7804,9 @@ mod tests {
         assert_eq!(count(&bounds_only), Some(at_bounds as u128));
         let space = || node_value_space(None, &bounds_only);
         let fit: Vec<NodeValueSpace> = (0..2).map(|_| space()).collect();
-        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(2), &no_specifics(2), &[], &|_, _| None));
         let over: Vec<NodeValueSpace> = (0..5).map(|_| space()).collect();
-        assert!(component_is_unsatisfiable(&over.iter().collect::<Vec<_>>(), &clique(5), &no_specifics(5), &[]));
+        assert!(component_is_unsatisfiable(&over.iter().collect::<Vec<_>>(), &clique(5), &no_specifics(5), &[], &|_, _| None));
 
         // Away from midnight each bound is one value. An excluded value counts
         // once, and only when it is in the space.
@@ -7855,20 +7890,20 @@ mod tests {
         let space = || node_value_space(None, &two);
         let constant =
             |lexical: &str| node_value_space::<()>(parse_value(&datetime_const(lexical)).as_ref(), &[]);
-        assert!(!component_is_unsatisfiable(&[&space(), &space()], &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&[&space(), &space()], &clique(2), &no_specifics(2), &[], &|_, _| None));
         assert!(component_is_unsatisfiable(
             &[&space(), &space(), &space()],
             &clique(3),
             &no_specifics(3),
-            &[],
+            &[], &|_, _| None,
         ));
         let star = [vec![1, 2], vec![0], vec![0]];
-        assert!(!component_is_unsatisfiable(&[&space(), &constant(c)], &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&[&space(), &constant(c)], &clique(2), &no_specifics(2), &[], &|_, _| None));
         assert!(component_is_unsatisfiable(
             &[&space(), &constant(c), &constant(d)],
             &star,
             &no_specifics(3),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -8022,19 +8057,19 @@ mod tests {
         // distinct ones do not, and the node can differ from "a" but not from "".
         let space = || node_value_space(None, std::slice::from_ref(&empty_only));
         let constant = |value: Constant| node_value_space::<()>(parse_value(&value).as_ref(), &[]);
-        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[]));
-        assert!(component_is_unsatisfiable(&[&space(), &space()], &clique(2), &no_specifics(2), &[]));
+        assert!(!component_is_unsatisfiable(&[&space()], &clique(1), &no_specifics(1), &[], &|_, _| None));
+        assert!(component_is_unsatisfiable(&[&space(), &space()], &clique(2), &no_specifics(2), &[], &|_, _| None));
         assert!(component_is_unsatisfiable(
             &[&space(), &constant(xsd_string(""))],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(!component_is_unsatisfiable(
             &[&space(), &constant(xsd_string("a"))],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
@@ -8089,13 +8124,13 @@ mod tests {
             &[&constant("a@EN"), &constant("a@en")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
         assert!(!component_is_unsatisfiable(
             &[&constant("a@EN"), &constant("a@fr")],
             &clique(2),
             &no_specifics(2),
-            &[],
+            &[], &|_, _| None,
         ));
     }
 
