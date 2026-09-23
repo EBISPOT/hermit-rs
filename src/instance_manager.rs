@@ -79,8 +79,13 @@ impl<E: Eq + Hash + Clone> InstanceManager<E> {
     /// cache). `direct` returns only the most-specific such nodes.
     ///
     /// Port of `InstanceManager.getTypes`: traverse upward from the bottom node;
-    /// when a node's concept is confirmed for the individual, record it and push
-    /// the possibility to its parents.
+    /// test each possible instance with the oracle, record a confirmed one, and
+    /// push a refuted one to the parents. Java traverses breadth-first, so it can
+    /// return a node reached before a known descendant as a direct type too, and
+    /// never tests a possible pushed to a parent it has already visited. This
+    /// visits every node after all of its children instead: a node with a type
+    /// below it is a type without a test, and each node receives every pushed
+    /// possible before it is visited.
     pub fn get_types<F>(
         &mut self,
         hierarchy: &Hierarchy<E>,
@@ -91,28 +96,13 @@ impl<E: Eq + Hash + Clone> InstanceManager<E> {
     where
         F: FnMut(&E) -> bool,
     {
-        let mut result: HashSet<NodeRef> = HashSet::new();
-        let mut visited: HashSet<NodeRef> = HashSet::new();
-        let mut to_process: VecDeque<NodeRef> = VecDeque::new();
-        to_process.push_back(hierarchy.bottom_node());
-
-        while let Some(current) = to_process.pop_front() {
-            // Skip a node that is an ancestor of an already confirmed type.
-            let descendants = hierarchy.descendant_nodes(current);
-            let mut is_ancestor_of_result = false;
-            for &r in &result {
-                if descendants.contains(&r) {
-                    is_ancestor_of_result = true;
-                    break;
-                }
-            }
-            if is_ancestor_of_result {
-                visited.insert(current);
+        let mut types: HashSet<NodeRef> = HashSet::new();
+        for current in hierarchy.nodes_bottom_up() {
+            let node = hierarchy.node(current);
+            if node.child_nodes().iter().any(|child| types.contains(child)) {
+                types.insert(current);
                 continue;
             }
-
-            let parents: Vec<NodeRef> = hierarchy.node(current).parent_nodes().iter().copied().collect();
-            let representative = hierarchy.node(current).representative().clone();
             // Only run the (expensive) oracle when the node's element marks the
             // individual as a possible instance (InstanceManager.java:945).
             let is_possible = self
@@ -120,11 +110,11 @@ impl<E: Eq + Hash + Clone> InstanceManager<E> {
                 .get(&current)
                 .map_or(false, |element| element.is_possible(individual));
             if is_possible {
-                if is_instance(&representative) {
+                if is_instance(node.representative()) {
                     self.concept_to_element.entry(current).or_default().set_to_known(individual);
                 } else {
                     // Push the individual as a possible to the parents.
-                    for &parent in &parents {
+                    for &parent in node.parent_nodes() {
                         self.concept_to_element.entry(parent).or_default().add_possible(individual);
                     }
                 }
@@ -134,24 +124,32 @@ impl<E: Eq + Hash + Clone> InstanceManager<E> {
                 .get(&current)
                 .map_or(false, |element| element.is_known(individual));
             if is_known {
-                if direct {
-                    result.insert(current);
-                } else {
-                    for ancestor in hierarchy.ancestor_nodes(current) {
-                        result.insert(ancestor);
-                    }
-                }
-            } else {
-                for parent in parents {
-                    if !visited.contains(&parent) && !to_process.contains(&parent) {
-                        to_process.push_back(parent);
-                    }
-                }
+                types.insert(current);
             }
-            visited.insert(current);
         }
-        result
+        if direct {
+            minimal_nodes(hierarchy, &types)
+        } else {
+            types
+        }
     }
+}
+
+/// The nodes of `types` none of whose children is in `types`. When `types` is
+/// closed under ancestors, as the types of an individual are, these are its
+/// minimal nodes: a node has a more specific node in `types` exactly when one of
+/// its children is in `types`.
+fn minimal_nodes<E: Eq + Hash + Clone>(
+    hierarchy: &Hierarchy<E>,
+    types: &HashSet<NodeRef>,
+) -> HashSet<NodeRef> {
+    types
+        .iter()
+        .copied()
+        .filter(|&node| {
+            !hierarchy.node(node).child_nodes().iter().any(|child| types.contains(child))
+        })
+        .collect()
 }
 
 /// Port of `RoleElementManager.RoleElement`: the known / possible relation
@@ -555,8 +553,18 @@ impl SeededClassInstanceManager {
 
     /// `realize`: confirm every possible instance with the oracle, pushing the
     /// refuted ones up to the parents (so an ancestor node can still confirm them).
-    /// After this, KNOWN instances of each node are exactly its instances.
-    /// Mirrors `InstanceManager.realize`.
+    /// After this no possible instance remains, and an individual is an instance
+    /// of a node exactly when it is a known instance of the node or of one of its
+    /// descendants. Mirrors `InstanceManager.realize`, except in the order of the
+    /// visits.
+    ///
+    /// Java visits the nodes breadth-first upward from the bottom node, and stops
+    /// at a node without an `AtomicConceptElement`. So a node can be visited
+    /// before a deeper descendant pushes it a refuted possible, and a node above
+    /// nodes without elements is never visited; Java tests such leftover
+    /// possibles when a query reaches them, but the queries here read the known
+    /// instances only. This visits every node after all of its children instead,
+    /// so each node receives every pushed possible before it is visited.
     pub fn realize<E, F>(&mut self, hierarchy: &Hierarchy<E>, mut is_instance: F)
     where
         E: Eq + Hash + Clone,
@@ -566,26 +574,9 @@ impl SeededClassInstanceManager {
         if !self.reading_off_found_possible {
             return;
         }
-        let mut to_process: VecDeque<NodeRef> = VecDeque::new();
-        let mut visited: HashSet<NodeRef> = HashSet::new();
-        for &parent in hierarchy.node(hierarchy.bottom_node()).parent_nodes() {
-            to_process.push_back(parent);
-        }
-        while let Some(current) = to_process.pop_front() {
-            if !visited.insert(current) {
+        for current in hierarchy.nodes_bottom_up() {
+            if current == hierarchy.bottom_node() {
                 continue;
-            }
-            let parents: Vec<NodeRef> =
-                hierarchy.node(current).parent_nodes().iter().copied().collect();
-            // Java guards the parent-enqueue (and the possible processing) with
-            // `if (atomicConceptElement!=null)`: the upward traversal stops at
-            // nodes that have no AtomicConceptElement.
-            if self.concept_to_element.contains_key(&current) {
-                for &parent in &parents {
-                    if !visited.contains(&parent) && !to_process.contains(&parent) {
-                        to_process.push_back(parent);
-                    }
-                }
             }
             let possibles: Vec<String> = match self.concept_to_element.get(&current) {
                 Some(element) if element.has_possibles() => {
@@ -593,6 +584,8 @@ impl SeededClassInstanceManager {
                 }
                 _ => continue,
             };
+            let parents: Vec<NodeRef> =
+                hierarchy.node(current).parent_nodes().iter().copied().collect();
             let representative = hierarchy.node(current).representative().clone();
             let mut non_instances: Vec<String> = Vec::new();
             for individual in possibles {
@@ -728,36 +721,21 @@ impl SeededClassInstanceManager {
     where
         E: Eq + Hash + Clone,
     {
+        // The known nodes are not closed under ancestors: each known instance is
+        // kept at the most specific node that records it, the nodes in between
+        // record nothing, and `owl:Thing` can keep an individual that `realize`
+        // confirms further down. So close them under ancestors first, as
+        // `getTypes(individual,false)` does (InstanceManager.java:961).
         let mut type_nodes: HashSet<NodeRef> = HashSet::new();
         for (&node, element) in &self.concept_to_element {
-            if element.is_known(individual) {
-                type_nodes.insert(node);
+            if element.is_known(individual) && !type_nodes.contains(&node) {
+                type_nodes.extend(hierarchy.ancestor_nodes(node));
             }
         }
         if direct {
-            let mut result = HashSet::new();
-            for &node in &type_nodes {
-                let has_more_specific = hierarchy
-                    .node(node)
-                    .child_nodes()
-                    .iter()
-                    .any(|child| type_nodes.contains(child));
-                if !has_more_specific {
-                    result.insert(node);
-                }
-            }
-            result
+            minimal_nodes(hierarchy, &type_nodes)
         } else {
-            // `getTypes(individual,false)`: `result.addAll(current.getAncestorNodes())`
-            // for every node where the individual is known, so the result is closed
-            // under ancestors (InstanceManager.java:961).
-            let mut result: HashSet<NodeRef> = HashSet::new();
-            for &node in &type_nodes {
-                for ancestor in hierarchy.ancestor_nodes(node) {
-                    result.insert(ancestor);
-                }
-            }
-            result
+            type_nodes
         }
     }
 }
@@ -1466,6 +1444,135 @@ mod tests {
         refute.seed_top_known(hierarchy.top_node(), "x");
         refute.realize(&hierarchy, |_c: &&str, _i| false);
         assert!(!refute.get_types_of(&hierarchy, "x", false).contains(&dog_node));
+    }
+
+    /// The hierarchy of the subclass `edges` (sub, super), below `top`.
+    fn hierarchy_of(edges: &[(&'static str, &'static str)]) -> Hierarchy<&'static str> {
+        let classes: HashSet<&str> = edges.iter().flat_map(|&(sub, sup)| [sub, sup]).collect();
+        let mut subsumers: HashMap<&str, HashSet<&str>> = HashMap::new();
+        for &class in &classes {
+            let mut supers: HashSet<&str> = [class, "top"].into_iter().collect();
+            let mut to_visit = vec![class];
+            while let Some(current) = to_visit.pop() {
+                for &(sub, sup) in edges {
+                    if sub == current && supers.insert(sup) {
+                        to_visit.push(sup);
+                    }
+                }
+            }
+            subsumers.insert(class, supers);
+        }
+        subsumers.insert("top", ["top"].into_iter().collect());
+        subsumers.insert("bottom", classes.iter().copied().chain(["top", "bottom"]).collect());
+        build_hierarchy("top", "bottom", subsumers)
+    }
+
+    fn nodes(hierarchy: &Hierarchy<&'static str>, classes: &[&'static str]) -> HashSet<NodeRef> {
+        classes.iter().map(|class| hierarchy.node_for_element(class).unwrap()).collect()
+    }
+
+    fn possible(class: &str) -> ReadOffConcept {
+        ReadOffConcept { concept_iri: class.to_string(), known: false }
+    }
+
+    #[test]
+    fn instance_manager_direct_types_are_minimal() {
+        // A is reached from its leaf G before D, three levels below it. Both are
+        // types, but only D is a direct type.
+        let hierarchy = hierarchy_of(&[("G", "A"), ("D", "A"), ("D2", "D"), ("D3", "D2")]);
+        let mut manager: InstanceManager<&str> = InstanceManager::new();
+        manager.add_possible(hierarchy.node_for_element(&"A").unwrap(), "x");
+        manager.add_possible(hierarchy.node_for_element(&"D").unwrap(), "x");
+        let direct =
+            manager.get_types(&hierarchy, "x", true, |c: &&str| matches!(*c, "A" | "D" | "top"));
+        assert_eq!(direct, nodes(&hierarchy, &["D"]));
+    }
+
+    #[test]
+    fn instance_manager_tests_possibles_pushed_to_visited_parents() {
+        // x is refuted as an X3, X2 and X, and so reaches P after P is reached
+        // from its leaf Y.
+        let hierarchy = hierarchy_of(&[("X3", "X2"), ("X2", "X"), ("X", "P"), ("Y", "P")]);
+        let x3 = hierarchy.node_for_element(&"X3").unwrap();
+        let is_instance = |c: &&str| matches!(*c, "P" | "top");
+        let mut manager: InstanceManager<&str> = InstanceManager::new();
+        manager.add_possible(x3, "x");
+        assert_eq!(
+            manager.get_types(&hierarchy, "x", true, is_instance),
+            nodes(&hierarchy, &["P"])
+        );
+        let mut manager: InstanceManager<&str> = InstanceManager::new();
+        manager.add_possible(x3, "x");
+        assert_eq!(
+            manager.get_types(&hierarchy, "x", false, is_instance),
+            nodes(&hierarchy, &["P", "top"])
+        );
+    }
+
+    #[test]
+    fn seeded_manager_direct_types_are_minimal() {
+        // `ReasonerTest.testDirect`: x is a possible D, C and B, and a known
+        // instance of top. D is refuted and pushes x to C, which is confirmed two
+        // levels below top.
+        let hierarchy = hierarchy_of(&[("F", "A"), ("C", "B"), ("D", "C"), ("E", "C")]);
+        let mut manager = SeededClassInstanceManager::new();
+        manager.seed_same_as(&["x".to_string()], &[]);
+        manager.read_off_types("x", &[possible("D"), possible("C"), possible("B")], |iri| {
+            hierarchy.node_for_element(&iri)
+        });
+        manager.seed_top_known(hierarchy.top_node(), "x");
+        manager.realize(&hierarchy, |c: &&str, _| matches!(*c, "C" | "B"));
+        assert_eq!(manager.get_types_of(&hierarchy, "x", true), nodes(&hierarchy, &["C"]));
+        assert_eq!(
+            manager.get_types_of(&hierarchy, "x", false),
+            nodes(&hierarchy, &["C", "B", "top"])
+        );
+        let individuals: HashSet<String> = ["x".to_string()].into_iter().collect();
+        let direct_instances = |class| {
+            let node = hierarchy.node_for_element(&class).unwrap();
+            manager.get_instances(&hierarchy, node, true, &individuals)
+        };
+        assert_eq!(direct_instances("C"), individuals);
+        assert!(direct_instances("B").is_empty());
+        assert!(direct_instances("top").is_empty());
+    }
+
+    #[test]
+    fn seeded_manager_realize_visits_each_node_after_its_children() {
+        // x is refuted as an X3, X2 and X, and so reaches P after P is reached
+        // from its leaf Y, which records y.
+        let hierarchy = hierarchy_of(&[("X3", "X2"), ("X2", "X"), ("X", "P"), ("Y", "P")]);
+        let mut manager = SeededClassInstanceManager::new();
+        manager.seed_same_as(&["x".to_string(), "y".to_string()], &[]);
+        let labels = [possible("X3"), possible("X2"), possible("X"), possible("P")];
+        manager.read_off_types("x", &labels, |iri| hierarchy.node_for_element(&iri));
+        let known_y = ReadOffConcept { concept_iri: "Y".to_string(), known: true };
+        manager.read_off_types("y", &[known_y], |iri| hierarchy.node_for_element(&iri));
+        manager.seed_top_known(hierarchy.top_node(), "x");
+        manager.seed_top_known(hierarchy.top_node(), "y");
+        manager.realize(&hierarchy, |c: &&str, _| *c == "P");
+        assert_eq!(manager.get_types_of(&hierarchy, "x", true), nodes(&hierarchy, &["P"]));
+        assert_eq!(manager.get_types_of(&hierarchy, "x", false), nodes(&hierarchy, &["P", "top"]));
+        let individuals: HashSet<String> = ["x".to_string(), "y".to_string()].into_iter().collect();
+        let p = hierarchy.node_for_element(&"P").unwrap();
+        assert_eq!(manager.get_instances(&hierarchy, p, false, &individuals), individuals);
+        assert_eq!(
+            manager.get_instances(&hierarchy, p, true, &individuals),
+            ["x".to_string()].into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn seeded_manager_realize_visits_nodes_above_nodes_without_instances() {
+        // x is a possible B, whose only child C records no instance.
+        let hierarchy = hierarchy_of(&[("C", "B")]);
+        let mut manager = SeededClassInstanceManager::new();
+        manager.seed_same_as(&["x".to_string()], &[]);
+        manager.read_off_types("x", &[possible("B")], |iri| hierarchy.node_for_element(&iri));
+        manager.seed_top_known(hierarchy.top_node(), "x");
+        manager.realize(&hierarchy, |c: &&str, _| *c == "B");
+        assert_eq!(manager.get_types_of(&hierarchy, "x", true), nodes(&hierarchy, &["B"]));
+        assert_eq!(manager.get_types_of(&hierarchy, "x", false), nodes(&hierarchy, &["B", "top"]));
     }
 
     #[test]

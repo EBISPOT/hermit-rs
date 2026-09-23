@@ -156,6 +156,24 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     pub fn descendant_nodes(&self, start: NodeRef) -> HashSet<NodeRef> {
         self.reachable(start, |node| &self.nodes[node].children)
     }
+    /// Every node, each after all of its child nodes: the bottom node first and
+    /// the top node last.
+    pub fn nodes_bottom_up(&self) -> Vec<NodeRef> {
+        let mut pending: Vec<usize> = self.nodes.iter().map(|node| node.children.len()).collect();
+        let mut ready: VecDeque<NodeRef> =
+            (0..self.nodes.len()).filter(|&node| pending[node] == 0).collect();
+        let mut order = Vec::with_capacity(self.nodes.len());
+        while let Some(node) = ready.pop_front() {
+            order.push(node);
+            for &parent in &self.nodes[node].parents {
+                pending[parent] -= 1;
+                if pending[parent] == 0 {
+                    ready.push_back(parent);
+                }
+            }
+        }
+        order
+    }
     fn reachable<'a, F>(&'a self, start: NodeRef, neighbours: F) -> HashSet<NodeRef>
     where
         F: Fn(NodeRef) -> &'a HashSet<NodeRef>,
@@ -1069,6 +1087,39 @@ Declaration( Class( B ) )
 SubClassOf( A B )
 SubClassOf( B owl:Thing )";
         assert_eq!(fss, expected, "got:\n{fss}");
+    }
+
+    #[test]
+    fn nodes_bottom_up_visits_each_node_after_its_children() {
+        // D ⊑ B ⊑ A and D ⊑ C2 ⊑ C1 ⊑ A, so A is two levels above D on one side
+        // and three on the other, and the leaf L ⊑ A is one level below A.
+        let mut subsumers: HashMap<&str, HashSet<&str>> = HashMap::new();
+        subsumers.insert("top", ["top"].into_iter().collect());
+        subsumers.insert("A", ["A", "top"].into_iter().collect());
+        subsumers.insert("B", ["B", "A", "top"].into_iter().collect());
+        subsumers.insert("C1", ["C1", "A", "top"].into_iter().collect());
+        subsumers.insert("C2", ["C2", "C1", "A", "top"].into_iter().collect());
+        subsumers.insert("D", ["D", "B", "C2", "C1", "A", "top"].into_iter().collect());
+        subsumers.insert("L", ["L", "A", "top"].into_iter().collect());
+        subsumers.insert(
+            "bottom",
+            ["bottom", "D", "B", "C2", "C1", "A", "L", "top"].into_iter().collect(),
+        );
+        let hierarchy = build_hierarchy("top", "bottom", subsumers);
+        let order = hierarchy.nodes_bottom_up();
+        let position: HashMap<NodeRef, usize> =
+            order.iter().enumerate().map(|(index, &node)| (node, index)).collect();
+        assert_eq!(position.len(), order.len());
+        assert_eq!(position.keys().copied().collect::<Set<_>>(), hierarchy.all_nodes());
+        assert_eq!(order.first(), Some(&hierarchy.bottom_node()));
+        assert_eq!(order.last(), Some(&hierarchy.top_node()));
+        for &node in &order {
+            for child in hierarchy.node(node).child_nodes() {
+                assert!(position[child] < position[&node]);
+            }
+        }
+        // An inconsistent ontology's hierarchy is one node, both top and bottom.
+        assert_eq!(Hierarchy::empty_hierarchy(&["A"], "top", "bottom").nodes_bottom_up(), vec![0]);
     }
 
     #[test]

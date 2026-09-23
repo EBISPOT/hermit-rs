@@ -6,22 +6,23 @@ the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
 dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
 string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #22 property classification fix, which also resolved #13, #18, #20, #23, #24,
-#25 and #27, and the issue #26 fix for the inverses of the built-in object
-properties. All 598 declared Java methods are accounted for; inherited methods
-also run under their individual-reuse and core-blocking suites.
+#25 and #27, the issue #26 fix for the inverses of the built-in object
+properties, and the issue #19 fix for the direct types of individuals. All 598
+declared Java methods are accounted for; inherited methods also run under their
+individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 896 | 26 | 2 |
+| Query/structural replay | 899 | 23 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 946 | 29 | 2 |
+| Total, excluding OWL WG | 949 | 26 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 29 failures are:
+The Rust port does **not** yet have full Java test parity. The 26 failures are:
 
-* **10 Rust/Java discrepancies**, including inherited repetitions: direct
-  results and hierarchy printing; three core-blocking Widmann scenarios; and
-  description-graph/SWRL integration.
+* **7 Rust/Java discrepancies**, including inherited repetitions: hierarchy
+  printing; three core-blocking Widmann scenarios; and description-graph/SWRL
+  integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure
@@ -283,6 +284,50 @@ same query on the properties, over ontologies that mention the built-in
 properties, their inverses or neither. They also check the hierarchy lookups
 under the default, core-blocking, individual-reuse and quasi-order
 configurations, and against the separate subsumption test.
+
+Issue #19 was a gap in the direct types of individuals. Under the OWL 2 Direct
+Semantics the types of an individual are closed under subsumption, so its direct
+types, the most specific ones, are the types none of whose strict subclasses is
+a type, and owl:Thing is a direct type only of an individual with no other type.
+The instance manager keeps each known instance at the most specific node that
+records it, and its direct filter dropped a known node only when a child of the
+node was known too. In `ReasonerTest.testDirect`, `:a` is an instance of `:C`,
+below `:B`, by either disjunct of each of its assertions, since `:Cp` is empty
+and `:D` and `:E` are subclasses of `:C`. It becomes a known instance of `:C`
+only when `realize` confirms the possible instance that `:D` or `:E` pushes up,
+and owl:Thing, which records every individual, has `:B` as its child, not `:C`.
+So owl:Thing stayed a direct type beside `:C`. The known nodes are now closed
+under ancestors first, and the direct types are the minimal nodes of the closure.
+
+`realize` had two more gaps, which it shares with Java's. It visited the nodes
+breadth-first upward from the bottom node and stopped at a node without
+instances. So a possible instance refuted along a long path could reach a node
+already visited from a shorter one, and a node above nodes without instances
+was never visited; either way the possible instance was never tested. Java tests
+such leftover possibles when a query reaches them, but the Rust queries read the
+known instances only, so the type was lost, direct or not: with
+`ObjectUnionOf(:X3 :Z3)(:a)`, both three levels below `:P`, and `:Y(:b)`, one
+level below it, `:a` was no instance of `:P`. `realize` now visits every node
+after all of its children, so each possible instance is tested at every node it
+reaches. `getInstances`, direct or not, and the realization read the same known
+instances, and are corrected with `getTypes`.
+
+One correction deviates from Java; no Java case covers it. With `:A(:a)` and
+`ObjectUnionOf(:F1 :F2)(:a)`, where `:F1` and `:F2` are subclasses of `:D`, three
+levels below `:A`, and `:A` has a leaf subclass `:G`, the pinned Java checkout
+returns both `:A` and `:D` as direct types of `:a`, although its
+`getInstances(:A, true)` leaves `:a` out. Its breadth-first `getTypes` reaches
+the known `:A` from `:G` before it confirms `:D`. Rust returns `:D`. The generic
+`InstanceManager`, which the reasoner does not use, ports that traversal; it
+now visits the nodes in the order `realize` does.
+
+The regressions check `getTypes`, the realization and `getInstances`, direct and
+not, under the default, core-blocking and individual-reuse configurations,
+against separate tests of each type and each subsumption. They cover the Java
+fixture, both `realize` gaps, the deviation above, owl:Thing, a class
+equivalent to it, an unsatisfiable class, equivalent and incomparable types,
+equality and nominals. The pinned Java checkout gives the same answers, except
+in the deviation above.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

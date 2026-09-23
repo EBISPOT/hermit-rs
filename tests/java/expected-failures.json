@@ -1,8 +1,4 @@
 {
-  "reasoner.ReasonerCoreBlockingTest.testDirect": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\""
-  },
   "reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
     "signature": "\"reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
@@ -19,17 +15,9 @@
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\""
   },
-  "reasoner.ReasonerIndividualReuseTest.testDirect": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\""
-  },
   "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
     "signature": "\"reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
-  },
-  "reasoner.ReasonerTest.testDirect": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\""
   },
   "reasoner.ReasonerTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
