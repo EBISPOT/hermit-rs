@@ -212,149 +212,149 @@ PASS	PositiveEntailment	TestCase-3AWebOnt-2DequivalentProperty-2D004
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Dimports-2D011
 PASS	PositiveEntailment	TestCase-3AWebOnt-2Dmiscellaneous-2D302-2DDirect
 PASS	PositiveEntailment	TestCase-3AWebOnt-2DsameAs-2D001
-SKIP: parse: horned-owl dropped logical triples	Consistency	Bnode2somevaluesfrom
+PASS	Consistency	Bnode2somevaluesfrom
 SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Danonymous-2Dindividual
-SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Dinvalid-2Doneof
-SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Dinvalid-2Dunionof
+PASS	Consistency	Owl2-2Drl-2Dinvalid-2Doneof
+PASS	Consistency	Owl2-2Drl-2Dinvalid-2Dunionof
 SKIP: parse: horned-owl dropped logical triples	Consistency	Owl2-2Drl-2Dvalid-2Doneof
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI4.5-2D001
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.2-2D005
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.2-2D006
+PASS	Consistency	TestCase-3AWebOnt-2DI4.5-2D001
+PASS	Consistency	TestCase-3AWebOnt-2DI5.2-2D005
+PASS	Consistency	TestCase-3AWebOnt-2DI5.2-2D006
 SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.26-2D001
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.26-2D002
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.26-2D003
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.26-2D004
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.3-2D006
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.3-2D008
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.3-2D010
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DI5.3-2D011
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DRestriction-2D003
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DRestriction-2D004
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DRestriction-2D005-2Ddirect
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DSymmetricProperty-2D002
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DThing-2D004
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DTransitiveProperty-2D002
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D005
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D006
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D009
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D016
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D018
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D020
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D021
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D024
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D025
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D028
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D031
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D034
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D501
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D503
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D605
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D606
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D609
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D616
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D624
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D625
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D628
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D631
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D634
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D661
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D665
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D667
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D905
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DequivalentClass-2D004
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D001
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D002
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D202
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DoneOf-2D004
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DunionOf-2D003
-SKIP: parse: horned-owl dropped logical triples	Consistency	TestCase-3AWebOnt-2DunionOf-2D004
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2DI4.5-2D002
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2DNothing-2D001
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D001
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D002
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D003
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D004
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D007
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D008
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D010
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D011
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D012
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D013
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D014
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D015
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D017
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D019
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D022
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D023
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D026
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D027
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D029
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D030
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D032
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D033
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D035
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D040
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D101
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D102
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D103
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D104
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D105
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D106
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D107
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D108
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D109
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D110
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D111
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D502
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D504
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D601
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D602
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D603
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D604
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D608
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D610
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D611
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D612
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D613
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D614
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D615
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D617
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D623
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D626
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D627
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D629
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D630
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D632
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D633
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D641
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D642
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D643
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D644
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D646
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D650
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Dmiscellaneous-2D203
-SKIP: parse: horned-owl dropped logical triples	Inconsistency	TestCase-3AWebOnt-2Dmiscellaneous-2D204
-SKIP: parse: horned-owl dropped logical triples	NegativeEntailment	TestCase-3AWebOnt-2DallValuesFrom-2D002
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	Bnode2somevaluesfrom
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	Somevaluesfrom2bnode
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DAnnotationProperty-2D002
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DClass-2D005-2Ddirect
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI4.5-2D001
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D004
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D006
+PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D002
+PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D003
+PASS	Consistency	TestCase-3AWebOnt-2DI5.26-2D004
+PASS	Consistency	TestCase-3AWebOnt-2DI5.3-2D006
+PASS	Consistency	TestCase-3AWebOnt-2DI5.3-2D008
+PASS	Consistency	TestCase-3AWebOnt-2DI5.3-2D010
+PASS	Consistency	TestCase-3AWebOnt-2DI5.3-2D011
+PASS	Consistency	TestCase-3AWebOnt-2DRestriction-2D003
+PASS	Consistency	TestCase-3AWebOnt-2DRestriction-2D004
+PASS	Consistency	TestCase-3AWebOnt-2DRestriction-2D005-2Ddirect
+PASS	Consistency	TestCase-3AWebOnt-2DSymmetricProperty-2D002
+PASS	Consistency	TestCase-3AWebOnt-2DThing-2D004
+PASS	Consistency	TestCase-3AWebOnt-2DTransitiveProperty-2D002
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D005
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D006
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D009
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D016
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D018
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D020
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D021
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D024
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D025
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D028
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D031
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D034
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D501
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D503
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D605
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D606
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D609
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D616
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D624
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D625
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D628
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D631
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D634
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D661
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D665
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D667
+PASS	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D905
+PASS	Consistency	TestCase-3AWebOnt-2DequivalentClass-2D004
+PASS	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D001
+PASS	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D002
+PASS	Consistency	TestCase-3AWebOnt-2Dmiscellaneous-2D202
+PASS	Consistency	TestCase-3AWebOnt-2DoneOf-2D004
+PASS	Consistency	TestCase-3AWebOnt-2DunionOf-2D003
+PASS	Consistency	TestCase-3AWebOnt-2DunionOf-2D004
+PASS	Inconsistency	TestCase-3AWebOnt-2DI4.5-2D002
+PASS	Inconsistency	TestCase-3AWebOnt-2DNothing-2D001
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D001
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D002
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D003
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D004
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D007
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D008
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D010
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D011
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D012
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D013
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D014
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D015
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D017
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D019
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D022
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D023
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D026
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D027
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D029
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D030
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D032
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D033
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D035
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D040
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D101
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D102
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D103
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D104
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D105
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D106
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D107
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D108
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D109
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D110
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D111
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D502
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D504
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D601
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D602
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D603
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D604
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D608
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D610
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D611
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D612
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D613
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D614
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D615
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D617
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D623
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D626
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D627
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D629
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D630
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D632
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D633
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D641
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D642
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D643
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D644
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D646
+PASS	Inconsistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D650
+PASS	Inconsistency	TestCase-3AWebOnt-2Dmiscellaneous-2D203
+PASS	Inconsistency	TestCase-3AWebOnt-2Dmiscellaneous-2D204
+PASS	NegativeEntailment	TestCase-3AWebOnt-2DallValuesFrom-2D002
+PASS	PositiveEntailment	Bnode2somevaluesfrom
+PASS	PositiveEntailment	Somevaluesfrom2bnode
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DAnnotationProperty-2D002
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DClass-2D005-2Ddirect
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DI4.5-2D001
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D004
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DI5.2-2D006
 SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.26-2D010
 SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DI5.5-2D005
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DRestriction-2D005-2Ddirect
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DSymmetricProperty-2D002
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DTransitiveProperty-2D002
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D661
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D665
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D667
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DequivalentClass-2D004
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DoneOf-2D004
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DsomeValuesFrom-2D003
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D003
-SKIP: parse: horned-owl dropped logical triples	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D004
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DRestriction-2D005-2Ddirect
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DSymmetricProperty-2D002
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DTransitiveProperty-2D002
+PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D661
+PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D665
+PASS	PositiveEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D667
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DequivalentClass-2D004
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DoneOf-2D004
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DsomeValuesFrom-2D003
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D003
+PASS	PositiveEntailment	TestCase-3AWebOnt-2DunionOf-2D004
 SKIP: timeout	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D208
 SKIP: timeout	Consistency	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209
 SKIP: timeout	NegativeEntailment	TestCase-3AWebOnt-2Ddescription-2Dlogic-2D209

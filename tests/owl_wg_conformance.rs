@@ -427,12 +427,17 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
         }
         Format::Rdf => {
             let mut cur = std::io::Cursor::new(src.as_bytes());
-            let (rdfo, incomplete) = horned_owl::io::rdf::reader::read_with_build::<
-                A,
-                AnnotatedComponent<A>,
-                _,
-            >(&mut cur, &build, Default::default())
-            .map_err(|e| format!("{e}"))?;
+            let mut parser = rdf_parser(&mut cur, &build);
+            // Like OWLAPI, resolve entity kinds against the declarations of
+            // the (bundled) import closure, so a property declared only in an
+            // imported ontology is still typed while this document is parsed.
+            let imports = parser.parse_imports().map_err(|e| format!("{e}"))?;
+            parser.parse_declarations().map_err(|e| format!("{e}"))?;
+            let declarations = import_closure_declarations(&imports, &build)?;
+            parser
+                .finish_parse(&[&declarations])
+                .map_err(|e| format!("{e}"))?;
+            let (rdfo, incomplete) = parser.parse().map_err(|e| format!("{e}"))?;
             // horned-owl's `is_complete()` is strict: it reports incomplete
             // whenever *any* triple is left unconsumed, including the harmless
             // `_:b rdf:type owl:Ontology` triple it emits for an anonymous (or
@@ -451,6 +456,61 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
             Ok(rdfo.into())
         }
     }
+}
+
+type RdfOntology = horned_owl::io::rdf::reader::ConcreteRDFOntology<A, AnnotatedComponent<A>>;
+
+fn rdf_parser<'b, R: std::io::BufRead>(
+    src: &mut R,
+    build: &'b Build<A>,
+) -> horned_owl::io::rdf::reader::OntologyParser<'b, A, AnnotatedComponent<A>, RdfOntology> {
+    horned_owl::io::rdf::reader::parser_with_build(src, build, Default::default())
+}
+
+/// The declarations of every bundled ontology in the transitive import closure
+/// of `imports`. Unmapped targets are skipped here; `resolve_imports` reports
+/// them.
+fn import_closure_declarations(
+    imports: &[horned_owl::model::IRI<A>],
+    build: &Build<A>,
+) -> Result<RdfOntology, String> {
+    let mut declarations = RdfOntology::default();
+    let mut pending: Vec<String> = imports.iter().map(|i| i.to_string()).collect();
+    let mut seen = std::collections::HashSet::new();
+    while let Some(iri) = pending.pop() {
+        if !seen.insert(iri.clone()) {
+            continue;
+        }
+        let Some((_, file)) = IMPORT_MAP.iter().find(|(k, _)| *k == iri) else {
+            continue;
+        };
+        let path = format!("{}/tests/owl_wg/{}", env!("CARGO_MANIFEST_DIR"), file);
+        let src = std::fs::read_to_string(&path)
+            .map_err(|e| format!("cannot read import resource {path}: {e}"))?;
+        let mut cur = std::io::Cursor::new(src.as_bytes());
+        let mut parser = rdf_parser(&mut cur, build);
+        let nested = parser
+            .parse_imports()
+            .map_err(|e| format!("parse import {iri} ({file}): {e}"))?;
+        pending.extend(nested.iter().map(|i| i.to_string()));
+        parser
+            .parse_declarations()
+            .map_err(|e| format!("parse import {iri} ({file}): {e}"))?;
+        for ac in parser.ontology_ref().i() {
+            if matches!(
+                ac.component,
+                Component::DeclareClass(_)
+                    | Component::DeclareObjectProperty(_)
+                    | Component::DeclareDataProperty(_)
+                    | Component::DeclareAnnotationProperty(_)
+                    | Component::DeclareNamedIndividual(_)
+                    | Component::DeclareDatatype(_)
+            ) {
+                declarations.insert(ac.clone());
+            }
+        }
+    }
+    Ok(declarations)
 }
 
 /// True when every unconsumed triple is an ontology-header artifact (and there
