@@ -807,11 +807,103 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
         self.o.insert(OntologyID { iri, viri });
     }
 
-    /// We should process the backward compatability rules, but
-    /// currently do nothing here at all. I expect that there are not
-    /// many OWL1 ontologies that need processing in existence.
+    /// The OWL 1 DL backward-compatibility rules of the OWL 2 mapping to
+    /// RDF graphs (Section 3.1.2). Table 5 removes type triples made
+    /// redundant by a more specific OWL type; Table 6 adds the
+    /// `owl:ObjectProperty` declaration implied by the OWL 1 property
+    /// characteristics that only apply to object properties.
     fn backward_compat(&mut self) {
-        // Table 5, Table 6
+        const RDFS_CLASS: &str = "http://www.w3.org/2000/01/rdf-schema#Class";
+        const RDF_PROPERTY: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property";
+        const OWL_DATA_RANGE: &str = "http://www.w3.org/2002/07/owl#DataRange";
+        const OWL_ONTOLOGY_PROPERTY: &str = "http://www.w3.org/2002/07/owl#OntologyProperty";
+
+        let is_iri = |t: &Term<A>, iri: &str| matches!(t, Term::Iri(i) if i.as_ref() == iri);
+        let mut types: HashMap<Term<A>, Vec<Term<A>>> = HashMap::default();
+        let mut list_cells: HashSet<Term<A>> = HashSet::default();
+        let triples = self
+            .simple
+            .iter()
+            .map(|t| t.triple())
+            .chain(self.bnode.values().flat_map(|v| v.iter()));
+        for t in triples {
+            match t {
+                [s, Term::RDF(VRDF::Type), o] => types.entry(s.clone()).or_default().push(o.clone()),
+                [s, Term::RDF(VRDF::First), _] => {
+                    list_cells.insert(s.clone());
+                }
+                _ => {}
+            }
+        }
+
+        // Table 5: the set of triples `x rdf:type T` to remove.
+        let mut remove: HashSet<[Term<A>; 3]> = HashSet::default();
+        // Table 6: the object property declarations to add.
+        let mut add = vec![];
+        for (s, ts) in &types {
+            let has = |f: &dyn Fn(&Term<A>) -> bool| ts.iter().any(f);
+            let typed = |t: Term<A>| [s.clone(), Term::RDF(VRDF::Type), t];
+            let rdfs_class = Term::Iri(self.b.iri(RDFS_CLASS));
+            let rdf_property = Term::Iri(self.b.iri(RDF_PROPERTY));
+            if has(&|t| {
+                matches!(
+                    t,
+                    Term::OWL(VOWL::Class | VOWL::Restriction) | Term::RDFS(VRDFS::Datatype)
+                ) || is_iri(t, OWL_DATA_RANGE)
+            }) {
+                remove.insert(typed(rdfs_class));
+            }
+            if has(&|t| matches!(t, Term::OWL(VOWL::Restriction))) {
+                remove.insert(typed(Term::OWL(VOWL::Class)));
+            }
+            if has(&|t| {
+                matches!(
+                    t,
+                    Term::OWL(
+                        VOWL::ObjectProperty
+                            | VOWL::FunctionalProperty
+                            | VOWL::InverseFunctionalProperty
+                            | VOWL::TransitiveProperty
+                            | VOWL::DatatypeProperty
+                            | VOWL::AnnotationProperty
+                    )
+                ) || is_iri(t, OWL_ONTOLOGY_PROPERTY)
+            }) {
+                remove.insert(typed(rdf_property));
+            }
+            if list_cells.contains(s) {
+                remove.insert(typed(Term::RDF(VRDF::List)));
+            }
+            if matches!(s, Term::Iri(_))
+                && has(&|t| {
+                    matches!(
+                        t,
+                        Term::OWL(
+                            VOWL::InverseFunctionalProperty
+                                | VOWL::TransitiveProperty
+                                | VOWL::SymmetricProperty
+                        )
+                    )
+                })
+                && !has(&|t| matches!(t, Term::OWL(VOWL::ObjectProperty)))
+            {
+                add.push(typed(Term::OWL(VOWL::ObjectProperty)));
+            }
+            if matches!(s, Term::Iri(_)) && has(&|t| is_iri(t, OWL_ONTOLOGY_PROPERTY)) {
+                remove.insert(typed(self.b.iri(OWL_ONTOLOGY_PROPERTY).into()));
+                if !has(&|t| matches!(t, Term::OWL(VOWL::AnnotationProperty))) {
+                    add.push(typed(Term::OWL(VOWL::AnnotationProperty)));
+                }
+            }
+        }
+        if !remove.is_empty() {
+            self.simple.retain(|t| !remove.contains(t.triple()));
+            for v in self.bnode.values_mut() {
+                v.retain(|t| !remove.contains(t));
+            }
+            self.bnode.retain(|_, v| !v.is_empty());
+        }
+        self.simple.extend(add.into_iter().map(PosTriple::from));
     }
 
     fn parse_annotations(
@@ -1036,6 +1128,22 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                         )
                     }
                 }
+                // Table 14: OWL 1 DL enumerated data ranges.
+                [
+                    [_, Term::OWL(VOWL::OneOf), list @ (Term::BNode(_) | Term::Iri(_))], //:
+                    [_, Term::RDF(VRDF::Type), Term::Iri(data_range)],
+                ] if data_range.as_ref() == "http://www.w3.org/2002/07/owl#DataRange" => {
+                    ok_some! {{
+                        let literals = self.retrieve_to_list(list, Self::retrieve_to_literal_seq)?;
+                        if literals.is_empty() {
+                            DataRange::DataComplementOf(Box::new(DataRange::Datatype(
+                                self.b.datatype("http://www.w3.org/2000/01/rdf-schema#Literal"),
+                            )))
+                        } else {
+                            DataRange::DataOneOf(literals)
+                        }
+                    }}
+                }
                 [
                     [_, Term::OWL(VOWL::OnDatatype), Term::Iri(iri)], //:
                     [_, Term::OWL(VOWL::WithRestrictions), Term::BNode(id)], //:
@@ -1197,6 +1305,23 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             .map(|e| f(self, e))
             // Collections to Option<Vec<E>>
             .collect()
+    }
+
+    /// Retrieve the members of the RDF list `t`: `rdf:nil` is the empty list,
+    /// and a blank node is the head of a list stitched into `bnode_seq`.
+    fn retrieve_to_list<E>(
+        &mut self,
+        t: &Term<A>,
+        f: fn(&mut Self, &BNode<A>) -> Option<Vec<E>>,
+    ) -> Option<Vec<E>> {
+        match t {
+            Term::BNode(id) => f(self, id),
+            Term::RDF(VRDF::Nil) => Some(vec![]),
+            Term::Iri(iri) if iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil" => {
+                Some(vec![])
+            }
+            _ => None,
+        }
     }
 
     /// Retrieve a `Vec` of `ClassExpression`, or None.
@@ -1672,20 +1797,33 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                         }
                     }
                 }
+                // Unqualified cardinality: a data restriction when `pr` is a
+                // declared data property (Table 13, `{ DPE(y) ≠ ε }`).
                 [
-                    [_, Term::OWL(VOWL::MinCardinality), literal],   //:
-                    [_, Term::OWL(VOWL::OnProperty), Term::Iri(pr)], //:
+                    [_, Term::OWL(VOWL::MinCardinality), literal], //:
+                    [_, Term::OWL(VOWL::OnProperty), pr],   //:
                     [_, Term::RDF(VRDF::Type), Term::OWL(VOWL::Restriction)],
-                ] => {
-                    ok_some! {
-                        ClassExpression::ObjectMinCardinality
-                        {
-                            n:self.convert_to_u32(literal)?,
-                            ope: pr.into(),
+                ] => match self.distinguish_retrieve_property_kind(pr, ic).or_else(|| {
+                    // An undeclared IRI keeps its earlier object reading.
+                    self.convert_to_iri(pr)
+                        .map(|iri| PropertyExpression::ObjectPropertyExpression(iri.into()))
+                }) {
+                    Some(PropertyExpression::ObjectPropertyExpression(ope)) => {
+                        ok_some!(ClassExpression::ObjectMinCardinality {
+                            n: self.convert_to_u32(literal)?,
+                            ope,
                             bce: self.b.class(VOWL::Thing).into()
-                        }
+                        })
                     }
-                }
+                    Some(PropertyExpression::DataProperty(dp)) => {
+                        ok_some!(ClassExpression::DataMinCardinality {
+                            n: self.convert_to_u32(literal)?,
+                            dp,
+                            dr: self.b.datatype(OWL2Datatype::Literal).into(),
+                        })
+                    }
+                    any => Self::error_or_none_on_annotation(any, v.position()),
+                },
                 [
                     [_, Term::OWL(VOWL::MinQualifiedCardinality), literal], //:
                     [_, Term::OWL(VOWL::OnClass), tce],                     //:
@@ -1701,20 +1839,33 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                         }
                     }
                 }
+                // Unqualified cardinality: a data restriction when `pr` is a
+                // declared data property (Table 13, `{ DPE(y) ≠ ε }`).
                 [
-                    [_, Term::OWL(VOWL::MaxCardinality), literal],   //:
-                    [_, Term::OWL(VOWL::OnProperty), Term::Iri(pr)], //:
+                    [_, Term::OWL(VOWL::MaxCardinality), literal], //:
+                    [_, Term::OWL(VOWL::OnProperty), pr],   //:
                     [_, Term::RDF(VRDF::Type), Term::OWL(VOWL::Restriction)],
-                ] => {
-                    ok_some! {
-                        ClassExpression::ObjectMaxCardinality
-                        {
-                            n:self.convert_to_u32(literal)?,
-                            ope: pr.into(),
+                ] => match self.distinguish_retrieve_property_kind(pr, ic).or_else(|| {
+                    // An undeclared IRI keeps its earlier object reading.
+                    self.convert_to_iri(pr)
+                        .map(|iri| PropertyExpression::ObjectPropertyExpression(iri.into()))
+                }) {
+                    Some(PropertyExpression::ObjectPropertyExpression(ope)) => {
+                        ok_some!(ClassExpression::ObjectMaxCardinality {
+                            n: self.convert_to_u32(literal)?,
+                            ope,
                             bce: self.b.class(VOWL::Thing).into()
-                        }
+                        })
                     }
-                }
+                    Some(PropertyExpression::DataProperty(dp)) => {
+                        ok_some!(ClassExpression::DataMaxCardinality {
+                            n: self.convert_to_u32(literal)?,
+                            dp,
+                            dr: self.b.datatype(OWL2Datatype::Literal).into(),
+                        })
+                    }
+                    any => Self::error_or_none_on_annotation(any, v.position()),
+                },
                 [
                     [_, Term::OWL(VOWL::MaxQualifiedCardinality), literal], //:
                     [_, Term::OWL(VOWL::OnClass), tce],                     //:
@@ -1822,7 +1973,16 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                     ann: BTreeSet::new(),
                 }),
                 _ => {
-                    if v.len() == 1 {
+                    if let Some(assertions) = self.anonymous_individual_assertions(&v) {
+                        for (t, axiom) in assertions {
+                            for ann in self.take_anns(&t) {
+                                self.insert_distinct(AnnotatedComponent {
+                                    component: axiom.clone(),
+                                    ann,
+                                });
+                            }
+                        }
+                    } else if v.len() == 1 {
                         single_bnodes.push(v[0].clone());
                     } else {
                         self.bnode.insert(this_bnode, v);
@@ -2165,6 +2325,73 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
                             .map(|ann| Some(AnnotationAssertion { subject: sub.into(), ann }.into()))
                     }
                 }
+                // `a p _:x` with `p` not an annotation property: an object
+                // property assertion whose target is an anonymous individual
+                // (Table 16, `x *:y z` with OPE(*:y) ≠ ε).
+                [Term::Iri(sub), Term::Iri(pred), Term::BNode(obj)]
+                    if !is_reserved_iri(pred)
+                        && !<O as AsRef<DeclarationMappedIndex<A, AA>>>::as_ref(&self.o)
+                            .is_declaration_kind(pred, NamedOWLEntityKind::AnnotationProperty) =>
+                {
+                    Ok(Some(
+                        ObjectPropertyAssertion {
+                            ope: ObjectProperty(pred.clone()).into(),
+                            from: sub.into(),
+                            to: self.anonymous_individual(obj).into(),
+                        }
+                        .into(),
+                    ))
+                }
+                // Table 18: OWL 1 DL encodes `EquivalentClasses(C, CE)` for a
+                // named class `C` by attaching the boolean-connective or
+                // enumeration triple directly to `C`.
+                [
+                    x @ Term::Iri(_),
+                    Term::OWL(op @ (VOWL::IntersectionOf | VOWL::UnionOf | VOWL::OneOf)),
+                    seq @ (Term::BNode(_) | Term::Iri(_)),
+                ] if self.distinguish_term_kind(x, ic) == Some(NamedOWLEntityKind::Class) => {
+                    let op = op.clone();
+                    ok_some! {{
+                        let ce = match op {
+                            VOWL::OneOf => {
+                                let inds = self.retrieve_to_list(seq, Self::retrieve_to_ni_seq)?;
+                                if inds.is_empty() {
+                                    ClassExpression::Class(self.b.class(VOWL::Nothing.as_ref()))
+                                } else {
+                                    ClassExpression::ObjectOneOf(inds)
+                                }
+                            }
+                            _ => {
+                                let mut ces = self.retrieve_to_list(seq, Self::retrieve_to_ce_seq)?;
+                                match (ces.len(), op) {
+                                    (0, VOWL::IntersectionOf) => {
+                                        ClassExpression::Class(self.b.class(VOWL::Thing.as_ref()))
+                                    }
+                                    (0, _) => {
+                                        ClassExpression::Class(self.b.class(VOWL::Nothing.as_ref()))
+                                    }
+                                    (1, _) => ces.pop()?,
+                                    (_, VOWL::IntersectionOf) => {
+                                        ClassExpression::ObjectIntersectionOf(ces)
+                                    }
+                                    _ => ClassExpression::ObjectUnionOf(ces),
+                                }
+                            }
+                        };
+                        EquivalentClasses(vec![self.retrieve_to_ce(x)?, ce]).into()
+                    }}
+                }
+                [x @ Term::Iri(_), Term::OWL(VOWL::ComplementOf), y]
+                    if self.distinguish_term_kind(x, ic) == Some(NamedOWLEntityKind::Class) =>
+                {
+                    ok_some! {
+                        EquivalentClasses(vec![
+                            self.retrieve_to_ce(x)?,
+                            ClassExpression::ObjectComplementOf(self.retrieve_to_ce(y)?.into()),
+                        ])
+                        .into()
+                    }
+                }
                 [Term::Iri(sub), Term::Iri(pred), Term::Iri(obj)] => {
                     // A `subject predicate object` triple (all IRIs) is an
                     // ObjectPropertyAssertion, EXCEPT when `predicate` is a *declared*
@@ -2211,6 +2438,94 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
         }
 
         Ok(())
+    }
+
+    /// The anonymous individual denoted by a blank node. Blank-node labels
+    /// are unique within one parsed document, so the label names it.
+    fn anonymous_individual(&self, id: &BNode<A>) -> AnonymousIndividual<A> {
+        self.b.anon(format!("_:{}", id.0.borrow()))
+    }
+
+    fn term_to_individual(&self, t: &Term<A>) -> Option<Individual<A>> {
+        match t {
+            Term::Iri(iri) => Some(iri.into()),
+            Term::BNode(id) => Some(self.anonymous_individual(id).into()),
+            _ => None,
+        }
+    }
+
+    /// Parse every triple about the blank node `_:x` as an assertion about
+    /// the anonymous individual `_:x` (Table 16: ClassAssertion,
+    /// ObjectPropertyAssertion, DataPropertyAssertion, SameIndividual,
+    /// DifferentIndividuals, plus annotation assertions). This is all or
+    /// nothing: when any triple has another shape, the blank node is not an
+    /// individual (or its description is malformed), so nothing is consumed
+    /// and the triples stay reported as unparsed.
+    fn anonymous_individual_assertions(
+        &mut self,
+        v: &[[Term<A>; 3]],
+    ) -> Option<Vec<([Term<A>; 3], Component<A>)>> {
+        let mut used_ces = vec![];
+        let mut out = vec![];
+        for t in v {
+            let Term::BNode(sub) = &t[0] else {
+                return None;
+            };
+            let ind = self.anonymous_individual(sub);
+            let cmp: Component<A> = match t {
+                [_, Term::RDF(VRDF::Type), cls] => {
+                    let ce = match cls {
+                        Term::Iri(iri) if !is_reserved_iri(iri) => Class(iri.clone()).into(),
+                        Term::OWL(VOWL::Thing) | Term::OWL(VOWL::Nothing) => {
+                            self.retrieve_to_ce(cls)?
+                        }
+                        Term::BNode(id) => {
+                            let ce = self.class_expression.get(id).cloned()?;
+                            used_ces.push(id.clone());
+                            ce
+                        }
+                        _ => return None,
+                    };
+                    ClassAssertion { ce, i: ind.into() }.into()
+                }
+                [_, Term::OWL(VOWL::SameAs), o] => {
+                    SameIndividual(vec![ind.into(), self.term_to_individual(o)?]).into()
+                }
+                [_, Term::OWL(VOWL::DifferentFrom), o] => {
+                    DifferentIndividuals(vec![ind.into(), self.term_to_individual(o)?]).into()
+                }
+                [_, Term::Iri(pred), o] if !is_reserved_iri(pred) => {
+                    let index = <O as AsRef<DeclarationMappedIndex<A, AA>>>::as_ref(&self.o);
+                    let is_ap =
+                        index.is_declaration_kind(pred, NamedOWLEntityKind::AnnotationProperty);
+                    let is_dp = index.is_declaration_kind(pred, NamedOWLEntityKind::DataProperty);
+                    match o {
+                        Term::Literal(_) if is_dp => DataPropertyAssertion {
+                            dp: pred.clone().into(),
+                            from: ind.into(),
+                            to: self.convert_to_literal(o)?,
+                        }
+                        .into(),
+                        Term::Iri(_) | Term::BNode(_) if !is_ap => ObjectPropertyAssertion {
+                            ope: ObjectProperty(pred.clone()).into(),
+                            from: ind.into(),
+                            to: self.term_to_individual(o)?,
+                        }
+                        .into(),
+                        Term::Literal(_) | Term::Iri(_) => AnnotationAssertion {
+                            subject: ind.into(),
+                            ann: self.annotation(t).ok()?,
+                        }
+                        .into(),
+                        _ => return None,
+                    }
+                }
+                _ => return None,
+            };
+            out.push((t.clone(), cmp));
+        }
+        self.used_class_expressions.extend(used_ces);
+        Some(out)
     }
 
     fn swrl(&mut self) -> Result<(), HornedError> {
@@ -2714,6 +3029,19 @@ impl<'a, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>> OntologyParser<'a, A
             },
         )
     }
+}
+
+/// True for an IRI in the RDF, RDFS, OWL or XSD namespace. Such IRIs are
+/// reserved vocabulary: never a user class or an individual-level property.
+fn is_reserved_iri<A: ForIRI>(iri: &IRI<A>) -> bool {
+    [
+        "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "http://www.w3.org/2000/01/rdf-schema#",
+        "http://www.w3.org/2002/07/owl#",
+        "http://www.w3.org/2001/XMLSchema#",
+    ]
+    .iter()
+    .any(|ns| iri.as_ref().starts_with(ns))
 }
 
 pub fn parser_with_build<'b, A: ForIRI, AA: ForIndex<A>, O: RDFOntology<A, AA>, R: BufRead>(

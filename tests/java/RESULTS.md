@@ -46,9 +46,18 @@ assertion, or an unexpected pass fails CI; an unexpected pass requires removing
 the stale exception. `HERMIT_JAVA_STRICT=1` disables exceptions. The default test
 runner's accepted outcomes must not be read as the strict conformance pass count.
 
-The separate OWL WG runner checks all 359 scoped cases: **212 pass, 147 skip**.
-Of the skips, 143 have unconsumed logical RDF triples and four exceed the
+The separate OWL WG runner checks all 359 scoped cases: **350 pass, 9 skip**.
+Of the skips, five have unconsumed logical RDF triples and four exceed the
 15-second deadline (both checks for each of description-logic tests 208 and 209).
+The RDF reader now parses blank-node (anonymous) individuals, the OWL 1 DL
+compatibility patterns (Tables 5, 6, 14 and 18 of the OWL 2 mapping to RDF) and
+unqualified cardinalities on data properties, and the harness resolves entity
+kinds against the declarations of the bundled import closure (as OWLAPI does).
+This moved 138 former parse skips to verified passes (#52). The five remaining
+parse skips are three stray, unattached class expressions in a premise (WebOnt
+I5.26-001) and in conclusions (I5.26-010, I5.5-005), an `owl:oneOf` blank node without
+`rdf:type owl:Class` (owl2-rl-valid-oneof), and a blank node typed
+`owl:NamedIndividual` (owl2-rl-anonymous-individual).
 Every identity and outcome is checked against `tests/owl_wg/expected.tsv`.
 Missing cases, wrong answers, newly skipped cases, changed skip reasons and
 unexpectedly passing skips all fail the gate.
