@@ -98,7 +98,7 @@ two overrides are empty in the original Java source.
 | [#16](https://github.com/EBISPOT/hermit-rs/issues/16) | Subtract enumerated exclusions from mixed numeric value spaces (**resolved** with #15) | 1 |
 | [#17](https://github.com/EBISPOT/hermit-rs/issues/17) | Detect an empty plain-literal range after excluding its sole value (**resolved**) | 1 |
 | [#18](https://github.com/EBISPOT/hermit-rs/issues/18) | Infer data-property subsumption forced by singleton values (**resolved** with #22) | 3 |
-| [#19](https://github.com/EBISPOT/hermit-rs/issues/19) | Return only the most specific direct individual types | 3 |
+| [#19](https://github.com/EBISPOT/hermit-rs/issues/19) | Return only the most specific direct individual types (**resolved**) | 3 |
 | [#20](https://github.com/EBISPOT/hermit-rs/issues/20) | Correct property hierarchy axioms emitted by printHierarchies (**resolved** with #22) | 3 |
 | [#21](https://github.com/EBISPOT/hermit-rs/issues/21) | Avoid declaring built-in bottom classes in collapsed hierarchies | 3 |
 | [#22](https://github.com/EBISPOT/hermit-rs/issues/22) | Infer role subsumption implied by chains and existential restrictions (**resolved**) | 3 |

@@ -4055,10 +4055,10 @@ pub(crate) fn build_class_instance_manager_with_configuration(
         manager.read_off_types(iri, &labels, |concept_iri| node_for_iri(concept_iri));
         // Every named individual is a (known) instance of owl:Thing -- the top
         // node -- so its `getTypes` includes owl:Thing and `getInstances(Thing)`
-        // returns it. The `direct` filter still excludes top when a more-specific
-        // type is known. (Java seeds top only for individuals with no read-off
-        // type; seeding it for all is equivalent because top has the type node as
-        // a child, so a more-specific known type keeps it out of the direct set.)
+        // returns it. (Java seeds top only for individuals with no read-off
+        // type; seeding it for all is equivalent because the direct types are
+        // the minimal nodes of the types closed under ancestors, and a known type
+        // below top keeps top out of them.)
         manager.seed_top_known(hierarchy.top_node(), iri);
     }
 
@@ -5553,8 +5553,7 @@ pub fn get_types_with_configuration(
             }
         }
     } else {
-        // Up-closed set: all named classes of every (known) type node, plus
-        // owl:Thing. The saturated read-off already up-closes the known nodes.
+        // Up-closed set: all named classes of every type node, plus owl:Thing.
         for node in type_nodes {
             for class in hierarchy.node(node).equivalent_elements() {
                 result.insert(class.clone());
