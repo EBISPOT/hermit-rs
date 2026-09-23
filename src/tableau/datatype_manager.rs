@@ -1328,7 +1328,7 @@ impl Tableau {
 /// explicit list. Mirrors Java's `enumerateValueSpaceSubset()` (DatatypeChecker.java:505),
 /// which turns a value-space subset into explicit data values for the assignment
 /// search. Returns `Some(values)` (possibly empty ⇒ empty value space ⇒ clash) for
-/// length-bounded strings and singleton dateTime intervals, including distinct
+/// length-bounded strings and finite dateTime value spaces, including distinct
 /// timezone offsets and end-of-day values. Returns `None` for other families or
 /// intervals that cannot be enumerated, so the caller stays sound.
 fn materialize_finite_value_space<D>(
@@ -1349,28 +1349,10 @@ fn materialize_finite_value_space<D>(
         ranges.iter().any(|(r, _)| value_in_range(candidate, r) == Some(false))
     };
 
-    // A singleton dateTime interval has one value for every legal timezone,
-    // and a distinct end-of-day spelling wherever the local time is midnight.
+    // A finite dateTime value space: the values at its instants, less the
+    // excluded values (see `datetime_value_space`).
     if restrictions.iter().all(|r| is_datetime_datatype(r.datatype_uri())) {
-        let (with_tz, without_tz) = datetime_value_space(&restrictions);
-        let mut out = Vec::new();
-        for (interval, has_tz) in [(with_tz, true), (without_tz, false)] {
-            let Some(interval) = interval else { continue };
-            if interval.lower != interval.upper { return None; }
-            let millis = interval.lower;
-            let offsets = if has_tz { -840..=840 } else { 0..=0 };
-            for tz_offset in offsets {
-                for last_day in [false, true] {
-                    if last_day && (millis + i64::from(tz_offset) * 60_000).rem_euclid(86_400_000) != 0 { continue; }
-                    let value = DataValue::DateTime { millis, has_tz, last_day, tz_offset };
-                    if !excluded(&value) {
-                        out.push(value);
-                        if out.len() >= cap { return Some(out); }
-                    }
-                }
-            }
-        }
-        return Some(out);
+        return Some(datetime_value_space(ranges)?.values()?.take(cap).collect());
     }
 
     // Length-bounded xsd:string: distinct strings of the allowed lengths over a
@@ -2990,20 +2972,9 @@ fn negation_subsumes<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
     if has_pattern_or_langrange && pattern_langrange_value_space_is_empty(ranges) {
         return true;
     }
-    // DateTime interval lattice: mirrors DateTimeDatatypeHandler.conjoinWithDRNegation,
-    // which computes the complement of the negated DR's intervals and intersects with
-    // the positive intervals. Fires only when a faceted negated datetime DR is present.
-    let has_datetime_negation = ranges.iter().any(|(r, _)| match r {
-        LiteralDataRange::AtomicNegationDataRange(n) => matches!(
-            n.get_negated_data_range(),
-            crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                if is_datetime_datatype(dr.datatype_uri()) && dr.number_of_facet_restrictions() > 0
-        ),
-        _ => false,
-    });
-    if has_datetime_negation && datetime_negation_value_space_is_empty(ranges) {
-        return true;
-    }
+    // A faceted negated dateTime restriction is subtracted by
+    // `datetime_value_space`, which the dateTime emptiness check and
+    // `node_value_space` both read.
     base_datatype_negation_subsumes(ranges)
 }
 
@@ -4233,27 +4204,11 @@ fn conjunction_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
             }
         }
     }
-    // xsd:dateTime / xsd:dateTimeStamp: the ordering facets carve out an
-    // interval whose emptiness must be decided explicitly. The four ordering
-    // facets are kept as exact instants (BigInt fractions) above are not
-    // applicable here (datetime instants are not owl:real values), so build the
-    // datetime interval(s) directly and detect an empty intersection, mirroring
-    // DateTimeDatatypeHandler.getIntervalsFor + DateTimeInterval.isIntervalEmpty.
-    if kinds.contains("datetime") {
-        let datetime_restrictions: Vec<&DatatypeRestriction> = ranges
-            .iter()
-            .filter_map(|(r, _)| match r {
-                LiteralDataRange::DatatypeRestriction(r)
-                    if is_datetime_datatype(r.datatype_uri()) =>
-                {
-                    Some(r)
-                }
-                _ => None,
-            })
-            .collect();
-        if datetime_value_space_is_empty(&datetime_restrictions) {
-            return true;
-        }
+    // xsd:dateTime / xsd:dateTimeStamp: the value space `node_value_space`
+    // counts, so an empty interval, a negated interval or an excluded value can
+    // empty it.
+    if kinds.contains("datetime") && datetime_value_space(ranges).is_some_and(|space| space.is_empty()) {
+        return true;
     }
     // xsd:hexBinary / xsd:base64Binary: the value space `node_value_space`
     // counts, so a negated length restriction or an excluded value can empty it.
@@ -4303,6 +4258,11 @@ impl DtInterval {
         self.lower > self.upper
             || (self.lower == self.upper && (!self.lower_inclusive || !self.upper_inclusive))
     }
+    /// DateTimeInterval.containsDateTime, for an instant of the interval's type.
+    fn contains(&self, millis: i64) -> bool {
+        (self.lower < millis || (self.lower == millis && self.lower_inclusive))
+            && (millis < self.upper || (millis == self.upper && self.upper_inclusive))
+    }
     /// DateTimeInterval.intersectWith: take the more restrictive of each bound;
     /// `None` (empty) on an empty result.
     fn intersect(self, other: DtInterval) -> Option<DtInterval> {
@@ -4328,22 +4288,6 @@ impl DtInterval {
             Some(result)
         }
     }
-}
-
-/// Whether the conjunction of the given dateTime datatype restrictions has an
-/// empty value space, mirroring `DateTimeDatatypeHandler.getIntervalsFor`
-/// followed by `DateTimeValueSpaceSubset` over the two interval types: HermiT
-/// keeps a WITH_TIMEZONE interval (always) and a WITHOUT_TIMEZONE interval
-/// (only for `xsd:dateTime`, not `xsd:dateTimeStamp`, which mandates a
-/// timezone). Each min/max facet intersects both intervals; a timezone-less
-/// instant maps the opposite-type interval's bound by ±MAX_TZ_CORRECTION (made
-/// exclusive). The value space is empty iff *both* intervals collapse to empty.
-fn datetime_value_space_is_empty(restrictions: &[&DatatypeRestriction]) -> bool {
-    if restrictions.is_empty() {
-        return false;
-    }
-    let (with_tz, without_tz) = datetime_value_space(restrictions);
-    with_tz.is_none() && without_tz.is_none()
 }
 
 /// Complement of a single `DtInterval` for one timezone type: returns the (up to
@@ -4379,57 +4323,15 @@ fn complement_dt_interval(iv: Option<DtInterval>) -> Vec<DtInterval> {
     out
 }
 
-/// Whether a conjunction containing positive and negated dateTime DRs has an
-/// empty value space after applying `conjoinWithDRNegation` for each negated DR.
-/// Scopes out (returns false) when any value-constraining range is not a
-/// datetime DR — never a false clash. Mirrors `length_value_space_is_empty`.
-fn datetime_negation_value_space_is_empty<D>(ranges: &[(LiteralDataRange, D)]) -> bool {
-    let mut pos_drs: Vec<&DatatypeRestriction> = Vec::new();
-    let mut neg_drs: Vec<&DatatypeRestriction> = Vec::new();
-    for (r, _) in ranges {
-        match r {
-            LiteralDataRange::DatatypeRestriction(dr) if is_datetime_datatype(dr.datatype_uri()) => {
-                pos_drs.push(dr);
-            }
-            LiteralDataRange::AtomicNegationDataRange(n) => {
-                match n.get_negated_data_range() {
-                    crate::model::AtomicDataRange::DatatypeRestriction(dr)
-                        if is_datetime_datatype(dr.datatype_uri()) =>
-                    {
-                        neg_drs.push(dr);
-                    }
-                    _ => return false, // non-datetime negation: scope out
-                }
-            }
-            r if is_value_non_constraining_helper(r) => {}
-            _ => return false, // non-datetime positive range: scope out
-        }
-    }
-    if pos_drs.is_empty() || neg_drs.is_empty() {
-        return false;
-    }
-    // Build the positive space: `(space_wtz, space_notz)` after intersecting all positive DRs.
-    let (pos_wtz, pos_notz) = datetime_value_space(&pos_drs);
-    let mut space_wtz: Vec<DtInterval> = pos_wtz.into_iter().collect();
-    let mut space_notz: Vec<DtInterval> = pos_notz.into_iter().collect();
-    // For each negated DR apply conjoinWithDRNegation: replace each surviving interval
-    // by its intersection with the complement of the negated DR's interval.
-    for neg_dr in &neg_drs {
-        let (neg_wtz, neg_notz) = datetime_value_space(std::slice::from_ref(neg_dr));
-        let comp_wtz = complement_dt_interval(neg_wtz);
-        let comp_notz = complement_dt_interval(neg_notz);
-        space_wtz = space_wtz.iter().flat_map(|old| comp_wtz.iter().filter_map(|c| old.intersect(*c))).collect();
-        space_notz = space_notz.iter().flat_map(|old| comp_notz.iter().filter_map(|c| old.intersect(*c))).collect();
-    }
-    space_wtz.is_empty() && space_notz.is_empty()
-}
-
 /// Builds the two dateTime intervals (WITH_TIMEZONE, WITHOUT_TIMEZONE) for the
-/// given restrictions, each `None` when that interval type collapses to empty.
-/// Shared by the emptiness test and the single-instant cardinality computation.
-fn datetime_value_space(
+/// conjunction of the given restrictions, each `None` when that interval type
+/// collapses to empty (`DateTimeDatatypeHandler.getIntervalsFor` and
+/// `conjoinWithDR`). `None` when a facet is not an ordering facet with a
+/// dateTime value; HermiT rejects such a restriction
+/// (`validateDatatypeRestriction`).
+fn datetime_intervals(
     restrictions: &[&DatatypeRestriction],
-) -> (Option<DtInterval>, Option<DtInterval>) {
+) -> Option<(Option<DtInterval>, Option<DtInterval>)> {
     // INTERVAL_ALL_WITH_TIMEZONE is always present.
     let mut with_tz: Option<DtInterval> = Some(DtInterval::all());
     // INTERVAL_ALL_WITHOUT_TIMEZONE is present only when no restriction is
@@ -4445,19 +4347,15 @@ fn datetime_value_space(
 
     for r in restrictions {
         for i in 0..r.number_of_facet_restrictions() {
-            let Some(facet) = r.facet_uri(i).strip_prefix(XSD) else {
-                continue;
-            };
+            let facet = r.facet_uri(i).strip_prefix(XSD)?;
             let inclusive = match facet {
                 "minInclusive" | "maxInclusive" => true,
                 "minExclusive" | "maxExclusive" => false,
-                _ => continue,
+                _ => return None,
             };
             let is_min = matches!(facet, "minInclusive" | "minExclusive");
-            // A facet value we cannot parse leaves the intervals unchanged
-            // (undecided ⇒ never a false clash).
             let Some(DataValue::DateTime { millis, has_tz, .. }) = parse_value(r.facet_value(i)) else {
-                continue;
+                return None;
             };
             // For each interval type, build the half-bounded interval the facet
             // implies and intersect it in. When the facet bound's timezone
@@ -4495,164 +4393,164 @@ fn datetime_value_space(
             }
         }
     }
-    (with_tz, without_tz)
+    Some((with_tz, without_tz))
 }
 
-/// The exact number of distinct dateTime literals that map to a single timeline
-/// instant `seconds` (UTC-normalized), for the given interval type. Mirrors
-/// `DateTimeInterval.subtractSizeFrom` for the singleton (`lower == upper`) case:
-///   * WITHOUT_TIMEZONE: one value, plus one more when the instant is a "last day
-///     instant" (midnight), since `24:00:00` of the previous day and `00:00:00`
-///     of this day denote the same point but are distinct literals;
-///   * WITH_TIMEZONE: 840 + 840 + 1 = 1681 base values (timezone offsets
-///     hh:mm with 0 ≤ hh < 14, 0 ≤ mm < 60, or 14:00, on each side, minus the
-///     doubly-counted 00:00), plus up to two more last-day-instant variants when
-///     the instant's seconds are zero.
-/// `millis` is the timeline instant as an EXACT integer count of MILLISECONDS on
-/// the UNIX epoch (matching `DataValue::DateTime.millis`). Java's
-/// `m_timeOnTimeline` is also a `long` in milliseconds, but on a YEAR-1 origin;
-/// the conversion below realigns the origin before the sign-sensitive arithmetic.
-fn datetime_instant_cardinality(millis: i64, has_timezone: bool) -> u128 {
-    // Java works in integer milliseconds on a YEAR-1 origin timeline
-    // (DateTime.getTimeOnTimelineRaw, DateTime.java:251-261): the instant of
-    // 0001-01-01T00:00:00 is 0, and earlier (BCE) instants are negative. Our
-    // `millis` is a UTC-normalized instant on the UNIX epoch (1970-01-01),
-    // because `days_from_civil` applies the -719468 offset. The two origins
-    // differ by a whole number of days, which does not affect the day/minute
-    // modular predicates (isLastDayInstant, secondsAreZero) — but it DOES affect
-    // the `m_lowerBound>=0` sign branch and `getMinutesInDay`
-    // (DateTimeInterval.java:113-133, DateTime.java:284-286): a date in
-    // [year 1, 1970) has a POSITIVE year-1-origin time but a NEGATIVE unix time.
-    // So convert to the year-1 origin before any sign-sensitive computation.
-    //
-    // The unix epoch 1970-01-01 is at year-1-origin day daysToYearStart(1970) =
-    // 365*1969 + 1969/400 - 1969/100 + 1969/4 = 719162 days
-    // (DateTime.daysToYearStart, DateTime.java:262-265).
-    const YEAR1_ORIGIN_OFFSET_DAYS: i64 = 719162;
-    let ms_per_minute: i64 = 1000 * 60;
-    let ms_per_day: i64 = ms_per_minute * 60 * 24;
-    let time_on_timeline: i64 = millis + YEAR1_ORIGIN_OFFSET_DAYS * ms_per_day;
-    // DateTime.isLastDayInstant.
-    let is_last_day_instant = time_on_timeline.rem_euclid(ms_per_day) == 0;
-    // DateTime.secondsAreZero.
-    let seconds_are_zero = time_on_timeline.rem_euclid(ms_per_minute) == 0;
-    // DateTime.getMinutesInDay: (int)((t / 60000) % 1440) — Java truncating
-    // division and `%`, which keep the sign of the dividend.
-    let minutes_in_day: i64 = (time_on_timeline / ms_per_minute) % (24 * 60);
+// ===========================================================================
+// xsd:dateTime / xsd:dateTimeStamp value space (port of
+// org.semanticweb.HermiT.datatypes.datetime.{DateTimeInterval,
+// DateTimeValueSpaceSubset} and DateTimeDatatypeHandler.{getIntervalsFor,
+// conjoinWithDR,conjoinWithDRNegation}, less DVariable's forbidden values).
+// The emptiness check, `node_value_space` and the values enumerated for the
+// distinct-value assignment all read this one value space, so they agree.
+// ===========================================================================
 
-    if !has_timezone {
-        // WITHOUT_TIMEZONE: one value, +1 for a last-day (midnight) instant.
-        let mut n: u128 = 1;
-        if is_last_day_instant {
-            n += 1;
+/// The dateTime value space of a conjunction of data ranges. A dateTime value
+/// either has a timezone offset or has none. Values of the two kinds are never
+/// equal, and each kind is ordered by its instant on the timeline, so the value
+/// space is a set of disjoint intervals of instants per kind.
+struct DateTimeValueSpace {
+    /// The remaining intervals, each with its kind (`true`: with a timezone
+    /// offset). Intervals of one kind are disjoint.
+    intervals: Vec<(DtInterval, bool)>,
+    /// The distinct excluded values that lie in the intervals.
+    excluded: Vec<DataValue>,
+}
+
+impl DateTimeValueSpace {
+    /// The values of the space, or `None` when it is infinite: an interval that
+    /// spans two instants holds infinitely many values, because seconds are
+    /// decimal numbers (`DateTimeInterval.subtractSizeFrom`).
+    fn values(&self) -> Option<impl Iterator<Item = DataValue> + '_> {
+        if self.intervals.iter().any(|(interval, _)| interval.lower != interval.upper) {
+            return None;
         }
-        n
-    } else {
-        // WITH_TIMEZONE: 840 + 840 + 1 base values, +extras at last-day instants.
-        let mut n: u128 = 840 + 840 + 1;
-        if seconds_are_zero {
-            if time_on_timeline >= 0 {
-                let m = minutes_in_day; // in [0, 1440)
-                if (0..=840).contains(&m) {
-                    n += 1;
-                }
-                if (1440 - 840) <= m {
-                    n += 1;
-                }
-            } else {
-                let m = minutes_in_day; // in (-1440, 0]
-                if (-840..=0).contains(&m) {
-                    n += 1;
-                }
-                if m <= (-1440 + 840) {
-                    n += 1;
-                }
-            }
-        }
-        n
+        Some(
+            self.intervals
+                .iter()
+                .flat_map(|&(interval, has_tz)| datetime_values_at(interval.lower, has_tz))
+                .filter(|value| !self.excluded.iter().any(|e| values_equal(e, value))),
+        )
+    }
+
+    /// Whether no value remains.
+    fn is_empty(&self) -> bool {
+        self.values().is_some_and(|mut values| values.next().is_none())
+    }
+
+    /// The node value space: its exact cardinality, with the values when there
+    /// are at most `MAX_ENUMERATED_VALUES` of them.
+    fn node_value_space(&self) -> NodeValueSpace {
+        let Some(values) = self.values() else {
+            return NodeValueSpace::Infinite;
+        };
+        let count = values.count() as u128;
+        let values = if count <= MAX_ENUMERATED_VALUES as u128 {
+            self.values().map(Iterator::collect)
+        } else {
+            None
+        };
+        NodeValueSpace::Finite { count, values }
     }
 }
 
-/// Counts the distinct excluded dateTime literals that map to the single
-/// timeline instant `instant_seconds` within the given timezone variant
-/// (`has_timezone`), so the single-instant cardinality can be reduced exactly.
-/// Mirrors HermiT subtracting the negated points from
-/// `DateTimeValueSpaceSubset.hasCardinalityAtLeast` (the post-
-/// `conjoinWithDRNegation` interval list no longer covers the excluded points).
+/// The distinct values at the instant `millis` of one kind, as
+/// `DateTimeInterval.enumerateDateTimes` lists them. Without a timezone offset
+/// there is one value; with one there is a value for each offset from -14:00 to
+/// +14:00, 1681 in all. Each value whose local time is midnight has a second
+/// spelling, `24:00:00` of the previous day, which `DateTime.equals` tells apart
+/// by its last-day flag, so it is listed too. (XSD 1.1 maps both spellings to
+/// one value, Part 2 §3.3.7.2 and §E.3.5; `values_equal` keeps HermiT's view.)
+fn datetime_values_at(millis: i64, has_tz: bool) -> impl Iterator<Item = DataValue> {
+    let offsets = if has_tz { -840..=840 } else { 0..=0 };
+    offsets.flat_map(move |tz_offset: i32| {
+        let midnight = (millis + i64::from(tz_offset) * 60_000).rem_euclid(86_400_000) == 0;
+        [false, true]
+            .into_iter()
+            .filter(move |&last_day| !last_day || midnight)
+            .map(move |last_day| DataValue::DateTime { millis, has_tz, last_day, tz_offset })
+    })
+}
+
+/// The dateTime value space of a conjunction of data ranges, mirroring
+/// `DVariable.prepareAsValueSpaceSubset` over a `DateTimeValueSpaceSubset`: the
+/// intervals of the positive dateTime restrictions, less the intervals of each
+/// negated dateTime restriction of the same kind (`conjoinWithDRNegation`), less
+/// the excluded values (members of negated `DataOneOf` ranges) that lie in what
+/// remains (`m_forbiddenDataValues`). `None` when there is no positive dateTime
+/// restriction or when a facet cannot be read.
 ///
-/// Returns `None` when an exclusion cannot be resolved to a finite set of
-/// dateTime points at this instant/variant — a negated dateTime *interval* (can
-/// remove a sub-range), or an unparseable enumeration member — so the caller
-/// falls back to the exclusion-free upper bound (sound-leaning). Each removed
-/// value is counted by value-space equality `(millis, last_day, tz_offset)`; distinct
-/// excluded literals that collapse to the same model value count once, which can
-/// only UNDER-count removals ⇒ the returned cardinality is an upper bound on the
-/// distinct values ⇒ never a false clash.
-fn count_excluded_datetimes_at_instant<D>(
-    ranges: &[(LiteralDataRange, D)],
-    instant_millis: i64,
-    has_timezone: bool,
-) -> Option<u128> {
-    let mut removed: Vec<DataValue> = Vec::new();
-    let mut consider = |v: DataValue| -> bool {
-        // Only a dateTime value at this exact instant with the matching timezone
-        // presence removes a value from this variant's single-instant count.
-        // De-duplication keys on the full value identity (millis, last_day,
-        // timezone offset), mirroring Java `DateTime.equals`: two excluded
-        // literals that share an instant but differ in the last-day flag or the
-        // offset are distinct values and each remove a point.
-        if let DataValue::DateTime { millis, has_tz, last_day, tz_offset } = v {
-            if millis == instant_millis && has_tz == has_timezone {
-                let value = DataValue::DateTime { millis, has_tz, last_day, tz_offset };
-                if !removed.iter().any(|e| values_equal(e, &value)) {
-                    removed.push(value);
-                }
-                return true;
-            }
-        }
-        false
-    };
-    for (r, _) in ranges {
-        match r {
-            // The positive dateTime datatype restriction(s) define the interval;
-            // they remove nothing here.
+/// Any other positive range is left to the callers; it can only shrink the
+/// space. A negated restriction of another datatype removes nothing, since no
+/// dateTime value belongs to it. HermiT skips it, and skips internal datatypes
+/// and restrictions of unsupported datatypes, positive or negated.
+fn datetime_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<DateTimeValueSpace> {
+    let mut positive: Vec<&DatatypeRestriction> = Vec::new();
+    let mut negative: Vec<&DatatypeRestriction> = Vec::new();
+    let mut forbidden: Vec<DataValue> = Vec::new();
+    for (range, _) in ranges {
+        match range {
             LiteralDataRange::DatatypeRestriction(dr) if is_datetime_datatype(dr.datatype_uri()) => {
+                positive.push(dr);
             }
+            LiteralDataRange::DatatypeRestriction(_)
+            | LiteralDataRange::ConstantEnumeration(_)
+            | LiteralDataRange::InternalDatatype(_) => {}
             LiteralDataRange::AtomicNegationDataRange(n) => match n.get_negated_data_range() {
-                // A negated enumeration removes its (finitely many) members.
-                crate::model::AtomicDataRange::ConstantEnumeration(e) => {
-                    for i in 0..e.number_of_constants() {
-                        match parse_value(e.constant(i)) {
-                            // A dateTime member: count it if it hits this instant.
-                            Some(v @ DataValue::DateTime { .. }) => {
-                                consider(v);
-                            }
-                            // A non-dateTime member removes nothing from the
-                            // dateTime value space.
-                            Some(_) => {}
-                            // An unparseable member is undecidable ⇒ bail.
-                            None => return None,
-                        }
-                    }
-                }
-                // A negated dateTime DR removes a (possibly continuous) interval,
-                // not a finite point set ⇒ cannot resolve exactly here.
                 crate::model::AtomicDataRange::DatatypeRestriction(dr)
                     if is_datetime_datatype(dr.datatype_uri()) =>
                 {
-                    return None
+                    negative.push(dr);
                 }
-                // A negated non-dateTime datatype removes nothing from dateTime.
+                crate::model::AtomicDataRange::ConstantEnumeration(e) => {
+                    for i in 0..e.number_of_constants() {
+                        if let Some(value @ DataValue::DateTime { .. }) = parse_value(e.constant(i)) {
+                            forbidden.push(value);
+                        }
+                    }
+                }
                 _ => {}
             },
-            // Helper ranges remove nothing.
-            r if is_value_non_constraining_helper(r) => {}
-            // Anything else (e.g. a positive enumeration) is handled before this
-            // branch is reached; be conservative.
-            _ => return None,
         }
     }
-    Some(removed.len() as u128)
+    if positive.is_empty() {
+        return None;
+    }
+    // Intersect the positive restrictions (conjoinWithDR).
+    let (with_tz, without_tz) = datetime_intervals(&positive)?;
+    let mut intervals: Vec<(DtInterval, bool)> = [(with_tz, true), (without_tz, false)]
+        .into_iter()
+        .filter_map(|(interval, has_tz)| Some((interval?, has_tz)))
+        .collect();
+    // Subtract each negated restriction (conjoinWithDRNegation): keep the parts
+    // of every interval that lie below or above the negated restriction's
+    // interval of the same kind. An empty or absent negated interval (a
+    // dateTimeStamp has no values without an offset) removes nothing.
+    for dr in negative {
+        let (with_tz, without_tz) = datetime_intervals(&[dr])?;
+        let (with_tz, without_tz) = (complement_dt_interval(with_tz), complement_dt_interval(without_tz));
+        let mut rest = Vec::with_capacity(intervals.len() * 2);
+        for (interval, has_tz) in intervals {
+            let complement = if has_tz { &with_tz } else { &without_tz };
+            rest.extend(complement.iter().filter_map(|c| interval.intersect(*c)).map(|i| (i, has_tz)));
+        }
+        intervals = rest;
+    }
+    // The excluded values that lie in the remaining intervals, as
+    // DVariable.m_forbiddenDataValues keeps them.
+    let mut excluded: Vec<DataValue> = Vec::new();
+    for value in forbidden {
+        let DataValue::DateTime { millis, has_tz, .. } = value else {
+            continue;
+        };
+        let inside = intervals
+            .iter()
+            .any(|&(interval, kind)| kind == has_tz && interval.contains(millis));
+        if inside && !excluded.iter().any(|e| values_equal(e, &value)) {
+            excluded.push(value);
+        }
+    }
+    Some(DateTimeValueSpace { intervals, excluded })
 }
 
 fn accumulate_numeric_bound(
@@ -4748,10 +4646,13 @@ fn node_value_spaces_equal(a: Option<&NodeValueSpace>, b: Option<&NodeValueSpace
                 return false;
             }
             match (va, vb) {
+                // Equal ranges enumerate their values in the same order, so
+                // compare in order first and fall back to set comparison.
                 (Some(va), Some(vb)) => {
                     va.len() == vb.len()
-                        && va.iter().all(|x| vb.iter().any(|y| values_equal(x, y)))
-                        && vb.iter().all(|y| va.iter().any(|x| values_equal(x, y)))
+                        && (va.iter().zip(vb).all(|(x, y)| values_equal(x, y))
+                            || (va.iter().all(|x| vb.iter().any(|y| values_equal(x, y)))
+                                && vb.iter().all(|y| va.iter().any(|x| values_equal(x, y)))))
                 }
                 // Same (huge) cardinality but unmaterialized: treat as equal.
                 _ => true,
@@ -5241,48 +5142,14 @@ fn node_value_space<D>(
         return NodeValueSpace::Infinite;
     }
 
-    // xsd:dateTime / xsd:dateTimeStamp: a MULTI-instant (lower < upper) interval
-    // is dense (seconds are real numbers) ⇒ infinite cardinality. But a
-    // single-instant (collapsed, lower == upper) interval is actually FINITE:
-    // only finitely many distinct literals map to one point on the timeline (the
-    // timezone-present-vs-absent corner). HermiT counts these exactly in
-    // DateTimeInterval.subtractSizeFrom / DateTimeValueSpaceSubset.
-    // hasCardinalityAtLeast; we mirror that so an at-least/min cardinality over a
-    // single-instant range is decided, not mis-decided as infinite.
+    // xsd:dateTime / xsd:dateTimeStamp: the intervals left after the negated
+    // dateTime restrictions are subtracted, less the excluded values. An interval
+    // that spans two instants is dense, hence infinite; a single instant holds
+    // finitely many values. Counted exactly and enumerated when small (see
+    // `datetime_value_space`).
     if restrictions.iter().all(|r| is_datetime_datatype(r.datatype_uri())) {
-        let (with_tz, without_tz) = datetime_value_space(&restrictions);
-        if with_tz.is_none() && without_tz.is_none() {
-            return NodeValueSpace::Finite { count: 0, values: Some(Vec::new()) };
-        }
-        // If either surviving interval spans more than a single instant, the
-        // value space is dense ⇒ infinite (subtractSizeFrom returns 0 there).
-        let is_point = |i: &Option<DtInterval>| i.is_none_or(|iv| iv.lower == iv.upper);
-        if is_point(&with_tz) && is_point(&without_tz) {
-            // Per tz variant: the exclusion-free instant cardinality, minus the
-            // number of distinct excluded literals that map to this instant within
-            // that variant. Mirrors DateTimeValueSpaceSubset.hasCardinalityAtLeast
-            // over the (collapsed) interval(s) after conjoinWithDRNegation has
-            // removed the excluded points (DateTimeInterval.subtractSizeFrom).
-            // `None` from the excluded-count helper means an exclusion we cannot
-            // resolve exactly (e.g. an unparseable member, or a negated *interval*
-            // that could remove a sub-range): fall back to the exclusion-free
-            // upper bound, which is sound-leaning (can only miss a clash).
-            let mut count: u128 = 0;
-            for (iv, has_tz) in [(with_tz, true), (without_tz, false)] {
-                if let Some(iv) = iv {
-                    let base = datetime_instant_cardinality(iv.lower, has_tz);
-                    let net = match count_excluded_datetimes_at_instant(ranges, iv.lower, has_tz) {
-                        Some(removed) => base.saturating_sub(removed),
-                        // Unresolved exclusion ⇒ fall back to the exclusion-free
-                        // upper bound for this variant (sound-leaning).
-                        None => base,
-                    };
-                    count = count.saturating_add(net);
-                }
-            }
-            return NodeValueSpace::Finite { count, values: None };
-        }
-        return NodeValueSpace::Infinite;
+        return datetime_value_space(ranges)
+            .map_or(NodeValueSpace::Infinite, |space| space.node_value_space());
     }
 
     // xsd:hexBinary / xsd:base64Binary: the length windows left after the negated
@@ -8536,23 +8403,24 @@ mod tests {
         // cases. A noon instant (seconds==0, not midnight): WITHOUT_TIMEZONE = 1
         // (not last-day), WITH_TIMEZONE = 1681 base + last-day extras when
         // secondsAreZero. 12:30:00 -> minutesInDay = 12*60+30 = 750.
+        let count = |millis, has_tz| datetime_values_at(millis, has_tz).count();
         let noon = datetime_millis("2020-06-15T12:30:00Z");
-        assert_eq!(datetime_instant_cardinality(noon, false), 1);
+        assert_eq!(count(noon, false), 1);
         // minutesInDay = 750: in [0,840] (+1) AND 1440-840=600 <= 750 (+1). So
         // 1681 + 2 = 1683.
-        assert_eq!(datetime_instant_cardinality(noon, true), 1683);
+        assert_eq!(count(noon, true), 1683);
 
         // A midnight instant is a last-day instant: WITHOUT_TIMEZONE = 2.
         let midnight = datetime_millis("2020-06-15T00:00:00Z");
-        assert_eq!(datetime_instant_cardinality(midnight, false), 2);
+        assert_eq!(count(midnight, false), 2);
         // minutesInDay = 0 -> in [0,840] (+1) and 0 < 600 so not in [600,1440)
         // (+0) -> 1681 + 1 = 1682.
-        assert_eq!(datetime_instant_cardinality(midnight, true), 1682);
+        assert_eq!(count(midnight, true), 1682);
 
         // An instant with non-zero seconds: no WITH-tz last-day extras.
         let odd = datetime_millis("2020-06-15T12:30:30Z");
-        assert_eq!(datetime_instant_cardinality(odd, false), 1);
-        assert_eq!(datetime_instant_cardinality(odd, true), 1681);
+        assert_eq!(count(odd, false), 1);
+        assert_eq!(count(odd, true), 1681);
     }
 
     /// A dateTime constant.
@@ -8687,6 +8555,168 @@ mod tests {
                 ],
             ),
             NodeValueSpace::Finite { count: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn datetime_value_spaces_subtract_negated_intervals_and_excluded_values() {
+        // Issue #14: a negated dateTime restriction removes its interval of each
+        // kind of value (with a timezone offset, without one) from the value space,
+        // and an excluded value removes itself. A bound of the other kind widens by
+        // the 14-hour offset window and becomes exclusive: a value within 14 hours
+        // of it is neither smaller nor larger than it (XSD 1.1 Part 2 §D.2.1,
+        // OWL 2 Structural Specification §4.7). Emptiness, cardinality and the
+        // enumerated values all see the subtraction.
+        let not = |range: LiteralDataRange| match range {
+            LiteralDataRange::DatatypeRestriction(dr) => dr.get_negation(),
+            _ => unreachable!(),
+        };
+        let closed = |from: &str, to: &str| {
+            datetime_restriction(false, &[("minInclusive", from), ("maxInclusive", to)])
+        };
+        let open = |from: &str, to: &str| {
+            datetime_restriction(false, &[("minExclusive", from), ("maxExclusive", to)])
+        };
+        // The remaining intervals as (lower, upper, has_tz).
+        let intervals = |ranges: &[(LiteralDataRange, ())]| -> Vec<(i64, i64, bool)> {
+            super::datetime_value_space(ranges)
+                .unwrap()
+                .intervals
+                .iter()
+                .map(|&(interval, has_tz)| (interval.lower, interval.upper, has_tz))
+                .collect()
+        };
+        // The count, checked against the enumerated values and the emptiness test.
+        let count = |ranges: &[(LiteralDataRange, ())]| match node_value_space(None, ranges) {
+            NodeValueSpace::Finite { count, values } => {
+                let values = values
+                    .or_else(|| materialize_finite_value_space(ranges, usize::MAX))
+                    .unwrap();
+                assert_eq!(values.len() as u128, count);
+                assert_eq!(conjunction_is_empty(ranges), count == 0);
+                Some(count)
+            }
+            NodeValueSpace::Infinite => {
+                assert!(!conjunction_is_empty(ranges));
+                None
+            }
+        };
+        let hours = |h: i64| h * 3_600_000;
+
+        // The issue #14 range: the closed interval between two midnights without
+        // a timezone offset, less its interior. Only its two bounds remain, as
+        // values without an offset. A value with an offset lies in the closed
+        // interval only when it is more than 14 hours inside it, and then it lies
+        // in the interior too.
+        let (a, b) = ("1965-04-15T00:00:00", "1965-05-01T00:00:00");
+        let bounds_only = [(closed(a, b), ()), (not(open(a, b)), ())];
+        let (a_ms, b_ms) = (datetime_millis(a), datetime_millis(b));
+        assert_eq!(intervals(&bounds_only), [(a_ms, a_ms, false), (b_ms, b_ms, false)]);
+        let at_bounds =
+            datetime_values_at(a_ms, false).chain(datetime_values_at(b_ms, false)).count();
+        assert_eq!(count(&bounds_only), Some(at_bounds as u128));
+        let space = || node_value_space(None, &bounds_only);
+        let fit: Vec<NodeValueSpace> = (0..2).map(|_| space()).collect();
+        assert!(!component_is_unsatisfiable(&fit.iter().collect::<Vec<_>>(), &clique(2), &no_specifics(2), &[]));
+        let over: Vec<NodeValueSpace> = (0..5).map(|_| space()).collect();
+        assert!(component_is_unsatisfiable(&over.iter().collect::<Vec<_>>(), &clique(5), &no_specifics(5), &[]));
+
+        // Away from midnight each bound is one value. An excluded value counts
+        // once, and only when it is in the space.
+        let (c, d) = ("2020-06-15T12:30:30", "2020-06-20T12:30:30");
+        let (cz, dz) = ("2020-06-15T12:30:30Z", "2020-06-20T12:30:30Z");
+        let two = [(closed(c, d), ()), (not(open(c, d)), ())];
+        assert_eq!(count(&two), Some(2));
+        let mut one = two.to_vec();
+        one.push((neg_datetime_enum(&[c, "2020-06-15T12:30:30.000", cz, "2020-06-17T12:30:30"]), ()));
+        assert_eq!(count(&one), Some(1));
+        let string_c = crate::model::ConstantEnumeration::create(vec![Constant::create(c, format!("{XSD}string"))]);
+        let mut still_two = two.to_vec();
+        still_two.push((string_c.get_negation(), ()));
+        assert_eq!(count(&still_two), Some(2));
+        let mut none = two.to_vec();
+        none.push((neg_datetime_enum(&[c, d]), ()));
+        assert_eq!(count(&none), Some(0));
+
+        // A bound stays only where the subtracted interval leaves it out.
+        let from_c = datetime_restriction(false, &[("minInclusive", c), ("maxExclusive", d)]);
+        let to_d = datetime_restriction(false, &[("minExclusive", c), ("maxInclusive", d)]);
+        let (c_ms, d_ms) = (datetime_millis(c), datetime_millis(d));
+        assert_eq!(intervals(&[(closed(c, d), ()), (not(from_c), ())]), [(d_ms, d_ms, false)]);
+        assert_eq!(intervals(&[(closed(c, d), ()), (not(to_d), ())]), [(c_ms, c_ms, false)]);
+        assert_eq!(count(&[(closed(c, d), ()), (not(closed(c, d)), ())]), Some(0));
+        assert_eq!(count(&[(open(c, d), ()), (not(open(c, d)), ())]), Some(0));
+
+        // Subtracting an interval with offsets from one without: a value without an
+        // offset is in the subtracted interval only when it is more than 14 hours
+        // inside its bounds. The values within 14 hours of either bound remain,
+        // infinitely many of them, and so do the instants exactly 14 hours in.
+        let mixed = [(closed(c, d), ()), (not(open(cz, dz)), ())];
+        assert_eq!(
+            intervals(&mixed),
+            [(c_ms, c_ms + hours(14), false), (d_ms - hours(14), d_ms, false)]
+        );
+        assert_eq!(count(&mixed), None);
+        // And the other way round: the values with an offset that remain are
+        // those within 14 hours of the bounds without one.
+        let mixed_back = [(closed(cz, dz), ()), (not(open(c, d)), ())];
+        assert_eq!(
+            intervals(&mixed_back),
+            [(c_ms, c_ms + hours(14), true), (d_ms - hours(14), d_ms, true)]
+        );
+        assert_eq!(count(&mixed_back), None);
+
+        // With offsets on both sides only the two bounds remain, each holding one
+        // value per offset from -14:00 to +14:00. Two spellings of one value are
+        // one exclusion; the same instant at another offset is another value.
+        let with_offsets = [(closed(cz, dz), ()), (not(open(cz, dz)), ())];
+        assert_eq!(count(&with_offsets), Some(2 * 1681));
+        let mut fewer = with_offsets.to_vec();
+        fewer.push((
+            neg_datetime_enum(&[cz, "2020-06-15T12:30:30+00:00", "2020-06-15T14:30:30+02:00", c]),
+            (),
+        ));
+        assert_eq!(count(&fewer), Some(2 * 1681 - 2));
+
+        // xsd:dateTimeStamp holds only values with an offset, so subtracting it
+        // keeps every value without one; as the positive range it has none.
+        let stamp_open = datetime_restriction(true, &[("minExclusive", cz), ("maxExclusive", dz)]);
+        assert_eq!(count(&[(closed(cz, dz), ()), (not(stamp_open), ())]), None);
+        let stamp_closed = datetime_restriction(true, &[("minInclusive", cz), ("maxInclusive", dz)]);
+        assert_eq!(count(&[(stamp_closed, ()), (not(open(cz, dz)), ())]), Some(2 * 1681));
+
+        // xsd:dateTime itself removes everything; another datatype removes nothing.
+        assert_eq!(count(&[(closed(c, d), ()), (not(datetime_restriction(false, &[])), ())]), Some(0));
+        let not_integer =
+            crate::model::DatatypeRestriction::create(format!("{XSD}integer"), vec![], vec![])
+                .get_negation();
+        assert_eq!(count(&[(closed(c, c), ()), (not_integer, ())]), Some(1));
+        // A positive range of another datatype can only shrink the space, so an
+        // empty dateTime interval stays empty beside it.
+        let xml_literal = LiteralDataRange::DatatypeRestriction(
+            crate::model::DatatypeRestriction::create(format!("{RDF}XMLLiteral"), vec![], vec![]),
+        );
+        assert!(conjunction_is_empty(&[(closed(d, c), ()), (xml_literal, ())]));
+
+        // Cardinality and assignment agree: two distinct nodes fit in {c, d} but
+        // three do not, and a node can differ from c but not from both c and d.
+        let space = || node_value_space(None, &two);
+        let constant =
+            |lexical: &str| node_value_space::<()>(parse_value(&datetime_const(lexical)).as_ref(), &[]);
+        assert!(!component_is_unsatisfiable(&[&space(), &space()], &clique(2), &no_specifics(2), &[]));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &space(), &space()],
+            &clique(3),
+            &no_specifics(3),
+            &[],
+        ));
+        let star = [vec![1, 2], vec![0], vec![0]];
+        assert!(!component_is_unsatisfiable(&[&space(), &constant(c)], &clique(2), &no_specifics(2), &[]));
+        assert!(component_is_unsatisfiable(
+            &[&space(), &constant(c), &constant(d)],
+            &star,
+            &no_specifics(3),
+            &[],
         ));
     }
 
