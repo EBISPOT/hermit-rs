@@ -879,6 +879,10 @@ impl Tableau {
         if data_nodes.is_empty() {
             return false;
         }
+        // Every component, and every clique, has at most this many nodes, so a
+        // value count capped one above decides "more values than nodes"
+        // exactly (`node_value_space_at_most`).
+        let value_count_cap = data_nodes.len() as u128 + 1;
         let is_data = |n: NodeId| {
             self.nodes[n].is_active()
                 && matches!(
@@ -959,7 +963,7 @@ impl Tableau {
             }
             let ranges = slf.node_data_ranges(n);
             let constant = slf.nodes[n].constant_value().and_then(parse_value);
-            let vs = node_value_space(constant.as_ref(), &ranges);
+            let vs = node_value_space_at_most(constant.as_ref(), &ranges, value_count_cap);
             ranges_by_node.insert(n, ranges);
             value_space.insert(n, vs);
         };
@@ -3816,18 +3820,20 @@ impl StringSubset {
         }
     }
 
-    /// The number of values, or `None` when there are infinitely many
+    /// The number of values capped at `cap` (exact below it, `cap` when there
+    /// are at least `cap`), or `None` when there are infinitely many
     /// (`hasCardinalityAtLeast`). As in `RDFPlainLiteralLengthInterval.subtractSizeFrom`,
     /// a window of tagged pairs, or one that reaches length 4, counts as
     /// infinite, and one of strings up to length 3 is counted by
     /// `LengthInterval::size_of`.
-    fn count(&self) -> Option<u128> {
+    fn count(&self, cap: u128) -> Option<u128> {
         match self {
             StringSubset::Lengths(windows) => windows
                 .iter()
-                .try_fold(0u128, |total, window| Some(total.saturating_add(window.size_of()?))),
+                .try_fold(0u128, |total, window| Some(total.saturating_add(window.size_of()?).min(cap))),
             StringSubset::Terms(terms) => terms.iter().try_fold(0u128, |total, term| {
-                Some(total.saturating_add(term.automaton.cardinality_within(&term.windows)?))
+                let count = term.automaton.cardinality_within_capped(&term.windows, cap)?;
+                Some(total.saturating_add(count).min(cap))
             }),
         }
     }
@@ -3884,16 +3890,18 @@ struct PlainLiteralValueSpace {
 }
 
 impl PlainLiteralValueSpace {
-    /// The number of values, or `None` when there are infinitely many. Each
+    /// The number of values capped at `cap` (exact below it, `cap` when there
+    /// are at least `cap`), or `None` when there are infinitely many. Each
     /// excluded value is in the subset, so each removes one value.
-    fn count(&self) -> Option<u128> {
-        Some(self.subset.count()?.saturating_sub(self.excluded.len() as u128))
+    fn count(&self, cap: u128) -> Option<u128> {
+        let excluded = self.excluded.len() as u128;
+        Some(self.subset.count(cap.saturating_add(excluded))?.saturating_sub(excluded).min(cap))
     }
 
     /// Whether no value remains. A window or an automaton holds a value, so only
     /// excluded values can empty a subset that is not empty.
     fn is_empty(&self) -> bool {
-        self.subset.is_empty() || (!self.excluded.is_empty() && self.count() == Some(0))
+        self.subset.is_empty() || (!self.excluded.is_empty() && self.count(1) == Some(0))
     }
 
     /// The values, when there are at most `cap` of them (`enumerateDataValues`,
@@ -3901,7 +3909,7 @@ impl PlainLiteralValueSpace {
     /// sequence of characters (`LengthInterval::size_of`), as its words in the
     /// automata are, since both measure lengths in characters.
     fn values(&self, cap: usize) -> Option<Vec<DataValue>> {
-        let count = self.count()?;
+        let count = self.count((cap as u128).saturating_add(1))?;
         if count > cap as u128 {
             return None;
         }
@@ -3914,13 +3922,19 @@ impl PlainLiteralValueSpace {
         (values.len() as u128 == count).then_some(values)
     }
 
-    /// The node value space: its exact cardinality, with the values when there
-    /// are at most `MAX_ENUMERATED_VALUES` of them.
-    fn node_value_space(&self) -> NodeValueSpace {
-        let Some(count) = self.count() else {
+    /// The node value space: its cardinality capped at `cap` (see
+    /// `node_value_space_at_most`), with the values when there are at most
+    /// `MAX_ENUMERATED_VALUES` of them.
+    fn node_value_space(&self, cap: u128) -> NodeValueSpace {
+        let Some(count) = self.count(cap) else {
             return NodeValueSpace::Infinite;
         };
-        NodeValueSpace::Finite { count, values: self.values(MAX_ENUMERATED_VALUES) }
+        let values = if count <= MAX_ENUMERATED_VALUES as u128 && count < cap {
+            self.values(MAX_ENUMERATED_VALUES)
+        } else {
+            None
+        };
+        NodeValueSpace::Finite { count, values }
     }
 }
 
@@ -3945,7 +3959,7 @@ fn plain_literal_value_space<D>(ranges: &[(LiteralDataRange, D)]) -> Option<Plai
 
 /// The value space of a conjunction of string-like ranges whose restrictions
 /// have a datatype `is_string_like` accepts; see `plain_literal_value_space`.
-/// xsd:anyURI goes through here too, over `any_uri_string_automaton`.
+/// xsd:anyURI goes through here too, over `any_uri_value_automaton`.
 fn string_value_space<D>(
     ranges: &[(LiteralDataRange, D)],
     is_string_like: fn(&str) -> bool,
@@ -4526,6 +4540,20 @@ fn node_value_space<D>(
     constant: Option<&DataValue>,
     ranges: &[(LiteralDataRange, D)],
 ) -> NodeValueSpace {
+    node_value_space_at_most(constant, ranges, u128::MAX)
+}
+
+/// `node_value_space`, with the string and anyURI counts capped at `cap`: a
+/// count below `cap` is exact, and a count of `cap` means at least `cap`
+/// values. The distinct-value assignment only asks whether a node has more
+/// values than its degree, or than the size of its clique, so a cap above the
+/// number of data nodes decides every such question exactly, and lets a count
+/// stop early over a large automaton and a long length window.
+fn node_value_space_at_most<D>(
+    constant: Option<&DataValue>,
+    ranges: &[(LiteralDataRange, D)],
+    cap: u128,
+) -> NodeValueSpace {
     // A constant node has exactly its value (the per-node pass has already
     // checked it against the ranges).
     if let Some(v) = constant {
@@ -4614,7 +4642,7 @@ fn node_value_space<D>(
     // small (see `plain_literal_value_space`).
     if restrictions.iter().all(|r| is_string_datatype(r.datatype_uri())) {
         return plain_literal_value_space(ranges)
-            .map_or(NodeValueSpace::Infinite, |space| space.node_value_space());
+            .map_or(NodeValueSpace::Infinite, |space| space.node_value_space(cap));
     }
 
     // xsd:dateTime / xsd:dateTimeStamp: the intervals left after the negated
@@ -4646,10 +4674,10 @@ fn node_value_space<D>(
     // URI-1: xsd:anyURI with length or pattern facets. Java
     // AnyURIValueSpaceSubset.hasCardinalityAtLeast intersects the URI automaton
     // with the length/pattern facets and counts via getFiniteStrings, so a
-    // length-bounded anyURI value space is FINITE. The words of the automaton
-    // over the characters a URI may hold are listed when few (keeping the valid
-    // URIs, an exact value space) and otherwise counted, which bounds the URIs
-    // from above: a clash then needs fewer words than nodes, so it is real.
+    // length-bounded anyURI value space is FINITE. The automaton
+    // (`any_uri_value_automaton`) accepts exactly the valid URIs, so its words
+    // are the values: listed when few, and otherwise counted exactly (capped
+    // at `cap`).
     if restrictions.iter().all(|r| is_anyuri_datatype(r.datatype_uri())) {
         // Intersect patterns with length restrictions before asking whether the
         // language is finite: an unbounded pattern can become finite after a
@@ -4685,15 +4713,13 @@ fn node_value_space<D>(
             if !is_anyuri_datatype(dr.datatype_uri()) { return None; }
             Some((if negated { dr.get_negation() } else { LiteralDataRange::DatatypeRestriction(*dr) }, ()))
         }).collect();
-        // The words over the characters an anyURI may contain
-        // (`any_uri_string_automaton`); the valid URIs among them are the values.
-        // Too many words to list: their count bounds the URIs from above, so
-        // it can clash only when the URIs are fewer than the nodes too. (The
-        // URIs over an ASCII alphabet, counted before, bound them from below,
-        // but a URI may hold any character above U+0080 that is no space or
-        // control character, so a clique over anyURI[maxLength 1] clashed.)
+        // The words of `any_uri_value_automaton` are the valid URIs, so the
+        // count is exact. (A count of the words over every character a URI may
+        // hold, taken before, only bounded the URIs from above, so a clique
+        // over anyURI[pattern "%3."], 22 URIs among a million words, had no
+        // clash.)
         if let Some(mapped) = string_ranges {
-            match string_value_space(&mapped, is_anyuri_datatype).map(|space| space.node_value_space()) {
+            match string_value_space(&mapped, is_anyuri_datatype).map(|space| space.node_value_space(cap)) {
                 Some(NodeValueSpace::Finite { values: Some(values), .. }) => {
                     let values: Vec<_> = values.into_iter().filter_map(|v| match v {
                         DataValue::Text(s) if is_valid_any_uri(&s) => Some(DataValue::Typed {kind:"anyURI",length:s.chars().count(),canonical:s}),
@@ -5526,7 +5552,7 @@ mod tests {
             ))
         };
         let string_space = |ranges: &[(LiteralDataRange, ())]| {
-            plain_literal_value_space(ranges).map(|space| space.node_value_space())
+            plain_literal_value_space(ranges).map(|space| space.node_value_space(u128::MAX))
         };
 
         // [ab]{2} is the 4-string language {aa, ab, ba, bb}. Excluding {aa, bb}

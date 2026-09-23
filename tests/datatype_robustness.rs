@@ -81,6 +81,18 @@ fn long_windows_over_large_automata_are_counted_exactly() {
 }
 
 #[test]
+fn long_windows_over_dense_automata_are_counted_exactly() {
+    // Over two thousand states that remember the last ten letters, the
+    // matrix powers are dense and passed the work budget, so the count was
+    // "at least u128::MAX". The dense part has even lengths only; of this odd
+    // length there is one string, x^2147483001.
+    let range = "DatatypeRestriction(xsd:string xsd:pattern \"(xx)*x|yy(([ab]c)*ac([ab]c){9})\" xsd:length \"2147483001\"^^xsd:integer)";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(1));
+    assert!(!values(2));
+}
+
+#[test]
 fn large_bounded_repetitions_are_reasoned_about_symbolically() {
     // a{2147483000} holds one string. Its automaton had a state per copy and
     // exhausted memory.
@@ -248,6 +260,17 @@ fn short_uris_are_not_only_ascii() {
     assert_eq!(consistent(&format!("ClassAssertion(DataMinCardinality(100 :dp {range}) :a)")), Ok(true));
     let empty = "DatatypeRestriction(xsd:anyURI xsd:maxLength \"0\"^^xsd:integer)";
     assert_eq!(consistent(&format!("ClassAssertion(DataMinCardinality(2 :dp {empty}) :a)")), Ok(false));
+}
+
+#[test]
+fn uris_too_many_to_list_are_counted_exactly() {
+    // anyURI[pattern "%3."] matches a million strings, too many to list, of
+    // which 22 are URIs: "%3" and a hex digit. The strings were counted, an
+    // upper bound, so 23 distinct values fitted.
+    let range = "DatatypeRestriction(xsd:anyURI xsd:pattern \"%3.\")";
+    let values = |n: usize| consistent(&format!("ClassAssertion(DataMinCardinality({n} :dp {range}) :a)")).unwrap();
+    assert!(values(22));
+    assert!(!values(23));
 }
 
 #[test]
