@@ -104,6 +104,14 @@ over-padded dateTime years; `"+INF"` is accepted. See
 `tests/nan_bounds_and_lexical_validation.rs` and [RESULTS.md](RESULTS.md),
 which lists the lexical leniencies deliberately kept.
 
+String lengths count characters, patterns have their XSD meaning, and length
+windows are reasoned about symbolically (**resolved**, no issue; the first two
+deliberately deviate from Java). HermiT counts UTF-16 code units, so U+10000
+had length 2; `\d`, `\w` and `.` followed dk.brics or the `regex` crate; and
+`xsd:string[pattern "a*", minLength 2147483000]` built one automaton state per
+length and exhausted memory. See `tests/string_datatype_edge_cases.rs` and
+[RESULTS.md](RESULTS.md).
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
