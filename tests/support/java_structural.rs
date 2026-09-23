@@ -1,5 +1,6 @@
 use super::*;
 use hermit_rs::structural::{Fact, OWLAxioms, OWLNormalization};
+use std::collections::BTreeSet;
 
 pub(super) fn canonical(text: &str) -> String {
     fn expression(tokens: &[String], at: &mut usize) -> String {
@@ -118,7 +119,55 @@ fn normalized(o: &O) -> HashSet<String> {
         .map(|a| canonical(&a.as_functional().to_string()))
         .collect()
 }
-pub(super) fn run(row: &Value) {
+/// The ontology IRI that Java's `getDLClauses` declares as the default prefix
+/// (with `#` appended). The recorded snapshots drop the ontology header, so it
+/// is recovered from the original test: a resource-based test loads the upstream
+/// fixture, whose header names it; `loadOntologyWithAxioms` uses
+/// `AbstractOntologyTest.ONTOLOGY_IRI`.
+fn ontology_iri(java: &str) -> String {
+    const ONTOLOGY_IRI: &str = "file:/c/test.owl";
+    let (class, method) = java
+        .strip_prefix("structural.")
+        .and_then(|name| name.split_once('.'))
+        .expect("structural test name");
+    let upstream = Path::new(ROOT).join("upstream");
+    let package = "org/semanticweb/HermiT/structural";
+    let source = std::fs::read_to_string(
+        upstream
+            .join("java")
+            .join(package)
+            .join(format!("{class}.java")),
+    )
+    .unwrap();
+    let body = &source[source
+        .find(&format!("public void {method}()"))
+        .expect("upstream test method")..];
+    let body = &body[..body[1..].find("\n    p").map_or(body.len(), |end| end + 1)];
+    let Some(resource) = regex::Regex::new(r#"assertClausification\("([^"]+)""#)
+        .unwrap()
+        .captures(body)
+    else {
+        return ONTOLOGY_IRI.into();
+    };
+    let fixture =
+        std::fs::read_to_string(upstream.join("resources").join(package).join(&resource[1]))
+            .unwrap();
+    let capture = |pattern: &str| {
+        regex::Regex::new(pattern)
+            .unwrap()
+            .captures(&fixture)
+            .map(|c| c[1].to_string())
+    };
+    match capture(r#"<owl:Ontology\s+rdf:about="([^"]*)""#) {
+        Some(about) if about.contains(':') => about,
+        Some(about) if about.is_empty() => {
+            capture(r#"xml:base="([^"]+)""#).expect("xml:base of the upstream fixture")
+        }
+        Some(about) => panic!("relative ontology IRI {about:?} in {}", &resource[1]),
+        None => capture(r"Ontology\(<([^>]+)>").expect("ontology IRI of the upstream fixture"),
+    }
+}
+pub(super) fn run(java: &str, row: &Value) {
     let o = ontology(&row["ontology"]);
     if row["op"] == "normalize" {
         let expected: HashSet<_> = row["expected"]
@@ -134,9 +183,26 @@ pub(super) fn run(row: &Value) {
     let dl = reasoner.dl_ontology();
     let mut prefixes = hermit_rs::prefixes::Prefixes::new();
     prefixes.declare_semantic_web_prefixes();
-    prefixes.declare_internal_prefixes(std::iter::empty::<&str>(), std::iter::empty::<&str>());
+    // As getDLClauses: one nom:/anon: prefix per namespace of the (anonymous)
+    // individuals, and the ontology IRI as the default prefix. Java numbers
+    // several namespaces in hash order; they are sorted here.
+    let (mut named, mut anonymous) = (BTreeSet::new(), BTreeSet::new());
+    for individual in dl.get_all_individuals() {
+        let iri = individual.iri();
+        if let Some(hash) = iri.rfind('#') {
+            if !hermit_rs::prefixes::Prefixes::is_internal_iri(iri) {
+                let namespaces = if individual.is_anonymous() {
+                    &mut anonymous
+                } else {
+                    &mut named
+                };
+                namespaces.insert(&iri[..=hash]);
+            }
+        }
+    }
+    prefixes.declare_internal_prefixes(named, anonymous);
     prefixes
-        .declare_default_prefix("file:/c/test.owl#")
+        .declare_default_prefix(&format!("{}#", ontology_iri(java)))
         .unwrap();
     let mut actual = std::collections::BTreeSet::new();
     for clause in dl.get_dl_clauses() {
@@ -166,8 +232,9 @@ pub(super) fn run(row: &Value) {
         .iter()
         .map(|s| s.as_str().unwrap().to_string())
         .collect();
-    // The controls spell literals, enumeration order and fresh auxiliary names
-    // differently from equivalent clauses; see clause_compare.rs.
+    // The controls spell literals, enumeration order, fresh auxiliary names,
+    // clause variables and role automata differently from equivalent clauses;
+    // see clause_compare.rs.
     if !clause_compare::equivalent(&actual, &expected) {
         assert_eq!(actual, expected);
     }

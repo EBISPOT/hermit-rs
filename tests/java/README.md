@@ -26,8 +26,11 @@ There are two forms of executable port:
   normalization comparison treats OWL set-valued operands as unordered.
   Replayed clausification controls are compared semantically by
   `tests/support/clause_compare.rs`. Literals are compared by data value,
-  enumerations and clause atoms as sets, and fresh auxiliary predicates up to
-  one consistent renaming. Everything else must match exactly.
+  enumerations and clause atoms as sets, each clause's variables up to a
+  bijective renaming, fresh auxiliary predicates up to one consistent renaming,
+  and transitive-role automaton states by the language they accept. Everything
+  else must match exactly. The default prefix is the original fixture's
+  ontology IRI, as in Java.
 
 A trace is not evidence that Rust passes it. `expected-failures.json` lists the
 remaining discrepancies explicitly. Every case still executes: normal CI checks

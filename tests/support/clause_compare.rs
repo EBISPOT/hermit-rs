@@ -6,20 +6,29 @@
 //!   valid for its datatype: OWL 2 / XSD 1.1 give `"18"^^xsd:int`,
 //!   `"18"^^xsd:integer` and `"18.0"^^xsd:decimal` the same value, and a plain
 //!   literal without a language tag abbreviates `xsd:string`;
-//! * reading `{ ... }` enumerations and clause heads and bodies as sets; and
+//! * reading `{ ... }` enumerations and clause heads and bodies as sets;
+//! * renaming the variables of each clause by a bijection of its own: a clause
+//!   is universally closed, so a bijective renaming of its variables yields the
+//!   same formula (alpha-equivalence). Merging two variables, or renaming a
+//!   variable to a constant, is not a renaming;
 //! * one bijection of fresh auxiliary predicates (`def:`, `defdata:`, `nnq:`,
 //!   `all:`), each mapped only within its own family and applied consistently
-//!   across the whole clause and fact set.
+//!   across the whole clause and fact set; and
+//! * replacing the `all:` states of a transitive-role automaton by the
+//!   languages they accept (see [`Automaton`]), when both sides encode their
+//!   automata in the form that makes this exact.
 //!
-//! Nothing else is identified: ordinary and nominal names, variables, negation,
-//! numbers, distinct value spaces (such as `xsd:double` and `xsd:decimal`) and
-//! ill-typed literals must match exactly.
+//! Nothing else is identified: ordinary and nominal names, negation, argument
+//! order, numbers, distinct value spaces (such as `xsd:double` and
+//! `xsd:decimal`) and ill-typed literals must match exactly.
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// The fresh predicate families that clausification numbers arbitrarily.
 const AUXILIARY: [&str; 4] = ["def", "defdata", "nnq", "all"];
 /// Bijections tried before giving up; far above any structural control.
 const MAX_BIJECTIONS: usize = 40_320;
+/// Clauses with more variables are compared with their variables as printed.
+const MAX_RENAMED_VARIABLES: usize = 7;
 
 pub fn equivalent<'a>(
     actual: impl IntoIterator<Item = &'a String>,
@@ -27,7 +36,18 @@ pub fn equivalent<'a>(
 ) -> bool {
     let actual: Vec<Vec<String>> = actual.into_iter().map(|s| tokens(s)).collect();
     let expected: Vec<Vec<String>> = expected.into_iter().map(|s| tokens(s)).collect();
-    let (actual_names, expected_names) = (auxiliaries(&actual), auxiliaries(&expected));
+    // Automaton states are compared by language, the other auxiliaries by name.
+    let (actual_automaton, expected_automaton) =
+        match (Automaton::split(&actual), Automaton::split(&expected)) {
+            (Some(a), Some(e)) => (Some(a), Some(e)),
+            _ => (None, None),
+        };
+    let by_language = actual_automaton.is_some();
+    let (mut actual_names, mut expected_names) = (auxiliaries(&actual), auxiliaries(&expected));
+    if by_language {
+        actual_names.remove("all");
+        expected_names.remove("all");
+    }
     if actual_names.len() != expected_names.len()
         || actual_names
             .iter()
@@ -35,7 +55,7 @@ pub fn equivalent<'a>(
     {
         return false;
     }
-    let target = render_all(&actual, &HashMap::new());
+    let target = canonical_all(&actual, actual_automaton.as_ref(), &HashMap::new());
     let families: Vec<(Vec<String>, Vec<String>)> = expected_names
         .into_iter()
         .map(|(kind, names)| (names, actual_names[&kind].clone()))
@@ -44,7 +64,7 @@ pub fn equivalent<'a>(
     search(
         &families,
         &mut HashMap::new(),
-        &mut |rename| render_all(&expected, rename) == target,
+        &mut |rename| canonical_all(&expected, expected_automaton.as_ref(), rename) == target,
         &mut budget,
     )
 }
@@ -98,7 +118,7 @@ fn tokens(text: &str) -> Vec<String> {
     static TOKENIZER: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = TOKENIZER.get_or_init(|| {
         regex::Regex::new(
-            r#""(?:\\.|[^"\\])*"(?:\^\^(?:<[^>]*>|[^\s(){},"<]+)|@[A-Za-z0-9-]+)?|<[^>]*>|[(){},]|[^\s(){},"<]+"#,
+            r#""(?:\\.|[^"\\])*"(?:\^\^(?:<[^>]*>|[^\s(){}\[\],"<]+)|@[A-Za-z0-9-]+)?|<[^>]*>|[(){}\[\],]|[^\s(){}\[\],"<]+"#,
         )
         .unwrap()
     });
@@ -134,6 +154,17 @@ fn auxiliary_kind(token: &str) -> Option<&str> {
     AUXILIARY.contains(&kind).then_some(kind)
 }
 
+fn is_state(token: &str) -> bool {
+    auxiliary_kind(token) == Some("all")
+}
+
+/// Clause variables as HermiT names them (`X`, `Y1`, `Z2`, ...). Every other
+/// name is prefixed or bracketed, so a bare name of this shape is a variable.
+fn is_variable(token: &str) -> bool {
+    let mut chars = token.chars();
+    matches!(chars.next(), Some('X' | 'Y' | 'Z')) && chars.all(|c| c.is_ascii_digit())
+}
+
 fn auxiliaries(items: &[Vec<String>]) -> BTreeMap<String, Vec<String>> {
     let mut names = BTreeMap::<String, BTreeSet<String>>::new();
     for token in items.iter().flatten() {
@@ -150,12 +181,28 @@ fn auxiliaries(items: &[Vec<String>]) -> BTreeMap<String, Vec<String>> {
         .collect()
 }
 
-fn render_all(items: &[Vec<String>], rename: &HashMap<String, String>) -> BTreeSet<String> {
-    items.iter().map(|item| render(item, rename)).collect()
+fn canonical_all(
+    items: &[Vec<String>],
+    automaton: Option<&Automaton>,
+    rename: &HashMap<String, String>,
+) -> BTreeSet<String> {
+    let Some(automaton) = automaton else {
+        return items
+            .iter()
+            .map(|item| canonical(&flatten(item, rename)))
+            .collect();
+    };
+    let mut rename = rename.clone();
+    rename.extend(automaton.languages(rename.clone()));
+    automaton
+        .rest
+        .iter()
+        .map(|&at| canonical(&flatten(&items[at], &rename)))
+        .collect()
 }
 
-/// Render one clause or fact with sorted enumerations, heads and bodies.
-fn render(item: &[String], rename: &HashMap<String, String>) -> String {
+/// Apply `rename` and read each `{ ... }` enumeration as one sorted token.
+fn flatten(item: &[String], rename: &HashMap<String, String>) -> Vec<String> {
     let mut flat = Vec::new();
     let mut at = 0;
     while at < item.len() {
@@ -176,37 +223,348 @@ fn render(item: &[String], rename: &HashMap<String, String>) -> String {
             at += 1;
         }
     }
-    let Some(arrow) = flat.iter().position(|t| t == ":-") else {
-        return flat.join(" ");
-    };
-    let atoms = |tokens: &[String], separator: &str| -> BTreeSet<String> {
-        let mut atoms = BTreeSet::new();
-        let (mut depth, mut current) = (0usize, Vec::new());
-        for token in tokens {
-            match token.as_str() {
-                "(" => depth += 1,
-                ")" => depth -= 1,
-                t if t == separator && depth == 0 => {
-                    atoms.insert(std::mem::take(&mut current).join(" "));
-                    continue;
-                }
-                _ => {}
+    flat
+}
+
+/// The rendering of a flattened item that is least over all bijective
+/// renamings of its variables, so alpha-equivalent clauses render alike.
+fn canonical(flat: &[String]) -> String {
+    let mut variables: Vec<&String> = Vec::new();
+    for token in flat {
+        if is_variable(token) && !variables.contains(&token) {
+            variables.push(token);
+        }
+    }
+    if variables.len() > MAX_RENAMED_VARIABLES {
+        return render(flat);
+    }
+    let fresh: Vec<String> = (0..variables.len()).map(|i| format!("?{i}")).collect();
+    let mut best: Option<String> = None;
+    let mut used = vec![false; fresh.len()];
+    let variables: Vec<String> = variables.into_iter().cloned().collect();
+    permute(
+        &variables,
+        &fresh,
+        0,
+        &mut used,
+        &mut HashMap::new(),
+        &mut |map| {
+            let renamed: Vec<String> = flat
+                .iter()
+                .map(|t| map.get(t).unwrap_or(t).clone())
+                .collect();
+            let text = render(&renamed);
+            if best.as_ref().is_none_or(|b| text < *b) {
+                best = Some(text);
             }
-            current.push(token.clone());
+            false
+        },
+    );
+    best.unwrap_or_else(|| render(flat))
+}
+
+/// The top-level atoms of a head (separated by `v`) or body (by `,`).
+fn atoms(tokens: &[String], separator: &str) -> Vec<Vec<String>> {
+    let mut atoms = Vec::new();
+    let (mut depth, mut current) = (0usize, Vec::new());
+    for token in tokens {
+        match token.as_str() {
+            "(" => depth += 1,
+            ")" => depth -= 1,
+            t if t == separator && depth == 0 => {
+                atoms.push(std::mem::take(&mut current));
+                continue;
+            }
+            _ => {}
         }
-        if !current.is_empty() {
-            atoms.insert(current.join(" "));
+        current.push(token.clone());
+    }
+    if !current.is_empty() {
+        atoms.push(current);
+    }
+    atoms
+}
+
+/// The atoms of a head or body, each as its tokens.
+type Atoms = Vec<Vec<String>>;
+
+/// A clause's head and body atoms; `None` for a fact.
+fn clause(flat: &[String]) -> Option<(Atoms, Atoms)> {
+    let arrow = flat.iter().position(|t| t == ":-")?;
+    Some((atoms(&flat[..arrow], "v"), atoms(&flat[arrow + 1..], ",")))
+}
+
+fn join(atoms: &[Vec<String>], separator: &str) -> String {
+    atoms
+        .iter()
+        .map(|atom| atom.join(" "))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
+/// Render one flattened clause or fact with sorted heads and bodies.
+fn render(flat: &[String]) -> String {
+    match clause(flat) {
+        None => flat.join(" "),
+        Some((head, body)) => format!("{} :- {}", join(&head, " v "), join(&body, " , ")),
+    }
+}
+
+/// `p ( t )` for a unary atom.
+fn unary(atom: &[String]) -> Option<(&str, &str)> {
+    match atom {
+        [p, open, t, close] if open == "(" && close == ")" => Some((p, t)),
+        _ => None,
+    }
+}
+
+/// `r ( s , t )` for a binary atom.
+fn binary(atom: &[String]) -> Option<(&str, &str, &str)> {
+    match atom {
+        [r, open, s, comma, t, close] if open == "(" && comma == "," && close == ")" => {
+            Some((r, s, t))
         }
-        atoms
-    };
-    let join = |atoms: BTreeSet<String>, separator: &str| {
-        atoms.into_iter().collect::<Vec<_>>().join(separator)
-    };
-    format!(
-        "{} :- {}",
-        join(atoms(&flat[..arrow], "v"), " v "),
-        join(atoms(&flat[arrow + 1..], ","), " , ")
-    )
+        _ => None,
+    }
+}
+
+/// One step of a transitive-role automaton clause with head `p(X)`.
+enum Step {
+    /// `p(X) :- q(X)`
+    Empty(String),
+    /// `p(X) :- r(X,Y), q(Y)`, or `r(Y,X)` for the inverse role
+    Role(String, String),
+    /// `p(X) :- C(X), ...` with no state and no variable besides `X`
+    Accept(String),
+}
+
+/// The `all:` states of the automata that encode `forall` restrictions over
+/// non-simple (for example transitive) roles. HermiT spells them as clauses
+/// that only ever derive a state, in one of three forms:
+/// `p(X) :- q(X)`, `p(X) :- r(X,Y), q(Y)` (or `r(Y,X)`), and
+/// `p(X) :- C1(X), ..., Cn(X)` with no state in the body.
+///
+/// When no other clause and no fact derives a state, and every other clause
+/// uses a state only as a unary body atom, those clauses are a monotone
+/// definition of the states: in the least extension of any interpretation of
+/// the other predicates, `p` holds exactly where some path `r1 ... rk` leads to
+/// a point satisfying a final body `C`, for a word `r1 ... rk C` accepted from
+/// `p`. As the states occur only positively in the bodies of the other clauses,
+/// a model extends to one of the whole set iff that least extension does. Two
+/// clause sets therefore have the same models over the non-state predicates
+/// when their other clauses coincide after each state is replaced by the
+/// language it accepts. The language is spelled as its minimal DFA, which is
+/// unique, so equal spellings mean equal languages and hence the same meaning,
+/// however many states or clauses either encoding uses.
+struct Automaton {
+    /// The indices of the items that are not automaton clauses.
+    rest: Vec<usize>,
+    /// The automaton clauses, before renaming.
+    steps: Vec<Vec<String>>,
+}
+
+impl Automaton {
+    fn split(items: &[Vec<String>]) -> Option<Automaton> {
+        let mut automaton = Automaton {
+            rest: Vec::new(),
+            steps: Vec::new(),
+        };
+        for (at, item) in items.iter().enumerate() {
+            if !item.iter().any(|t| is_state(t)) {
+                automaton.rest.push(at);
+                continue;
+            }
+            let (head, body) = clause(&flatten(item, &HashMap::new()))?;
+            if Self::step(&head, &body).is_some() {
+                automaton.steps.push(item.clone());
+            } else if head.iter().flatten().any(|t| is_state(t))
+                || body.iter().any(|atom| {
+                    atom.iter().any(|t| is_state(t))
+                        && !unary(atom).is_some_and(|(p, _)| is_state(p))
+                })
+            {
+                return None;
+            } else {
+                automaton.rest.push(at);
+            }
+        }
+        (!automaton.steps.is_empty()).then_some(automaton)
+    }
+
+    fn step(head: &[Vec<String>], body: &[Vec<String>]) -> Option<(String, Step)> {
+        let [head] = head else { return None };
+        let (p, x) = unary(head)?;
+        if !is_state(p) || !is_variable(x) {
+            return None;
+        }
+        let step = match body {
+            [atom] if unary(atom).is_some_and(|(q, t)| is_state(q) && t == x) => {
+                Step::Empty(unary(atom)?.0.to_string())
+            }
+            [a, b]
+                if [a, b]
+                    .iter()
+                    .any(|atom| unary(atom).is_some_and(|(q, _)| is_state(q))) =>
+            {
+                let (state, role) = if unary(a).is_some_and(|(q, _)| is_state(q)) {
+                    (a, b)
+                } else {
+                    (b, a)
+                };
+                let (q, y) = unary(state)?;
+                let (r, s, t) = binary(role)?;
+                if is_state(r) || !is_variable(y) || y == x {
+                    return None;
+                }
+                let label = match (s == x, t == y, s == y, t == x) {
+                    (true, true, _, _) => r.to_string(),
+                    (_, _, true, true) => format!("{r}^-"),
+                    _ => return None,
+                };
+                Step::Role(label, q.to_string())
+            }
+            _ if !body.is_empty()
+                && body
+                    .iter()
+                    .flatten()
+                    .all(|t| !is_state(t) && (!is_variable(t) || t == x)) =>
+            {
+                Step::Accept(join(body, " , "))
+            }
+            _ => return None,
+        };
+        Some((p.to_string(), step))
+    }
+
+    /// The minimal-DFA spelling of each state's language after `rename`.
+    fn languages(&self, rename: HashMap<String, String>) -> HashMap<String, String> {
+        const ACCEPT: &str = "";
+        let mut edges: BTreeMap<String, Vec<(Option<String>, String)>> = BTreeMap::new();
+        for item in &self.steps {
+            let (head, body) = clause(&flatten(item, &rename)).unwrap();
+            let (p, step) = Self::step(&head, &body).unwrap();
+            let edge = match step {
+                Step::Empty(q) => (None, q),
+                Step::Role(r, q) => (Some(format!("role {r}")), q),
+                Step::Accept(c) => (Some(format!("accept {c}")), ACCEPT.to_string()),
+            };
+            edges.entry(edge.1.clone()).or_default();
+            edges.entry(p).or_default().push(edge);
+        }
+        let closure = |states: BTreeSet<String>| {
+            let mut closed = states.clone();
+            let mut todo: Vec<String> = states.into_iter().collect();
+            while let Some(p) = todo.pop() {
+                for (label, q) in &edges[&p] {
+                    if label.is_none() && closed.insert(q.clone()) {
+                        todo.push(q.clone());
+                    }
+                }
+            }
+            closed
+        };
+        let alphabet: BTreeSet<&String> = edges
+            .values()
+            .flatten()
+            .filter_map(|e| e.0.as_ref())
+            .collect();
+        let mut languages = HashMap::new();
+        for start in edges.keys().filter(|p| p.as_str() != ACCEPT) {
+            // Subset construction over the whole alphabet, the empty set included.
+            let first = closure(BTreeSet::from([start.clone()]));
+            let mut index = BTreeMap::from([(first.clone(), 0usize)]);
+            let mut subsets = vec![first];
+            let mut delta: Vec<Vec<usize>> = Vec::new();
+            while delta.len() < subsets.len() {
+                let from = subsets[delta.len()].clone();
+                let mut row = Vec::new();
+                for &symbol in &alphabet {
+                    let next: BTreeSet<String> = from
+                        .iter()
+                        .flat_map(|p| &edges[p])
+                        .filter(|(label, _)| label.as_ref() == Some(symbol))
+                        .map(|(_, q)| q.clone())
+                        .collect();
+                    let next = closure(next);
+                    let id = *index.entry(next.clone()).or_insert_with(|| {
+                        subsets.push(next);
+                        subsets.len() - 1
+                    });
+                    row.push(id);
+                }
+                delta.push(row);
+            }
+            let accepting: Vec<bool> = subsets.iter().map(|s| s.contains(ACCEPT)).collect();
+            // Moore refinement to the minimal DFA.
+            let mut class: Vec<usize> = accepting.iter().map(|&a| a as usize).collect();
+            loop {
+                let mut ids = BTreeMap::new();
+                let refined: Vec<usize> = (0..subsets.len())
+                    .map(|s| {
+                        let signature = (
+                            class[s],
+                            delta[s].iter().map(|&t| class[t]).collect::<Vec<_>>(),
+                        );
+                        let next = ids.len();
+                        *ids.entry(signature).or_insert(next)
+                    })
+                    .collect();
+                let stable = ids.len() == class.iter().collect::<BTreeSet<_>>().len();
+                class = refined;
+                if stable {
+                    break;
+                }
+            }
+            // Live classes can still reach acceptance; transitions to the
+            // (unique) dead class are left out, so unused symbols do not count.
+            let classes = class.iter().max().map_or(0, |m| m + 1);
+            let mut live = vec![false; classes];
+            for s in 0..subsets.len() {
+                live[class[s]] |= accepting[s];
+            }
+            loop {
+                let mut changed = false;
+                for s in 0..subsets.len() {
+                    if !live[class[s]] && delta[s].iter().any(|&t| live[class[t]]) {
+                        live[class[s]] = true;
+                        changed = true;
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+            // Number the live classes breadth-first in alphabet order.
+            let representative: BTreeMap<usize, usize> =
+                (0..subsets.len()).rev().map(|s| (class[s], s)).collect();
+            let mut spelling = Vec::new();
+            if live[class[0]] {
+                let mut number = BTreeMap::from([(class[0], 0usize)]);
+                let mut order = vec![class[0]];
+                let mut at = 0;
+                while at < order.len() {
+                    let s = representative[&order[at]];
+                    let mut row = vec![if accepting[s] { "final" } else { "state" }.to_string()];
+                    for (symbol, &t) in alphabet.iter().zip(&delta[s]) {
+                        if live[class[t]] {
+                            let next = number.len();
+                            let n = *number.entry(class[t]).or_insert_with(|| {
+                                order.push(class[t]);
+                                next
+                            });
+                            row.push(format!("{symbol} -> {n}"));
+                        }
+                    }
+                    spelling.push(row.join("; "));
+                    at += 1;
+                }
+            }
+            languages.insert(start.clone(), format!("all:[{}]", spelling.join(" | ")));
+        }
+        languages
+    }
 }
 
 /// One key per data value for the datatypes whose values the controls spell
@@ -488,5 +846,137 @@ mod tests {
             &[":A(X) v :B(X) :- :C(X), :D(X)"],
             &[":B(X) v :A(X) :- :D(X), :C(X)"]
         ));
+    }
+
+    #[test]
+    fn renames_variables_within_each_clause() {
+        // testNominals1 and testNominals2 (#47, #48): current HermiT names the
+        // nominal variables Z, Z1 where the controls have Y, Y1.
+        assert!(same(
+            &[
+                ":r(X,Z) v :r(X,Z1) :- :c(X), nom:i1(Z), nom:i2(Z1)",
+                "Y == Z v Y == Z1 :- :f(X), :r(X,Y), nom:i1(Z), nom:i2(Z1)",
+                "nom:i1(:i1)",
+            ],
+            &[
+                ":r(X,Y) v :r(X,Y1) :- :c(X), nom:i1(Y), nom:i2(Y1)",
+                "Y == Y1 v Y == Y2 :- :f(X), :r(X,Y), nom:i1(Y1), nom:i2(Y2)",
+                "nom:i1(:i1)",
+            ],
+        ));
+        // Each clause has a renaming of its own.
+        assert!(same(
+            &[":A(X) :- :r(X,Y)", ":B(Z) :- :s(Z,Y1)"],
+            &[":A(Y) :- :r(Y,X)", ":B(X) :- :s(X,Y)"],
+        ));
+        // Annotated equalities and ordering atoms are renamed with the rest.
+        assert!(same(
+            &[":e(X) v [Y1 == Y2]@atMost(2 :r :d)(X) :- :r(X,Y1), :r(X,Y2), Y1 <= Y2, NodeIDsAscendingOrEqual(Y1,Y2)"],
+            &[":e(Z) v [Y == Y1]@atMost(2 :r :d)(Z) :- :r(Z,Y), :r(Z,Y1), Y <= Y1, NodeIDsAscendingOrEqual(Y,Y1)"],
+        ));
+        // Alpha-equivalent copies are one clause.
+        assert!(same(
+            &[":A(X) :- :B(X)", ":A(Y) :- :B(Y)"],
+            &[":A(X) :- :B(X)"]
+        ));
+    }
+
+    #[test]
+    fn rejects_what_is_not_a_renaming_of_each_clause() {
+        let differ = |a: &[&str], b: &[&str]| !same(a, b);
+        // Swapping the arguments of an asymmetric role (testNominals1 against
+        // testNominals3).
+        assert!(differ(
+            &[":r(X,Z) v :r(X,Z1) :- :c(X), nom:i1(Z), nom:i2(Z1)"],
+            &[":r(Y,X) v :r(Y1,X) :- :c(X), nom:i1(Y), nom:i2(Y1)"],
+        ));
+        assert!(differ(
+            &[":A(X) :- :r(X,Y), :B(Y)"],
+            &[":A(Y) :- :r(X,Y), :B(Y)"]
+        ));
+        // A swap of two variables that changes which atom constrains which.
+        assert!(differ(
+            &[":r(X,Y) v :s(X,Y1) :- :c(X), nom:i1(Y), nom:i2(Y1)"],
+            &[":r(X,Y) v :s(X,Y1) :- :c(X), nom:i1(Y1), nom:i2(Y)"],
+        ));
+        assert!(differ(
+            &["Y1 <= Y2 :- :r(X,Y1), :s(X,Y2)"],
+            &["Y2 <= Y1 :- :r(X,Y1), :s(X,Y2)"],
+        ));
+        // Merging variables is not a renaming, nor is replacing one by a name.
+        assert!(differ(&[":A(X) :- :r(X,Y)"], &[":A(X) :- :r(X,X)"]));
+        assert!(differ(
+            &["Y == Z :- :f(X), :r(X,Y), :s(X,Z)"],
+            &["Y == Y :- :f(X), :r(X,Y), :s(X,Y)"],
+        ));
+        assert!(differ(&[":A(X) :- :r(X,Y)"], &[":A(X) :- :r(X,:a)"]));
+        assert!(differ(&[":A(:a)"], &[":A(:b)"]));
+        // Atoms do not move between clauses.
+        assert!(differ(
+            &[":A(X) :- :r(X,Y), :B(Y)", ":C(X) :- :D(X)"],
+            &[":A(X) :- :r(X,Y), :B(X)", ":C(Y) :- :D(Y)"],
+        ));
+        assert!(differ(
+            &[":A(X) :- :B(X)", ":C(Y) :- :D(Y)"],
+            &[":A(X) :- :D(X)", ":C(Y) :- :B(Y)"],
+        ));
+        assert!(differ(
+            &[":A(X) :- :B(X)"],
+            &[":A(X) :- :B(X)", ":C(Y) :- :B(Y)"]
+        ));
+    }
+
+    /// testBasic (#45): `exists r.(exists s.c) <= d` with transitive `s`, as
+    /// current HermiT (and Rust) encodes it.
+    #[allow(dead_code)]
+    const TRANSITIVE: [&str; 9] = [
+        ":d(X) :- :r(X,Y), def:0(Y)",
+        "def:0(X) :- all:0(X)",
+        "all:0(X) :- all:2(X)",
+        "all:2(X) :- :s(X,Y), all:3(Y)",
+        "all:0(X) :- :s(X,Y), all:1(Y)",
+        "all:3(X) :- all:1(X)",
+        "all:1(X) :- all:0(X)",
+        "all:3(X) :- all:2(X)",
+        "all:1(X) :- :c(X)",
+    ];
+
+    #[test]
+    fn compares_role_automata_by_language() {
+        // The control's two-state automaton accepts the same words s s* c.
+        let control = [
+            ":d(X) :- :r(X,Y), def:0(Y)",
+            "def:0(X) :- all:0_1(X)",
+            "all:0_1(X) :- :s(X,Y), all:0_0(Y)",
+            "all:0_0(X) :- :s(X,Y), all:0_0(Y)",
+            "all:0_0(X) :- :c(X)",
+        ];
+        assert!(same(&TRANSITIVE, &control));
+        let differ = |edit: &dyn Fn(&mut Vec<&'static str>)| {
+            let mut changed = control.to_vec();
+            edit(&mut changed);
+            !same(&TRANSITIVE, &changed)
+        };
+        // Without the loop only s c is accepted: exists s.(exists s.c) is lost.
+        assert!(differ(
+            &|c| c.retain(|l| *l != "all:0_0(X) :- :s(X,Y), all:0_0(Y)")
+        ));
+        // s* c would also accept c itself: exists r.c <= d does not follow.
+        assert!(differ(&|c| c[1] = "def:0(X) :- all:0_0(X)"));
+        // Another role, the inverse role, or another final concept.
+        assert!(differ(&|c| c[2] = "all:0_1(X) :- :r(X,Y), all:0_0(Y)"));
+        assert!(differ(&|c| c[2] = "all:0_1(X) :- :s(Y,X), all:0_0(Y)"));
+        assert!(differ(&|c| c[4] = "all:0_0(X) :- :d(X)"));
+        // The non-automaton clauses still match exactly.
+        assert!(differ(&|c| c[0] = ":d(X) :- :r(Y,X), def:0(Y)"));
+        assert!(differ(&|c| c[1] = "def:0(X) :- all:0_1(X), :c(X)"));
+        // A state derived outside the automaton clauses makes the least
+        // extension argument inapplicable: states are then compared by name.
+        let mut derived = TRANSITIVE.to_vec();
+        derived.push(":e(X) v all:0(X) :- :c(X), :d(X)");
+        let mut control_derived = control.to_vec();
+        control_derived.push(":e(X) v all:0_1(X) :- :c(X), :d(X)");
+        assert!(!same(&derived, &control_derived));
+        assert!(same(&derived, &derived));
     }
 }

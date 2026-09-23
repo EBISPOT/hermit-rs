@@ -11,22 +11,22 @@ properties, the issue #19 fix for the direct types of individuals, the issue
 #21 fix for the declarations in printed hierarchies, the issue #28
 core-blocking fix, which also resolved #29 and #30, the issue #32/#33
 blocking-validator fixture repair, the issue #34 description-graph rule
-fix, and the semantic clause comparison for issues #35 to #44 and #46. All 598
+fix, and the semantic clause comparison for issues #35 to #50. All 598
 declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 916 | 6 | 2 |
+| Query/structural replay | 921 | 1 | 2 |
 | Native internal tests | 53 | 0 | 0 |
-| Total, excluding OWL WG | 969 | 6 | 2 |
+| Total, excluding OWL WG | 974 | 1 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 6 failures are
-assertions that also fail in the pinned Java checkout: structural control
-comparisons. The original Java aggregate suites exclude these classes. The
-original controls and Java failure messages are retained, rather than rewritten
-to match Rust's output.
+The Rust port does **not** yet have full Java test parity. The remaining failure
+is an assertion that also fails in the pinned Java checkout: the
+`NormalizationTest.testKeys2` structural control (#51). The original Java
+aggregate suites exclude this class. The original controls and Java failure
+messages are retained, rather than rewritten to match Rust's output.
 
 One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
@@ -427,6 +427,47 @@ and in `not def:0`, where `exists r.Thing <= def:0`, which matches the input
 assertions `a: exists r.Self` and `a: all r.Nothing`. The upstream traces are unchanged
 and need no correction, because each control is semantically equal to the
 clauses. Nothing deviates from Java's clausification.
+
+Issues #45 and #47 to #50 were obsolete `ClausificationTest` controls as well;
+the pinned Java checkout fails all five. Run on the same fixtures, it prints
+exactly Rust's clauses. Three spellings differed, none of them a clausifier defect:
+
+- The fixtures are RDF/XML resources whose ontology IRI is
+  `file:/c:/temp/test.owl` (the wine IRI for `testNominals4`). Java's
+  `getDLClauses` declares that IRI plus `#` as the default prefix, and a `nom:`
+  prefix for the namespace of the individuals. The recorded snapshots drop the
+  ontology header, and the runner declared `file:/c/test.owl#` and no `nom:`
+  prefix. It now recovers the ontology IRI from the upstream test and fixture
+  (`AbstractOntologyTest.ONTOLOGY_IRI` for `loadOntologyWithAxioms`) and declares
+  the prefixes as Java does.
+- Current HermiT names nominal variables `Z`, `Z1` where the controls have `Y`,
+  `Y1`. Each clause is universally closed, so a bijective renaming of its own
+  variables is the same formula. The comparator now takes, per clause, the least
+  rendering over all bijections of its variables onto fresh names. Merging
+  variables, replacing one by a name, swapping the arguments of a role, or moving
+  an atom to another clause is still rejected, and unit tests show it.
+- `testBasic` encodes `exists r.(exists s.c) <= d` with transitive `s`. The
+  control's automaton has two states and five clauses; since the issue #8
+  construction, HermiT and Rust use four states and nine clauses. The clauses
+  that derive `all:` states are a monotone definition, so each state holds
+  exactly where the words it accepts lead to its final concept. The comparator
+  replaces every state by the minimal DFA of its language, when both sides use
+  states only in that form, and compares the remaining clauses exactly. Both
+  encodings give `def:0` the language `s s* c`: `def:0` contains `exists s.c`
+  and, by the transitivity of `s`, nothing more. Unit tests reject a missing
+  loop (`s c` only), `s* c` (which would wrongly entail `exists r.c <= d`),
+  another role, the inverse role and another final concept.
+
+The Rust clauses were checked by hand. `testNominals1` has
+`c(X) -> r(X,i1) or r(X,i2)` through the nominal concepts, and
+`d <= atLeast 1 s.not def:0` with `def:0(i1)`, `def:0(i2)`. Besides those
+facts, `def:0` occurs only negatively, so its least extension `{i1, i2}` is the
+one that matters and the clause says `d <= exists s.not {i1, i2}`. `testNominals2` bounds
+`all r.{i1, i2}` by equalities, `all r.not {i1}` and `all r.not {i1, i2}` by
+clauses with empty heads, and keeps the `atMost 2` clause unchanged.
+`testNominals3` turns the successor into a predecessor, and `testNominals4` gives
+`Chianti` the `hasSugar` value `Dry`. The upstream traces are unchanged. Nothing deviates from Java's
+clausification.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
