@@ -3,6 +3,8 @@
 mod clause_compare;
 #[path = "../tests/support/memory_budget.rs"]
 mod memory_budget;
+#[path = "../tests/support/java_corrections.rs"]
+pub(crate) mod corrections;
 #[path = "../tests/support/java_outcome.rs"]
 mod outcome;
 pub(crate) fn isolated(name: &str) -> bool {

@@ -150,14 +150,15 @@ fn values_equal(a: &DataValue, b: &DataValue) -> bool {
         ) => n1 == n2 && d1 == d2,
         (DataValue::Float(x), DataValue::Float(y)) => x == y,
         (DataValue::Double(x), DataValue::Double(y)) => x == y,
-        // Java `DateTime.equals` compares three fields: the instant on the
-        // timeline, the last-day (hour==24) flag, and the timezone offset. So
-        // `...T24:00:00` is distinct from the equal-instant `...T00:00:00` of the
-        // next day, and `...Z` is distinct from `...+01:00` at the same instant.
+        // The instant on the timeline and the timezone offset, as in Java
+        // `DateTime.equals`, so `...Z` is distinct from `...+01:00` at the same
+        // instant. Java also compares a last-day flag, which keeps `...T24:00:00`
+        // apart from `...T00:00:00` of the next day; XSD 1.1 Part 2 §3.3.7.2 and
+        // §E.3.5 map both spellings to one value, so they are equal here.
         (
-            DataValue::DateTime { millis: x, has_tz: xt, last_day: xl, tz_offset: xo },
-            DataValue::DateTime { millis: y, has_tz: yt, last_day: yl, tz_offset: yo },
-        ) => x == y && xt == yt && xl == yl && xo == yo,
+            DataValue::DateTime { millis: x, has_tz: xt, tz_offset: xo },
+            DataValue::DateTime { millis: y, has_tz: yt, tz_offset: yo },
+        ) => x == y && xt == yt && xo == yo,
         (
             DataValue::Typed { kind: k1, canonical: c1, .. },
             DataValue::Typed { kind: k2, canonical: c2, .. },
@@ -4064,19 +4065,13 @@ impl DateTimeValueSpace {
 /// The distinct values at the instant `millis` of one kind, as
 /// `DateTimeInterval.enumerateDateTimes` lists them. Without a timezone offset
 /// there is one value; with one there is a value for each offset from -14:00 to
-/// +14:00, 1681 in all. Each value whose local time is midnight has a second
-/// spelling, `24:00:00` of the previous day, which `DateTime.equals` tells apart
-/// by its last-day flag, so it is listed too. (XSD 1.1 maps both spellings to
-/// one value, Part 2 §3.3.7.2 and §E.3.5; `values_equal` keeps HermiT's view.)
+/// +14:00, 1681 in all. A local midnight also has the spelling `24:00:00` of
+/// the previous day, which is the same value (XSD 1.1 Part 2 §3.3.7.2 and
+/// §E.3.5), so it is not listed again, unlike in HermiT, whose `DateTime.equals`
+/// tells the two spellings apart by a last-day flag.
 fn datetime_values_at(millis: i64, has_tz: bool) -> impl Iterator<Item = DataValue> {
     let offsets = if has_tz { -840..=840 } else { 0..=0 };
-    offsets.flat_map(move |tz_offset: i32| {
-        let midnight = (millis + i64::from(tz_offset) * 60_000).rem_euclid(86_400_000) == 0;
-        [false, true]
-            .into_iter()
-            .filter(move |&last_day| !last_day || midnight)
-            .map(move |last_day| DataValue::DateTime { millis, has_tz, last_day, tz_offset })
-    })
+    offsets.map(move |tz_offset: i32| DataValue::DateTime { millis, has_tz, tz_offset })
 }
 
 /// The dateTime value space of a conjunction of data ranges, mirroring
@@ -7975,8 +7970,6 @@ mod tests {
                 ],
             )
         };
-        // Not a "noon, not midnight" last-day instant: seconds==0 so the WITH-tz
-        // last-day extras may apply; either way the count is finite and modest.
         let space = node_value_space(None, &[(point(), ())]);
         let count = match space {
             NodeValueSpace::Finite { count, .. } => count,
@@ -8013,28 +8006,19 @@ mod tests {
 
     #[test]
     fn single_instant_datetime_cardinality_values() {
-        // Exact counts from DateTimeInterval.subtractSizeFrom for the corner
-        // cases. A noon instant (seconds==0, not midnight): WITHOUT_TIMEZONE = 1
-        // (not last-day), WITH_TIMEZONE = 1681 base + last-day extras when
-        // secondsAreZero. 12:30:00 -> minutesInDay = 12*60+30 = 750.
+        // The values at one instant: one without a timezone offset, and one for
+        // each offset from -14:00 to +14:00 with one. A local midnight written
+        // `24:00:00` of the previous day is the same value as `00:00:00` (XSD 1.1
+        // Part 2 §3.3.7.2, §E.3.5), so it adds nothing. HermiT's
+        // `DateTimeInterval.subtractSizeFrom` counts it again: 1683 for 12:30Z
+        // (offsets +11:30 and -12:30 reach local midnight) and 2 without a
+        // timezone at midnight.
         let count = |millis, has_tz| datetime_values_at(millis, has_tz).count();
-        let noon = datetime_millis("2020-06-15T12:30:00Z");
-        assert_eq!(count(noon, false), 1);
-        // minutesInDay = 750: in [0,840] (+1) AND 1440-840=600 <= 750 (+1). So
-        // 1681 + 2 = 1683.
-        assert_eq!(count(noon, true), 1683);
-
-        // A midnight instant is a last-day instant: WITHOUT_TIMEZONE = 2.
-        let midnight = datetime_millis("2020-06-15T00:00:00Z");
-        assert_eq!(count(midnight, false), 2);
-        // minutesInDay = 0 -> in [0,840] (+1) and 0 < 600 so not in [600,1440)
-        // (+0) -> 1681 + 1 = 1682.
-        assert_eq!(count(midnight, true), 1682);
-
-        // An instant with non-zero seconds: no WITH-tz last-day extras.
-        let odd = datetime_millis("2020-06-15T12:30:30Z");
-        assert_eq!(count(odd, false), 1);
-        assert_eq!(count(odd, true), 1681);
+        for instant in ["2020-06-15T12:30:00Z", "2020-06-15T00:00:00Z", "2020-06-15T12:30:30Z"] {
+            let millis = datetime_millis(instant);
+            assert_eq!(count(millis, false), 1, "{instant}");
+            assert_eq!(count(millis, true), 1681, "{instant}");
+        }
     }
 
     /// A dateTime constant.

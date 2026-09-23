@@ -80,6 +80,13 @@ components start only from non-constant nodes, so
 `NegativeDataPropertyAssertion(:dp :a "01"^^xsd:int)` was consistent. See
 `tests/constant_data_inequality.rs`.
 
+`xsd:dateTime` `24:00:00` is the same value as `00:00:00` of the next day
+(**resolved**, no issue, deliberately deviating from Java). HermiT's last-day
+flag kept the two spellings apart, so a functional data property asserted with
+both was inconsistent and each local midnight was counted twice. Six
+`DateTimeTest` expectations are corrected in [corrections.json](corrections.json);
+see `tests/datetime_24h.rs` and [RESULTS.md](RESULTS.md).
+
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
@@ -102,8 +109,8 @@ are grouped; every issue lists its exact cases, reproduction command, findings,
 and acceptance criteria. At the release baseline, 912 imported cases pass and
 two overrides are empty in the original Java source. All 43 are now resolved.
 In strict mode, all 975 executable cases pass and `expected-failures.json` is
-empty. Two of those passes use documented corrections of the Java expectation
-(#9 and #51).
+empty. Eight of those passes use documented corrections of the Java expectation
+(#9, #51 and six dateTime `24:00:00` cases).
 
 | Issue | Work | Cases |
 | --- | --- | ---: |

@@ -63,15 +63,16 @@ pub enum DataValue {
     /// `long` in milliseconds: using an integer (rather than `f64` seconds)
     /// keeps the instant exact even at extreme years, where sub-second fractions
     /// would otherwise be lost to floating-point rounding. Mirroring Java
-    /// `DateTime.equals`, the value identity is three fields: the instant on the
-    /// timeline, the `last_day` flag (true when the lexical hour was exactly 24
-    /// at the end-of-day instant, so `...T24:00:00` is a distinct value from the
-    /// equal-instant `...T00:00:00` of the next day), and the timezone offset in
-    /// minutes (so `...Z` is a distinct value from `...+01:00` even at the same
-    /// instant). `tz_offset` is only meaningful when `has_tz`; it is held at `0`
-    /// otherwise (mirroring Java's fixed `NO_TIMEZONE` sentinel, which keeps
-    /// tz-less values equal).
-    DateTime { millis: i64, has_tz: bool, last_day: bool, tz_offset: i32 },
+    /// `DateTime.equals`, the value identity is the instant on the timeline and
+    /// the timezone offset in minutes (so `...Z` is a distinct value from
+    /// `...+01:00` even at the same instant). `tz_offset` is only meaningful
+    /// when `has_tz`; it is held at `0` otherwise (mirroring Java's fixed
+    /// `NO_TIMEZONE` sentinel, which keeps tz-less values equal).
+    ///
+    /// Unlike Java, which also compares a last-day flag, `...T24:00:00` is the
+    /// same value as `...T00:00:00` of the next day: XSD 1.1 Part 2 §3.3.7.2
+    /// and the lexical mapping of §E.3.5 map both spellings to one value.
+    DateTime { millis: i64, has_tz: bool, tz_offset: i32 },
     /// A datatype with its own value space disjoint from the others
     /// (`xsd:anyURI`, `xsd:hexBinary`, `xsd:base64Binary`, `rdf:XMLLiteral`):
     /// compared by canonical form, with a value-space `length` for the length
@@ -976,14 +977,14 @@ pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
 }
 
 /// Parses an `xsd:dateTime` / `xsd:date` lexical form into
-/// `(instant_millis, has_timezone, last_day, tz_offset_minutes)`, where the
+/// `(instant_millis, has_timezone, tz_offset_minutes)`, where the
 /// instant is an EXACT integer count of MILLISECONDS since the Unix epoch,
 /// normalized to UTC. This mirrors Java `DateTime.getTimeOnTimelineRaw`, which
 /// computes whole seconds and then `seconds*1000 + millisecond` as a `long`.
 /// Returns `None` on anything it does not recognize, so a parse failure is
 /// always treated as "undecided" (never a false clash). `has_time` distinguishes
 /// `dateTime` (with a `T` time part) from `date`.
-pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, bool, i32)> {
+pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, i32)> {
     // Java parses every numeric subfield with digit-only regex classes
     // (`[0-9]{...}`), so a leading `+`/`-` inside a subfield makes
     // `matcher.matches()` fail. Rust's `str::parse` would instead accept a
@@ -1123,9 +1124,10 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, bool,
         }
     }
 
-    // DateTime.java:66: m_lastDayInstant is true exactly when the lexical hour was
-    // 24 (at the validated end-of-day instant, minute/second/millisecond all 0).
-    let last_day = hour == 24;
+    // `24:00:00` is the instant `00:00:00` of the next day and the same value
+    // (XSD 1.1 Part 2 §3.3.7.2, §E.3.5: the lexical mapping adds the 24 hours
+    // to the day). Java instead keeps it apart with `m_lastDayInstant`
+    // (DateTime.java:66); the instant computed below is the same either way.
 
     // Exact integer milliseconds since the Unix epoch (UTC). Java computes whole
     // seconds first and then `*1000 + millisecond`; we mirror that exactly.
@@ -1134,7 +1136,7 @@ pub fn parse_datetime(lexical: &str, has_time: bool) -> Option<(i64, bool, bool,
         + minute * 60
         + second;
     let millis = seconds * 1000 + millisecond - tz_offset_millis;
-    Some((millis, has_tz, last_day, tz_offset_minutes))
+    Some((millis, has_tz, tz_offset_minutes))
 }
 
 /// Parses `lexical_form` against `datatype_uri`, returning the parsed value or
@@ -1302,11 +1304,11 @@ pub fn parse_value(lexical_form: &str, datatype_uri: &str) -> Option<DataValue> 
         // Mirror DateTimeDatatypeHandler.parseLiteral: xsd:dateTimeStamp REQUIRES
         // a timezone offset (unlike xsd:dateTime), so a timezone-less
         // dateTimeStamp lexical form is malformed ⇒ ill-typed.
-        let (millis, has_tz, last_day, tz_offset) = parse_datetime(lexical, true)?;
+        let (millis, has_tz, tz_offset) = parse_datetime(lexical, true)?;
         if datatype.strip_prefix(XSD) == Some("dateTimeStamp") && !has_tz {
             return None;
         }
-        Some(DataValue::DateTime { millis, has_tz, last_day, tz_offset })
+        Some(DataValue::DateTime { millis, has_tz, tz_offset })
     } else if is_anyuri_datatype(datatype) {
         if !is_valid_any_uri(lexical) {
             return None;

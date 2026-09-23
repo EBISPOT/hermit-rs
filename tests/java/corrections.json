@@ -46,5 +46,380 @@
       "issue51_key_normalization::key_requires_agreement_on_the_data_property",
       "issue51_key_normalization::key_applies_to_instances_of_the_complex_class"
     ]
+  },
+  "reasoner.DateTimeTest.testFinite1_1": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operation": 1,
+    "op": "isConsistent",
+    "java": true,
+    "corrected": false,
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "The range xsd:dateTime[>= 1965-04-15T00:00:00, <= 1965-04-15T00:00:00] is one instant without a timezone offset, so it holds the single value 1965-04-15T00:00:00 (1965-04-14T24:00:00 is the same value). Two distinct values of it, as the test requires, cannot exist, so the ontology is inconsistent.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
+  },
+  "reasoner.DateTimeTest.testFinite2_1": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operation": 1,
+    "op": "isConsistent",
+    "java": true,
+    "corrected": false,
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "xsd:dateTime[>= 1965-04-15T00:00:00, <= 1965-05-01T00:00:00] less xsd:dateTime[> 1965-04-15T00:00:00, < 1965-05-01T00:00:00] holds only its two bounds, both without a timezone offset: 1965-04-15T00:00:00 (= 1965-04-14T24:00:00) and 1965-05-01T00:00:00 (= 1965-04-30T24:00:00). Four distinct values, as the test requires, cannot exist, so the ontology is inconsistent.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
+  },
+  "reasoner.DateTimeTest.testParsing": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operations": [
+      {
+        "operation": 1,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-26T24:00:00Z",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-27T00:00:00Z",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        }
+      },
+      {
+        "operation": 11,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "0000-01-01T24:00:00+02:00",
+          "millis": -62167053600000,
+          "tz_offset": 120
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "0000-01-02T00:00:00+02:00",
+          "millis": -62167053600000,
+          "tz_offset": 120
+        }
+      },
+      {
+        "operation": 12,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-0001-12-31T24:00:00Z",
+          "millis": -62167132800000,
+          "tz_offset": 0
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "0000-01-01T00:00:00Z",
+          "millis": -62167132800000,
+          "tz_offset": 0
+        }
+      },
+      {
+        "operation": 15,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-0001-12-31T24:00:00+14:00",
+          "millis": -62167183200000,
+          "tz_offset": 840
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "0000-01-01T00:00:00+14:00",
+          "millis": -62167183200000,
+          "tz_offset": 840
+        }
+      },
+      {
+        "operation": 17,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-26T24:00:00Z",
+          "millis": -122917219200000,
+          "tz_offset": 0
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-27T00:00:00Z",
+          "millis": -122917219200000,
+          "tz_offset": 0
+        }
+      }
+    ],
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "The parse assertions print the parsed value. A 24:00:00 form is the value 00:00:00 of the next day, whose canonical form is printed; its instant and timezone offset are unchanged.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
+  },
+  "reasoner.DateTimeTest.testExactIntervalsWithoutTZ2": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operations": [
+      {
+        "operation": 0,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": false,
+          "lexical": "1926-11-26T24:00:00",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": false,
+          "lexical": "1926-11-27T00:00:00",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        }
+      },
+      {
+        "operation": 2,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-26T24:00:00Z",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-27T00:00:00Z",
+          "millis": -1360022400000,
+          "tz_offset": 0
+        }
+      },
+      {
+        "operation": 3,
+        "op": "subtract",
+        "java": 100000,
+        "corrected": 100001
+      },
+      {
+        "operation": 7,
+        "op": "enumerate",
+        "remove": [
+          {
+            "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+            "has_tz": false,
+            "lexical": "1926-11-26T24:00:00",
+            "millis": -1360022400000,
+            "tz_offset": 0
+          }
+        ]
+      }
+    ],
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "The single-instant interval 1926-11-27T00:00:00 without a timezone offset holds one value, which 1926-11-26T24:00:00 also names: subtractSizeFrom(100002) is 100001, and the interval enumerates one value. The 24:00:00 forms parse to the value printed as 00:00:00 of the next day.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
+  },
+  "reasoner.DateTimeTest.testExactIntervalsWithTZ2": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operations": [
+      {
+        "operation": 2,
+        "op": "subtract",
+        "java": 100000,
+        "corrected": 100002
+      },
+      {
+        "operation": 1686,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-25T24:00:00-11:00",
+          "millis": -1360069200000,
+          "tz_offset": -660
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-26T00:00:00-11:00",
+          "millis": -1360069200000,
+          "tz_offset": -660
+        }
+      },
+      {
+        "operation": 1687,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-26T24:00:00+13:00",
+          "millis": -1360069200000,
+          "tz_offset": 780
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "1926-11-27T00:00:00+13:00",
+          "millis": -1360069200000,
+          "tz_offset": 780
+        }
+      },
+      {
+        "operation": 1688,
+        "op": "enumerate",
+        "remove": [
+          {
+            "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+            "has_tz": true,
+            "lexical": "1926-11-25T24:00:00-11:00",
+            "millis": -1360069200000,
+            "tz_offset": -660
+          },
+          {
+            "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+            "has_tz": true,
+            "lexical": "1926-11-26T24:00:00+13:00",
+            "millis": -1360069200000,
+            "tz_offset": 780
+          }
+        ]
+      }
+    ],
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "The instant 1926-11-26T11:00:00Z with a timezone offset holds one value per offset from -14:00 to +14:00, 1681 in all. The two offsets at which it is local midnight (-11:00 and +13:00) do not add a 24:00:00 value: subtractSizeFrom(101683) is 100002, and the interval enumerates 1681 values. The 24:00:00 forms parse to the value printed as 00:00:00 of the next day.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
+  },
+  "reasoner.DateTimeTest.testExactIntervalsWithTZ3": {
+    "issue": "none (known bug without an issue): xsd:dateTime 24:00:00 is 00:00:00 of the next day",
+    "operations": [
+      {
+        "operation": 2,
+        "op": "subtract",
+        "java": 100000,
+        "corrected": 100002
+      },
+      {
+        "operation": 1686,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-25T24:00:00-11:00",
+          "millis": -122917266000000,
+          "tz_offset": -660
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-26T00:00:00-11:00",
+          "millis": -122917266000000,
+          "tz_offset": -660
+        }
+      },
+      {
+        "operation": 1687,
+        "op": "parse",
+        "java": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-26T24:00:00+13:00",
+          "millis": -122917266000000,
+          "tz_offset": 780
+        },
+        "corrected": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+          "has_tz": true,
+          "lexical": "-1926-11-27T00:00:00+13:00",
+          "millis": -122917266000000,
+          "tz_offset": 780
+        }
+      },
+      {
+        "operation": 1688,
+        "op": "enumerate",
+        "remove": [
+          {
+            "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+            "has_tz": true,
+            "lexical": "-1926-11-25T24:00:00-11:00",
+            "millis": -122917266000000,
+            "tz_offset": -660
+          },
+          {
+            "datatype": "http://www.w3.org/2001/XMLSchema#dateTime",
+            "has_tz": true,
+            "lexical": "-1926-11-26T24:00:00+13:00",
+            "millis": -122917266000000,
+            "tz_offset": 780
+          }
+        ]
+      }
+    ],
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.7.2 (dateTime lexical mapping) and §E.3.5 (dateTimeLexicalMap, through newDateTime): hour 24 is allowed only with zero minutes and seconds, and it maps to hour 0 of the next day. So 2000-12-31T24:00:00 and 2001-01-01T00:00:00 are two lexical forms of one value, with the same timezone offset if any.",
+      "XSD 1.1 Part 2 §E.3.1 and §3.3.7.2: the value has no hour 24 and no memory of the spelling, and the canonical mapping (§E.3.6) never produces 24:00:00, so the value is printed as 00:00:00 of the next day.",
+      "OWL 2 Structural Specification §4.7 (xsd:dateTime, xsd:dateTimeStamp) takes the value space and lexical mapping from XSD 1.1; OWL 2 Direct Semantics §2.2 interprets a literal as the value its lexical form maps to. So the two spellings denote one data value, and a range holding one of them holds exactly one value for it, not two.",
+      "As testExactIntervalsWithTZ2, for the instant -1926-11-26T11:00:00Z: 1681 values, subtractSizeFrom(101683) is 100002, and the 24:00:00 forms parse to the value printed as 00:00:00 of the next day.",
+      "HermiT's DateTime keeps m_lastDayInstant for a lexical hour of 24 (DateTime.java:66) and compares it in equals, and DateTimeInterval.subtractSizeFrom and enumerateDateTimes count and list every local midnight a second time as 24:00:00 of the previous day. The pinned Java suite records those extra values."
+    ],
+    "regressions": [
+      "datetime_24h::end_of_day_spelling_is_the_next_midnight",
+      "datetime_24h::single_instant_holds_one_value_per_offset",
+      "tableau::datatype_manager::tests::single_instant_datetime_cardinality_values"
+    ]
   }
 }
