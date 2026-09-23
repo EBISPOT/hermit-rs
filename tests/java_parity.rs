@@ -1,5 +1,7 @@
 //! Replay the original Java suite's checked query traces against Rust.
 //! Each case runs in a separate process: a timeout kills and reaps that process.
+#[path = "support/clause_compare.rs"]
+mod clause_compare;
 #[path = "support/java_datalog.rs"]
 mod java_datalog;
 #[path = "support/java_outcome.rs"]

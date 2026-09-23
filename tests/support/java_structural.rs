@@ -160,11 +160,15 @@ pub(super) fn run(row: &Value) {
     for a in dl.get_negative_facts() {
         actual.insert(format!("not {}", a.to_string_prefixes(&prefixes)));
     }
-    let expected = row["expected"]
+    let expected: std::collections::BTreeSet<String> = row["expected"]
         .as_array()
         .unwrap()
         .iter()
         .map(|s| s.as_str().unwrap().to_string())
         .collect();
-    assert_eq!(actual, expected);
+    // The controls spell literals, enumeration order and fresh auxiliary names
+    // differently from equivalent clauses; see clause_compare.rs.
+    if !clause_compare::equivalent(&actual, &expected) {
+        assert_eq!(actual, expected);
+    }
 }

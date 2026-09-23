@@ -77,7 +77,9 @@ cardinality, and inequality assignment consistent.
 Nineteen failing assertions also failed in the pinned Java checkout. These require
 investigation of obsolete controls or fixtures, not blindly changing Rust to
 match them. The two `BlockingValidatorTest` fixtures are repaired (#32, #33;
-see `corrected/` and [RESULTS.md](RESULTS.md)); 17 structural controls remain. Original Java error traces are retained in the case fixtures and
+see `corrected/` and [RESULTS.md](RESULTS.md)). Issues #35 to #44 and #46 are
+resolved by a semantic clause comparison (see [RESULTS.md](RESULTS.md)); 6
+structural controls remain. Original Java error traces are retained in the case fixtures and
 `upstream-failures.json`.
 
 ## Imported Java failures
@@ -115,18 +117,18 @@ two overrides are empty in the original Java source.
 | [#32](https://github.com/EBISPOT/hermit-rs/issues/32) | Repair the obsolete annotated-equality blocking-validator fixture (**resolved**; see `corrected/`) | 1 |
 | [#33](https://github.com/EBISPOT/hermit-rs/issues/33) | Repair the obsolete one-invalid-block validator fixture and check its assertions (**resolved** with #32) | 1 |
 | [#34](https://github.com/EBISPOT/hermit-rs/issues/34) | Apply description-graph rules to anonymous graph vertices (**resolved**) | 1 |
-| [#35](https://github.com/EBISPOT/hermit-rs/issues/35) | Compare datatype clausification semantically: testDataComplementOf3 | 1 |
-| [#36](https://github.com/EBISPOT/hermit-rs/issues/36) | Compare datatype clausification semantically: testDataComplementOf4 | 1 |
-| [#37](https://github.com/EBISPOT/hermit-rs/issues/37) | Compare datatype clausification semantically: testDataPropertiesDataComplementOf1 | 1 |
-| [#38](https://github.com/EBISPOT/hermit-rs/issues/38) | Compare datatype clausification semantically: testDataPropertiesDataComplementOf2 | 1 |
-| [#39](https://github.com/EBISPOT/hermit-rs/issues/39) | Compare datatype clausification semantically: testDataPropertiesDataOneOf1 | 1 |
-| [#40](https://github.com/EBISPOT/hermit-rs/issues/40) | Compare datatype clausification semantically: testDataPropertiesDataOneOf2 | 1 |
-| [#41](https://github.com/EBISPOT/hermit-rs/issues/41) | Compare datatype clausification semantically: testDataPropertiesDataOneOf3 | 1 |
-| [#42](https://github.com/EBISPOT/hermit-rs/issues/42) | Compare datatype clausification semantically: testDataPropertiesDataOneOf4 | 1 |
-| [#43](https://github.com/EBISPOT/hermit-rs/issues/43) | Compare datatype clausification semantically: testDataPropertiesHasValue1 | 1 |
-| [#44](https://github.com/EBISPOT/hermit-rs/issues/44) | Compare datatype clausification semantically: testDataPropertiesHasValue2 | 1 |
+| [#35](https://github.com/EBISPOT/hermit-rs/issues/35) | Compare datatype clausification semantically: testDataComplementOf3 (**resolved**) | 1 |
+| [#36](https://github.com/EBISPOT/hermit-rs/issues/36) | Compare datatype clausification semantically: testDataComplementOf4 (**resolved** with #35) | 1 |
+| [#37](https://github.com/EBISPOT/hermit-rs/issues/37) | Compare datatype clausification semantically: testDataPropertiesDataComplementOf1 (**resolved** with #35) | 1 |
+| [#38](https://github.com/EBISPOT/hermit-rs/issues/38) | Compare datatype clausification semantically: testDataPropertiesDataComplementOf2 (**resolved** with #35) | 1 |
+| [#39](https://github.com/EBISPOT/hermit-rs/issues/39) | Compare datatype clausification semantically: testDataPropertiesDataOneOf1 (**resolved** with #35) | 1 |
+| [#40](https://github.com/EBISPOT/hermit-rs/issues/40) | Compare datatype clausification semantically: testDataPropertiesDataOneOf2 (**resolved** with #35) | 1 |
+| [#41](https://github.com/EBISPOT/hermit-rs/issues/41) | Compare datatype clausification semantically: testDataPropertiesDataOneOf3 (**resolved** with #35) | 1 |
+| [#42](https://github.com/EBISPOT/hermit-rs/issues/42) | Compare datatype clausification semantically: testDataPropertiesDataOneOf4 (**resolved** with #35) | 1 |
+| [#43](https://github.com/EBISPOT/hermit-rs/issues/43) | Compare datatype clausification semantically: testDataPropertiesHasValue1 (**resolved** with #35) | 1 |
+| [#44](https://github.com/EBISPOT/hermit-rs/issues/44) | Compare datatype clausification semantically: testDataPropertiesHasValue2 (**resolved** with #35) | 1 |
 | [#45](https://github.com/EBISPOT/hermit-rs/issues/45) | Modernize the transitive-role clausification control without weakening semantics | 1 |
-| [#46](https://github.com/EBISPOT/hermit-rs/issues/46) | Compare clausification auxiliaries modulo consistent renaming | 1 |
+| [#46](https://github.com/EBISPOT/hermit-rs/issues/46) | Compare clausification auxiliaries modulo consistent renaming (**resolved** with #35) | 1 |
 | [#47](https://github.com/EBISPOT/hermit-rs/issues/47) | Restore the nominal clausification control: testNominals1 | 1 |
 | [#48](https://github.com/EBISPOT/hermit-rs/issues/48) | Restore the nominal clausification control: testNominals2 | 1 |
 | [#49](https://github.com/EBISPOT/hermit-rs/issues/49) | Restore the nominal clausification control: testNominals3 | 1 |
