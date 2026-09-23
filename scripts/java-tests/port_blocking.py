@@ -3,7 +3,12 @@ import pathlib,re,runpy
 root=pathlib.Path(__file__).resolve().parents[2]
 helper=runpy.run_path(str(root/'scripts/java-tests/port_ni.py'))
 args=helper['arguments'];calls=helper['replace_calls']
-src=(root/'tests/java/upstream/java/org/semanticweb/HermiT/tableau/BlockingValidatorTest.java').read_text()
+# Both upstream scenarios hang their tree nodes directly off NI roots. With the
+# inverse roles these ontologies use, ValidatedSingleDirectBlockingChecker only lets a
+# tree node block or be blocked when its parent is a tree or graph node, so the
+# upstream fixture fails at its first blocking assertion in Java too. Port the
+# corrected fixture beside it, which places the old roots under one fresh NI root.
+src=(root/'tests/java/corrected/java/org/semanticweb/HermiT/tableau/BlockingValidatorTest.java').read_text()
 src=re.sub(r'//[^\n]*','',src)
 def pred(p):
  if p.startswith('AnnotatedEquality.create'):
@@ -13,7 +18,7 @@ def atom(s):
  a=args(s[len('Atom.create('):-1]);return 'atom('+pred(a[0])+',&['+','.join('"'+v+'"' for v in a[1:])+'])'
 def atoms(s):
  s=s[s.index('{')+1:s.rindex('}')];return 'vec!['+','.join(atom(a) for a in args(s))+']'
-out=['// Direct translation of Java BlockingValidatorTest; regenerate with port_blocking.py.\n#![allow(non_snake_case,unused_variables)]\nuse super::java_tableau_tests::*;\nuse super::*;\nuse crate::model::*;\n']
+out=['// Direct translation of the corrected Java BlockingValidatorTest\n// (tests/java/corrected/); regenerate with port_blocking.py.\n#![allow(non_snake_case,unused_variables)]\nuse super::java_tableau_tests::*;\nuse super::*;\nuse crate::model::*;\n']
 for m in re.finditer(r'public void (test\w+)\(\) \{(.*?)\n    \}',src,re.S):
  out.append('#[test]\nfn '+m[1]+'(){\nif crate::java_test_support::isolated(concat!(module_path!(), "::'+m[1]+'").trim_start_matches("hermit_rs::")) { return; }\nlet mut clauses=indexmap::IndexSet::new();\n')
  body=m[2]

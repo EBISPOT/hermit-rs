@@ -8,24 +8,25 @@ string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #22 property classification fix, which also resolved #13, #18, #20, #23, #24,
 #25 and #27, the issue #26 fix for the inverses of the built-in object
 properties, the issue #19 fix for the direct types of individuals, the issue
-#21 fix for the declarations in printed hierarchies, and the issue #28
-core-blocking fix, which also resolved #29 and #30. All 598 declared Java
+#21 fix for the declarations in printed hierarchies, the issue #28
+core-blocking fix, which also resolved #29 and #30, and the issue #32/#33
+blocking-validator fixture repair. All 598 declared Java
 methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
 | Query/structural replay | 905 | 17 | 2 |
-| Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 955 | 20 | 2 |
+| Native internal tests | 52 | 1 | 0 |
+| Total, excluding OWL WG | 957 | 18 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 20 failures are:
+The Rust port does **not** yet have full Java test parity. The 18 failures are:
 
 * **1 Rust/Java discrepancy**: description-graph/SWRL integration.
-* **19 assertions that also fail in the pinned Java checkout**: 17 structural
-  control comparisons and both blocking-validator tests. The original Java
-  aggregate suites exclude these classes. The original controls and Java failure
+* **17 assertions that also fail in the pinned Java checkout**: structural
+  control comparisons. The original Java aggregate suites exclude these
+  classes. The original controls and Java failure
   messages are retained, rather than rewritten to match Rust's output.
 
 One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
@@ -355,6 +356,31 @@ are not built in are declared, each hierarchy of an inconsistent ontology is
 one equivalence led by its bottom and top elements, and a printed class
 hierarchy, read back, prints the same. The pinned Java checkout prints the same
 axioms for each of these ontologies.
+
+Issues #32 and #33 were obsolete fixtures, not Rust defects. Both
+`BlockingValidatorTest` scenarios build a tableau by hand and hang the nodes
+that should block or be blocked (a1, a2, b1, b2, b3) directly off NI roots.
+Both ontologies use the inverse role `INVR`, and with inverse roles HermiT's
+`ValidatedSingleDirectBlockingChecker.canBeBlocker` and `canBeBlocked` accept
+a tree node only when its parent is a tree or graph node: a child of a named or
+NI node can feed its label back to that node, so it must not be blocked. The
+pinned Java checkout therefore fails both tests at their first blocking
+assertion, before any validator assertion runs, and Rust ports the same rule.
+The upstream source stays unchanged under `upstream/`; the corrected copy in
+`corrected/java/org/semanticweb/HermiT/tableau/BlockingValidatorTest.java`
+only makes the old roots a and b tree children of one fresh NI root r that has
+no labels or edges. a and b keep their labels and edges and, as children of an
+NI node, still can neither block nor be blocked, so every assertion keeps its
+meaning; none is changed. `port_blocking.py` now ports the corrected copy.
+Every assertion passes in Rust and, compiled against the pinned checkout, in
+Java. The validator results also follow from the labels: in the annotated
+equality scenario, a2 is `B` and has the `R`-neighbour a in `C`, so as a copy
+of a1, whose `R`-successor a11 is in `C`, it would have two `R`-neighbours in
+`C` against `B <= <=1 R.C`, and the block is invalid. In the other scenario, b2
+and b3 are both `R`-successors of the `C` node b and would both copy a1's `D`
+against `C <= <=1 R.D`, so exactly one of their blocks is valid; the blocks of
+a2, a111, b1 and a121 respect every clause. Nothing deviates from Java's
+blocking or validation; only the fixture changed.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

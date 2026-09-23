@@ -74,9 +74,10 @@ Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
 cardinality, and inequality assignment consistent.
 
-Nineteen failing assertions also fail in the pinned Java checkout. These require
+Nineteen failing assertions also failed in the pinned Java checkout. These require
 investigation of obsolete controls or fixtures, not blindly changing Rust to
-match them. Original Java error traces are retained in the case fixtures and
+match them. The two `BlockingValidatorTest` fixtures are repaired (#32, #33;
+see `corrected/` and [RESULTS.md](RESULTS.md)); 17 structural controls remain. Original Java error traces are retained in the case fixtures and
 `upstream-failures.json`.
 
 ## Imported Java failures
@@ -111,8 +112,8 @@ two overrides are empty in the original Java source.
 | [#29](https://github.com/EBISPOT/hermit-rs/issues/29) | Reject the second unsatisfiable Widmann case under core blocking (**resolved** with #28) | 1 |
 | [#30](https://github.com/EBISPOT/hermit-rs/issues/30) | Reject the third unsatisfiable Widmann case under core blocking (**resolved** with #28) | 1 |
 | [#31](https://github.com/EBISPOT/hermit-rs/issues/31) | Reject intersections of XMLLiteral and disjoint datatype spaces (**resolved**) | 1 |
-| [#32](https://github.com/EBISPOT/hermit-rs/issues/32) | Repair the obsolete annotated-equality blocking-validator fixture | 1 |
-| [#33](https://github.com/EBISPOT/hermit-rs/issues/33) | Repair the obsolete one-invalid-block validator fixture and check its assertions | 1 |
+| [#32](https://github.com/EBISPOT/hermit-rs/issues/32) | Repair the obsolete annotated-equality blocking-validator fixture (**resolved**; see `corrected/`) | 1 |
+| [#33](https://github.com/EBISPOT/hermit-rs/issues/33) | Repair the obsolete one-invalid-block validator fixture and check its assertions (**resolved** with #32) | 1 |
 | [#34](https://github.com/EBISPOT/hermit-rs/issues/34) | Apply description-graph rules to anonymous graph vertices | 1 |
 | [#35](https://github.com/EBISPOT/hermit-rs/issues/35) | Compare datatype clausification semantically: testDataComplementOf3 | 1 |
 | [#36](https://github.com/EBISPOT/hermit-rs/issues/36) | Compare datatype clausification semantically: testDataComplementOf4 | 1 |
