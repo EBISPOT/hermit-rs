@@ -99,8 +99,9 @@ fn do_iteration(
             // Tableau.java:421-422: `if (m_checkUnknownDatatypeRestrictions && !containsClash())
             //     m_datatypeManager.applyUnknownDatatypeRestrictionSemantics();`
             // Runs BEFORE checkDatatypeConstraints. Gated on the unknown-restriction
-            // flag, which is only ever set in the non-default ignoreUnsupportedDatatypes
-            // mode, so the default path skips this entirely.
+            // flag, which is set only for unsupported datatypes in the
+            // ignoreUnsupportedDatatypes mode and for the data-property
+            // classification's unknown datatype, so other reasoning skips this.
             if tableau.check_unknown_datatype_restrictions && !tableau.contains_clash() {
                 tableau.apply_unknown_datatype_restriction_semantics();
             }
@@ -1984,50 +1985,6 @@ fn is_object_property_subsumed_by_core_with(
     Ok(!is_ontology_consistent_with_configuration(&test, configuration)?)
 }
 
-/// Whether `sub` is subsumed by the *union* of `sups` (i.e. every model forces
-/// `sub(a,b)` to satisfy at least one `sup_i(a,b)`). The batched subsumption
-/// test of `QuasiOrderClassification.isEveryPossibleSubsumerNonSubsumer`: assert
-/// `sub(a,b)` and `not sup_i(a,b)` for every candidate, and test inconsistency.
-/// An empty `sups` makes the union empty, so the result is just whether `sub`
-/// is unsatisfiable as an edge.
-fn is_object_property_subsumed_by_union_with(
-    ontology: &SetOntology<crate::structural::A>,
-    sub: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-    sups: &std::collections::HashSet<horned_owl::model::ObjectPropertyExpression<crate::structural::A>>,
-    configuration: &crate::configuration::Configuration,
-) -> Result<bool, String> {
-    use horned_owl::model::{ClassAssertion, ObjectPropertyAssertion};
-    let mut test = ontology.clone();
-    let build = Build::new_arc();
-    let a = fresh_anonymous_individual("role-subject");
-    let b = fresh_anonymous_individual("role-object");
-    let pseudo_nominal = CE::Class(build.class("internal:pseudo-nominal"));
-    test.insert(Component::ObjectPropertyAssertion(ObjectPropertyAssertion {
-        ope: sub,
-        from: a.clone(),
-        to: b.clone(),
-    }));
-    test.insert(Component::ClassAssertion(ClassAssertion {
-        ce: pseudo_nominal.clone(),
-        i: b.clone(),
-    }));
-    // The pseudo-nominal form of the per-candidate `not sup_i(a,b)` (mirroring the
-    // single-subsumption test in `is_object_property_subsumed_by_core_with`): the
-    // union subsumption holds iff `b` cannot remain a pseudo-nominal under every
-    // `∀sup_i.¬pseudoNominal(a)` simultaneously. This propagates through the role
-    // automaton for complex/inverse super-roles.
-    for sup in sups {
-        test.insert(Component::ClassAssertion(ClassAssertion {
-            ce: CE::ObjectAllValuesFrom {
-                ope: sup.clone(),
-                bce: Box::new(CE::ObjectComplementOf(Box::new(pseudo_nominal.clone()))),
-            },
-            i: a.clone(),
-        }));
-    }
-    Ok(!is_ontology_consistent_with_configuration(&test, configuration)?)
-}
-
 /// Port of `Reasoner.isSubDataPropertyOf` (`Reasoner.java:1434-1456`): the
 /// fresh-data-property reduction. On an inconsistent ontology HermiT short-
 /// circuits to `true` (the `if(!m_isConsistent)` guard). Otherwise: assert
@@ -2110,53 +2067,6 @@ fn is_sub_data_property_of_core_with(
         sup,
         negated_super,
     ])));
-    Ok(!is_ontology_consistent_with_configuration(&test, configuration)?)
-}
-
-/// Whether `sub` is subsumed by the *union* of `sups` (the data-role analogue of
-/// [`is_object_property_subsumed_by_union_with`]): assert `subDP(a,k)` and, for
-/// each candidate `sup_i`, a fresh `negDP_i` disjoint from `sup_i` with
-/// `negDP_i(a,k)`, forcing `k` to be no `sup_i`-value; inconsistency means every
-/// model forces some `sup_i(a,k)`, i.e. `sub ⊑ ⊔ sup_i`.
-fn is_sub_data_property_of_union_with(
-    ontology: &SetOntology<crate::structural::A>,
-    sub: horned_owl::model::DataProperty<crate::structural::A>,
-    sups: &std::collections::HashSet<horned_owl::model::DataProperty<crate::structural::A>>,
-    configuration: &crate::configuration::Configuration,
-) -> Result<bool, String> {
-    use horned_owl::model::{DataPropertyAssertion, DisjointDataProperties, Literal};
-    if !is_ontology_consistent_with_configuration(ontology, configuration)?
-        || sub.0.to_string() == "http://www.w3.org/2002/07/owl#bottomDataProperty"
-        || sups
-            .iter()
-            .any(|s| s.0.to_string() == "http://www.w3.org/2002/07/owl#topDataProperty")
-    {
-        return Ok(true);
-    }
-    let build = Build::new_arc();
-    let a = fresh_anonymous_individual("subdp-individual");
-    let constant = Literal::Datatype {
-        datatype_iri: build.iri("internal:anonymous-constants"),
-        literal: fresh_witness_iri("subdp-constant"),
-    };
-    let mut test = ontology.clone();
-    test.insert(Component::DataPropertyAssertion(DataPropertyAssertion {
-        dp: sub,
-        from: a.clone(),
-        to: constant.clone(),
-    }));
-    for sup in sups {
-        let negated_super = build.data_property(fresh_witness_iri("subdp-negated-super"));
-        test.insert(Component::DataPropertyAssertion(DataPropertyAssertion {
-            dp: negated_super.clone(),
-            from: a.clone(),
-            to: constant.clone(),
-        }));
-        test.insert(Component::DisjointDataProperties(DisjointDataProperties(vec![
-            sup.clone(),
-            negated_super,
-        ])));
-    }
     Ok(!is_ontology_consistent_with_configuration(&test, configuration)?)
 }
 
@@ -2590,7 +2500,6 @@ where
     }
     element_set.insert(thing.clone());
     element_set.insert(nothing.clone());
-    let elements: Vec<Class<crate::structural::A>> = element_set.into_iter().collect();
 
     // Clausify and compile the clauses ONCE, then reuse the tableau/manager across
     // every subsumption test (HermiT's single `m_tableau`). This is what makes
@@ -2598,7 +2507,6 @@ where
     // was the bottleneck.
     monitor.classification_phase("compile");
     let reasoner = Reasoner::with_configuration(&dl_ontology, configuration.clone());
-    let mut manager = reasoner.new_manager();
 
     monitor.classification_phase("consistency");
     if !reasoner.is_consistent() {
@@ -2609,6 +2517,7 @@ where
         if configuration.throw_inconsistent_ontology_exception {
             return Err(INCONSISTENT_ONTOLOGY_ERROR.to_string());
         }
+        let elements: Vec<Class<crate::structural::A>> = element_set.into_iter().collect();
         return Ok(crate::hierarchy::Hierarchy::empty_hierarchy(
             &elements,
             thing,
@@ -2616,62 +2525,8 @@ where
         ));
     }
 
-    use crate::model::AtomicConcept;
-    let atomic_of = |c: &Class<crate::structural::A>| AtomicConcept::create(c.0.to_string());
-
     monitor.classification_phase("classify");
 
-    // Deterministic (Horn) ontologies: one model build per concept, reading its
-    // subsumers off the single saturated model -- `DeterministicClassification`.
-    // O(N) satisfiability tests instead of O(N^2) pairwise subsumption tests.
-    // Java dispatches on `tableau.isDeterministic() && !forceQuasiOrder`
-    // (Reasoner.classifyAtomicConcepts, Reasoner.java:2047).
-    if reasoner.is_deterministic() && !reasoner.configuration().force_quasi_order_classification {
-        let element_iris: HashSet<String> = elements.iter().map(|c| c.0.to_string()).collect();
-        let mut subsumers: HashMap<
-            Class<crate::structural::A>,
-            HashSet<Class<crate::structural::A>>,
-        > = HashMap::new();
-        let total = elements.len();
-        for (idx, element) in elements.iter().enumerate() {
-            monitor.classification_progress(idx, total);
-            let mut element_subsumers: HashSet<Class<crate::structural::A>> = HashSet::new();
-            // Read every element's subsumers off its own single model -- including
-            // owl:Thing, so a `⊤ ⊑ C` axiom (making C equivalent to Thing) is found.
-            match reasoner.concept_subsumers(&mut manager, &atomic_of(element)) {
-                // Satisfiable: the atomic concepts forced onto the fresh node are
-                // exactly `element`'s subsumers (filtered to the classified set).
-                Some(forced) => {
-                    element_subsumers.insert(thing.clone());
-                    element_subsumers.insert(element.clone());
-                    for c in forced {
-                        if element_iris.contains(c.iri()) {
-                            element_subsumers.insert(build.class(c.iri()));
-                        }
-                    }
-                }
-                // Unsatisfiable (`element ⊑ ⊥`): subsumed by everything.
-                None => {
-                    for other in &elements {
-                        element_subsumers.insert(other.clone());
-                    }
-                }
-            }
-            subsumers.insert(element.clone(), element_subsumers);
-        }
-        return Ok(crate::hierarchy::build_hierarchy_with_monitor(
-            thing, nothing, subsumers, monitor,
-        ));
-    }
-
-    // Non-deterministic ontologies: route through the faithful quasi-order
-    // classifier (HermiT's `QuasiOrderClassification`, the same driver the
-    // role/data-property classifiers use). It seeds the known graph with told
-    // subsumers, reads each concept's possible subsumers off one saturated model
-    // (the leaf-node strategy), and resolves the leftover possible subsumptions
-    // with the enhanced-traversal search and the batched non-subsumer test --
-    // rather than the O(N^2) pairwise subsumption build.
-    use crate::quasi_order::QuasiOrderClassification;
     // Told subsumers are read off the clausified binary DL clauses (head length 1,
     // body length 1, both predicates atomic concepts that belong to the classified
     // vocabulary), exactly as
@@ -2680,11 +2535,9 @@ where
     // axioms captures told subsumptions hidden inside conjunctions and definitions
     // (e.g. `A ⊑ B ⊓ C` clausifies to `A ⊑ B` and `A ⊑ C`), giving a stronger known
     // graph seed.
-    let element_set: HashSet<Class<crate::structural::A>> = elements.iter().cloned().collect();
-    let element_iris: HashSet<String> = elements.iter().map(|c| c.0.to_string()).collect();
-    let mut told: Vec<(Class<crate::structural::A>, Class<crate::structural::A>)> = Vec::new();
-    {
-        use crate::model::DLPredicate;
+    let told = |elements: &HashSet<Class<crate::structural::A>>| {
+        let element_iris: HashSet<String> = elements.iter().map(|c| c.0.to_string()).collect();
+        let mut told: Vec<(Class<crate::structural::A>, Class<crate::structural::A>)> = Vec::new();
         for clause in dl_ontology.get_dl_clauses() {
             if clause.get_head_length() == 1 && clause.get_body_length() == 1 {
                 if let (
@@ -2706,17 +2559,131 @@ where
                 }
             }
         }
-    }
-    let oracle = ConceptSubsumptionOracle {
-        reasoner: &reasoner,
-        manager,
-        thing: thing.clone(),
-        class_cache: std::cell::RefCell::new(HashMap::new()),
+        told
     };
-    let mut classifier =
-        QuasiOrderClassification::new(oracle, thing.clone(), nothing.clone(), element_set);
+    Ok(classify_atomic_concepts(
+        &reasoner,
+        thing,
+        nothing,
+        element_set,
+        told,
+        None,
+        RelevantConcepts::Named,
+        monitor,
+    ))
+}
+
+/// Classifies the atomic concepts `elements` (including `top` and `bottom`, the
+/// hierarchy's top and bottom elements) over `reasoner`'s consistent ontology --
+/// HermiT's `classifyAtomicConcepts` / `classifyAtomicConceptsForRoles`
+/// (Reasoner.java:2046-2057). Only the `relevant` concepts are read off models.
+/// The quasi-order classifier seeds its known subsumptions with the pairs
+/// `told(elements)` returns; with `inverse_concepts` (the proxies of a role and
+/// of its inverse) every subsumption is mirrored onto the inverses, as in
+/// `QuasiOrderClassificationForRoles`.
+#[allow(clippy::too_many_arguments)]
+fn classify_atomic_concepts<M, T>(
+    reasoner: &Reasoner<'_>,
+    top: Class<crate::structural::A>,
+    bottom: Class<crate::structural::A>,
+    elements: std::collections::HashSet<Class<crate::structural::A>>,
+    told: T,
+    inverse_concepts: Option<HashMap<Class<crate::structural::A>, Class<crate::structural::A>>>,
+    relevant: RelevantConcepts,
+    monitor: &mut M,
+) -> crate::hierarchy::Hierarchy<Class<crate::structural::A>>
+where
+    M: crate::hierarchy::ClassificationProgressMonitor<Class<crate::structural::A>> + ?Sized,
+    T: FnOnce(
+        &std::collections::HashSet<Class<crate::structural::A>>,
+    ) -> Vec<(Class<crate::structural::A>, Class<crate::structural::A>)>,
+{
+    use crate::model::AtomicConcept;
+    use std::collections::HashSet;
+
+    let build = Build::new_arc();
+    let atomic_of = |c: &Class<crate::structural::A>| AtomicConcept::create(c.0.to_string());
+    let mut manager = reasoner.new_manager();
+
+    // Deterministic (Horn) ontologies: one model build per concept, reading its
+    // subsumers off the single saturated model -- `DeterministicClassification`.
+    // O(N) satisfiability tests instead of O(N^2) pairwise subsumption tests.
+    // Java dispatches on `tableau.isDeterministic() && !forceQuasiOrder`
+    // (Reasoner.classifyAtomicConcepts, Reasoner.java:2047).
+    if reasoner.is_deterministic() && !reasoner.configuration().force_quasi_order_classification {
+        let elements: Vec<Class<crate::structural::A>> = elements.into_iter().collect();
+        let element_iris: HashSet<String> = elements.iter().map(|c| c.0.to_string()).collect();
+        let mut subsumers: HashMap<
+            Class<crate::structural::A>,
+            HashSet<Class<crate::structural::A>>,
+        > = HashMap::new();
+        let total = elements.len();
+        for (idx, element) in elements.iter().enumerate() {
+            monitor.classification_progress(idx, total);
+            // `R⁻ ⊑ S⁻` exactly when `R ⊑ S`, so an inverse role whose role has
+            // been classified has the inverses of its role's subsumers.
+            let mirrored = inverse_concepts.as_ref().and_then(|inverses| {
+                subsumers
+                    .get(inverses.get(element)?)?
+                    .iter()
+                    .map(|subsumer| inverses.get(subsumer).cloned())
+                    .collect::<Option<HashSet<Class<crate::structural::A>>>>()
+            });
+            if let Some(mirrored) = mirrored {
+                subsumers.insert(element.clone(), mirrored);
+                continue;
+            }
+            let mut element_subsumers: HashSet<Class<crate::structural::A>> = HashSet::new();
+            // Read every element's subsumers off its own single model -- including
+            // the top element, so a `⊤ ⊑ C` axiom (making C equivalent to Thing) is
+            // found.
+            match reasoner.concept_subsumers(&mut manager, &atomic_of(element)) {
+                // Satisfiable: the atomic concepts forced onto the fresh node are
+                // exactly `element`'s subsumers (filtered to the classified set).
+                Some(forced) => {
+                    element_subsumers.insert(top.clone());
+                    element_subsumers.insert(element.clone());
+                    for c in forced {
+                        if element_iris.contains(c.iri()) {
+                            element_subsumers.insert(build.class(c.iri()));
+                        }
+                    }
+                }
+                // Unsatisfiable (`element ⊑ ⊥`): subsumed by everything.
+                None => {
+                    for other in &elements {
+                        element_subsumers.insert(other.clone());
+                    }
+                }
+            }
+            subsumers.insert(element.clone(), element_subsumers);
+        }
+        return crate::hierarchy::build_hierarchy_with_monitor(top, bottom, subsumers, monitor);
+    }
+
+    // Non-deterministic ontologies: route through the faithful quasi-order
+    // classifier (HermiT's `QuasiOrderClassification`). It seeds the known graph
+    // with told subsumers, reads each concept's possible subsumers off one
+    // saturated model (the leaf-node strategy), and resolves the leftover possible
+    // subsumptions with the enhanced-traversal search and the batched non-subsumer
+    // test -- rather than the O(N^2) pairwise subsumption build.
+    use crate::quasi_order::QuasiOrderClassification;
+    let told = told(&elements);
+    let oracle = ConceptSubsumptionOracle {
+        reasoner,
+        manager,
+        thing: top.clone(),
+        class_cache: std::cell::RefCell::new(HashMap::new()),
+        relevant,
+    };
+    let mut classifier = match inverse_concepts {
+        Some(inverses) => {
+            QuasiOrderClassification::new_for_roles(oracle, top, bottom, elements, Some(inverses))
+        }
+        None => QuasiOrderClassification::new(oracle, top, bottom, elements),
+    };
     classifier.initialise_known_subsumptions_using_told_subsumers(&told);
-    Ok(classifier.classify_with_monitor(monitor))
+    classifier.classify_with_monitor(monitor)
 }
 
 /// Whether the object property `ope` is necessarily empty (`ope ⊑ ⊥`): true iff
@@ -2739,93 +2706,21 @@ fn is_object_property_empty(
     Ok(!is_ontology_consistent(&test)?)
 }
 
-/// An oracle for the quasi-order classifier (`quasi_order::SubsumptionOracle`)
-/// backed by the object-/data-property subsumption tests. As in
-/// `QuasiOrderClassification`'s `TruthOracle`-style usage, `build_model`
-/// exposes no deterministic known subsumers (every other element is *possible*),
-/// so `does_subsume` -- the explicit tableau subsumption test -- decides every
-/// edge. This keeps the role/data-role classification result identical to the
-/// pairwise build while routing it through the faithful quasi-order driver
-/// (including the inverse-concept mirroring of `QuasiOrderClassificationForRoles`).
-struct PropertySubsumptionOracle<'a, E, F, G, H> {
-    ontology: &'a SetOntology<crate::structural::A>,
-    candidates: Vec<E>,
-    /// `does_subsume(parent, child)`: returns the subsumption-test result, or an
-    /// error that is captured into `error`.
-    subsumes: F,
-    /// `is_subsumed_by_union(child, candidates)`: the batched test result paired
-    /// with the picked element's deterministic known subsumers read off the
-    /// witnessing model (empty when the union test is negative / the read-off finds
-    /// none), or an error captured into `error`. The known subsumers mirror the
-    /// class path's `readKnownSubsumersFromRootNode` so the classifier can prune
-    /// them (`isEveryPossibleSubsumerNonSubsumer`'s positive branch).
-    subsumes_union: G,
-    /// `buildModelForConcept`: reads `(known, possible)` subsumers off one
-    /// saturated model of `picked`, or `None` if `picked` is unsatisfiable.
-    build_model_fn: H,
-    error: Option<String>,
+/// The atomic concepts a classification reads off its models: the named classes
+/// (every concept outside the `internal:` namespace), or exactly the given
+/// concepts -- the `internal:prop#` proxies of a property classification, with
+/// `owl:Thing` and `owl:Nothing`.
+#[derive(Clone)]
+enum RelevantConcepts {
+    Named,
+    Only(std::sync::Arc<std::collections::HashSet<crate::model::AtomicConcept>>),
 }
 
-impl<'a, E, F, G, H> crate::quasi_order::SubsumptionOracle<E>
-    for PropertySubsumptionOracle<'a, E, F, G, H>
-where
-    E: Eq + std::hash::Hash + Clone,
-    F: FnMut(&SetOntology<crate::structural::A>, &E, &E) -> Result<bool, String>,
-    G: FnMut(
-        &SetOntology<crate::structural::A>,
-        &E,
-        &std::collections::HashSet<E>,
-    ) -> Result<(bool, std::collections::HashSet<E>), String>,
-    H: FnMut(&E, &[E]) -> Option<(std::collections::HashSet<E>, std::collections::HashSet<E>)>,
-{
-    fn build_model(&mut self, concept: &E) -> Option<crate::quasi_order::ModelReadOff<E>> {
-        // The role classifier reads subsumers off a single edge model; it does not
-        // expose full node labels, so cross-concept harvesting is disabled
-        // (`node_labels: None`) and only the query's own possibles are recorded.
-        let (query_known, query_possible) = (self.build_model_fn)(concept, &self.candidates)?;
-        Some(crate::quasi_order::ModelReadOff {
-            query_known,
-            query_possible,
-            node_labels: None,
-        })
-    }
-    fn does_subsume(&mut self, parent: &E, child: &E) -> bool {
-        if self.error.is_some() {
-            return false;
-        }
-        match (self.subsumes)(self.ontology, child, parent) {
-            Ok(result) => result,
-            Err(e) => {
-                self.error = Some(e);
-                false
-            }
-        }
-    }
-    fn is_subsumed_by_union(
-        &mut self,
-        child: &E,
-        candidates: &std::collections::HashSet<E>,
-    ) -> Option<crate::quasi_order::UnionTestResult<E>> {
-        if self.error.is_some() {
-            return None;
-        }
-        match (self.subsumes_union)(self.ontology, child, candidates) {
-            // On a positive union test the picked element's deterministic known
-            // subsumers are read off the witnessing edge model (mirroring the class
-            // path's `readKnownSubsumersFromRootNode`), so the classifier prunes
-            // them from the possibles. Answer-neutral: only fewer pairwise tests.
-            Ok((subsumed, query_known)) => Some(crate::quasi_order::UnionTestResult {
-                subsumed,
-                query_known: if subsumed {
-                    query_known
-                } else {
-                    std::collections::HashSet::new()
-                },
-            }),
-            Err(e) => {
-                self.error = Some(e);
-                None
-            }
+impl RelevantConcepts {
+    fn contains(&self, concept: crate::model::AtomicConcept) -> bool {
+        match self {
+            RelevantConcepts::Named => !concept.iri().starts_with("internal:"),
+            RelevantConcepts::Only(concepts) => concepts.contains(&concept),
         }
     }
 }
@@ -2842,6 +2737,8 @@ struct ConceptSubsumptionOracle<'r, 'd> {
     reasoner: &'r Reasoner<'d>,
     manager: HyperresolutionManager,
     thing: horned_owl::model::Class<crate::structural::A>,
+    /// The concepts read off the models (the classified elements' namespace).
+    relevant: RelevantConcepts,
     /// Interns the `Class<A>` for each distinct concept encountered while reading
     /// labels off saturated models. On dense models the same atomic concepts recur
     /// across tens of thousands of node labels per model and across every model
@@ -2882,7 +2779,7 @@ impl<'r, 'd> ConceptSubsumptionOracle<'r, 'd> {
         acs: std::collections::HashSet<crate::model::AtomicConcept>,
     ) -> std::collections::HashSet<horned_owl::model::Class<crate::structural::A>> {
         acs.into_iter()
-            .filter(|c| !c.iri().starts_with("internal:"))
+            .filter(|c| self.relevant.contains(*c))
             .map(|c| self.class_of(build, c))
             .collect()
     }
@@ -2899,6 +2796,7 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
         let (known_concepts, label_concepts) = self.reasoner.classification_model_read_off(
             &mut self.manager,
             &crate::model::AtomicConcept::create(concept.0.to_string()),
+            &self.relevant,
         )?;
         // readKnownSubsumersFromRootNode: deterministic subsumers + owl:Thing.
         let mut query_known = self.classes_of(&build, known_concepts);
@@ -2997,8 +2895,13 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
             self.reasoner,
             self.thing.clone(),
             &self.class_cache,
+            self.relevant.clone(),
             worker_count,
         )))
+    }
+
+    fn builds_models_in_parallel(&self) -> bool {
+        leaf_build_max_workers() > 1
     }
 
     /// Parallel leaf-node model builds. Each model
@@ -3043,6 +2946,7 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
 
         let dl_ontology = self.reasoner.dl_ontology();
         let configuration = self.reasoner.configuration().clone();
+        let relevant = &self.relevant;
         // Global work queue: each worker repeatedly claims the next concept index.
         let next = std::sync::atomic::AtomicUsize::new(0);
         // Each worker pushes its `(index, raw_result)` into the shared sink; we
@@ -3069,7 +2973,11 @@ impl<'r, 'd> crate::quasi_order::SubsumptionOracle<horned_owl::model::Class<crat
                         if i >= queries.len() {
                             break;
                         }
-                        let result = worker.classification_model_read_off(&mut manager, &queries[i]);
+                        let result = worker.classification_model_read_off(
+                            &mut manager,
+                            &queries[i],
+                            relevant,
+                        );
                         sink.lock().unwrap().push((i, result));
                     }
                 });
@@ -3245,6 +3153,8 @@ struct ConceptStreamingPool<'r> {
     /// `AtomicConcept` -- so `dispatch` interns once and `recv` returns the exact
     /// `Class<A>` the coordinator dispatched (its in-flight key).
     dispatched: HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
+    /// The oracle's relevant concepts, read off by the workers' models.
+    relevant: RelevantConcepts,
     worker_count: usize,
 }
 
@@ -3255,6 +3165,7 @@ impl<'r> ConceptStreamingPool<'r> {
         class_cache: &'r std::cell::RefCell<
             HashMap<crate::model::AtomicConcept, horned_owl::model::Class<crate::structural::A>>,
         >,
+        relevant: RelevantConcepts,
         worker_count: usize,
     ) -> ConceptStreamingPool<'r> {
         // Extend the shared, read-only ontology + configuration borrows to 'static
@@ -3280,6 +3191,7 @@ impl<'r> ConceptStreamingPool<'r> {
             let work_rx = std::sync::Arc::clone(&work_rx);
             let result_tx = result_tx.clone();
             let configuration = configuration.clone();
+            let relevant = relevant.clone();
             let handle = std::thread::spawn(move || {
                 // One replica reasoner + manager per worker, reused across every
                 // concept it builds (one tableau allocation per worker, not per
@@ -3298,7 +3210,8 @@ impl<'r> ConceptStreamingPool<'r> {
                         // Work channel closed (pool dropping): exit.
                         Err(_) => break,
                     };
-                    let result = worker.classification_model_read_off(&mut manager, &concept);
+                    let result =
+                        worker.classification_model_read_off(&mut manager, &concept, &relevant);
                     // Drop this worker's tableau now if that build blew it up, so an
                     // idle worker does not pin a multi-GB allocation while the memory
                     // governor throttles dispatch (the throttle relies on quiescent
@@ -3320,6 +3233,7 @@ impl<'r> ConceptStreamingPool<'r> {
             thing,
             class_cache,
             dispatched: HashMap::new(),
+            relevant,
             worker_count,
         }
     }
@@ -3377,7 +3291,7 @@ impl<'r> crate::quasi_order::StreamingModelPool<horned_owl::model::Class<crate::
             let mut query_known: std::collections::HashSet<
                 horned_owl::model::Class<crate::structural::A>,
             > = known_concepts.into_iter()
-                .filter(|c| !c.iri().starts_with("internal:"))
+                .filter(|c| self.relevant.contains(*c))
                 .map(|c| self.class_of(&build, c))
                 .collect();
             query_known.insert(self.thing.clone());
@@ -3387,7 +3301,7 @@ impl<'r> crate::quasi_order::StreamingModelPool<horned_owl::model::Class<crate::
                 .into_iter()
                 .map(|acs| {
                     acs.into_iter()
-                        .filter(|c| !c.iri().starts_with("internal:"))
+                        .filter(|c| self.relevant.contains(*c))
                         .map(|c| self.class_of(&build, c))
                         .collect()
                 })
@@ -3665,15 +3579,14 @@ pub fn classify_object_properties_with_configuration(
 
 /// Classifies object-property *expressions* into a subsumption
 /// [`Hierarchy`](crate::hierarchy::Hierarchy), surfacing one `Inv(P)` node per
-/// inverse role -- the faithful analogue of HermiT's `classifyObjectProperties`
-/// (`Reasoner.java:945-1029`) whose `m_objectRoleHierarchy` is a `Hierarchy<Role>`
-/// (`Role` = `OWLObjectPropertyExpression`). When the ontology
-/// `hasInverseRoles()`, an `internal:prop#inv#…` role-concept is added per
-/// inverse role and the classification is run through
-/// [`QuasiOrderClassificationForRoles`](crate::quasi_order) with the
-/// `inverse_concept` map populated (mirroring every subsumption onto inverses).
-/// The resulting concept-node hierarchy is transformed back to OPE nodes (Java's
-/// `transformer`).
+/// inverse role -- HermiT's `classifyObjectProperties` (`Reasoner.java:945-1029`),
+/// whose `m_objectRoleHierarchy` is a `Hierarchy<Role>`. Role subsumption is
+/// reduced to concept subsumption: each role `R` gets a proxy concept
+/// `internal:prop#R ≡ ∃R.M` (`internal:prop#inv#R` for `Inv(R)`, added when the
+/// ontology has inverse roles), where `M` is a fresh concept with an instance;
+/// owl:topObjectProperty and owl:bottomObjectProperty map to owl:Thing and
+/// owl:Nothing. The proxies are classified like atomic concepts, and the
+/// hierarchy is transformed back.
 pub fn classify_object_property_expressions(
     ontology: &SetOntology<crate::structural::A>,
 ) -> Result<
@@ -3689,9 +3602,9 @@ pub fn classify_object_property_expressions(
 }
 
 /// As [`classify_object_property_expressions`], but runs the role classification
-/// under an explicit [`Configuration`](crate::configuration::Configuration):
-/// the consistency precheck and every subsumption test
-/// ([`is_object_property_subsumed_by_with`]) are threaded through `configuration`.
+/// under an explicit [`Configuration`](crate::configuration::Configuration),
+/// which governs the clausification of the proxy definitions, the consistency
+/// check and every tableau of the concept classifier.
 pub fn classify_object_property_expressions_with_configuration(
     ontology: &SetOntology<crate::structural::A>,
     configuration: &crate::configuration::Configuration,
@@ -3701,18 +3614,12 @@ pub fn classify_object_property_expressions_with_configuration(
     >,
     String,
 > {
-    // `Reasoner.classifyObjectProperties` (Reasoner.java:946) calls
-    // `checkPreConditions` first, so it throws on an inconsistent ontology under
-    // the default flag (the `!m_isConsistent` empty-hierarchy branch is for the
-    // flag-off case).
-    throw_inconsistent_ontology_exception_if_necessary(ontology, configuration)?;
-    use crate::quasi_order::QuasiOrderClassification;
+    use crate::model::{AtomicRole, InverseRole, Role};
     use crate::structural::{
         BuiltInPropertyManager, OWLAxioms, OWLAxiomsExpressivity, OWLNormalization,
     };
-    use horned_owl::model::{ObjectProperty, ObjectPropertyExpression as OPE};
+    use horned_owl::model::{EquivalentClasses, ObjectProperty, ObjectPropertyExpression as OPE};
     use std::collections::HashSet;
-    let configuration = configuration.clone();
 
     let build = Build::new_arc();
     let top: OPE<crate::structural::A> =
@@ -3744,179 +3651,180 @@ pub fn classify_object_property_expressions_with_configuration(
         }
         named_roles.insert(property.clone());
     }
-    // The role-concepts to classify: each named role, plus -- when the ontology has
-    // inverse roles -- its inverse (matching the `relevantObjectRoles` loop).
-    let mut elements: HashSet<OPE<crate::structural::A>> = HashSet::new();
-    let mut inverse_concept: HashMap<OPE<crate::structural::A>, OPE<crate::structural::A>> =
+
+    // The proxy of each role to classify: each named role, plus -- when the
+    // ontology has inverse roles -- its inverse (the `relevantObjectRoles` loop).
+    // `C_R ≡ ∃R.M` with `M(a)` for a fresh `a` (Reasoner.java:962-993).
+    let thing = build.class("http://www.w3.org/2002/07/owl#Thing");
+    let nothing = build.class("http://www.w3.org/2002/07/owl#Nothing");
+    let fresh_concept = CE::Class(build.class("internal:fresh-concept"));
+    let mut extended = ontology.clone();
+    let mut roles_for_proxies: HashMap<Class<crate::structural::A>, OPE<crate::structural::A>> =
         HashMap::new();
-    for role in &named_roles {
-        let p = OPE::ObjectProperty(role.clone());
-        elements.insert(p.clone());
-        if has_inverse_roles {
-            let ip = OPE::InverseObjectProperty(role.clone());
-            elements.insert(ip.clone());
-            inverse_concept.insert(p.clone(), ip.clone());
-            inverse_concept.insert(ip, p);
-        }
-    }
-    elements.insert(top.clone());
-    elements.insert(bottom.clone());
-
-    if !is_ontology_consistent_with_configuration(ontology, &configuration)? {
-        let elements_vec: Vec<OPE<crate::structural::A>> = elements.into_iter().collect();
-        return Ok(crate::hierarchy::Hierarchy::empty_hierarchy(
-            &elements_vec,
-            top,
-            bottom,
-        ));
-    }
-
-    // Candidate possible-subsumers (everything except top/bottom).
-    let candidates: Vec<OPE<crate::structural::A>> = elements
-        .iter()
-        .filter(|e| **e != top && **e != bottom)
-        .cloned()
-        .collect();
-
-    // A persistent reasoner over the clausified ontology, used to read each role's
-    // subsumers off a single saturated model (HermiT's buildModelForConcept),
-    // reusing the compiled clauses across elements.
-    let dl_ontology = clausify_for_query(ontology)?;
-    let model_reasoner = Reasoner::new(&dl_ontology);
-    let mut model_manager = model_reasoner.new_manager();
-    let model_top = top.clone();
-
-    // Deterministic (Horn) ontologies: read every role's subsumers off its one
-    // saturated model and build the hierarchy directly, with no subsumption
-    // tests -- HermiT's `DeterministicClassification` (Reasoner.java:2053-2054
-    // dispatches on `tableau.isDeterministic() && !forceQuasiOrder`).
-    if model_reasoner.is_deterministic() && !configuration.force_quasi_order_classification {
-        let mut subsumers: HashMap<OPE<crate::structural::A>, HashSet<OPE<crate::structural::A>>> =
-            HashMap::new();
-        for element in &elements {
-            let mut element_subsumers: HashSet<OPE<crate::structural::A>> = HashSet::new();
-            element_subsumers.insert(top.clone());
-            element_subsumers.insert(element.clone());
-            if *element == top {
-                // owl:topObjectProperty is subsumed only by itself.
-            } else if *element == bottom {
-                element_subsumers.extend(elements.iter().cloned());
-            } else {
-                match model_reasoner.object_property_edge_subsumers(
-                    &mut model_manager,
-                    element,
-                    &candidates,
-                ) {
-                    Some(holds) => element_subsumers.extend(holds),
-                    // An unsatisfiable (empty) role is subsumed by everything.
-                    None => element_subsumers.extend(elements.iter().cloned()),
-                }
-            }
-            subsumers.insert(element.clone(), element_subsumers);
-        }
-        return Ok(crate::hierarchy::build_hierarchy(top, bottom, subsumers));
-    }
-
-    // Shared by the build-model and union-test read-offs (both run on this one
-    // reusable reasoner/manager, like HermiT's single classification `m_tableau`).
-    let model_reasoner = std::rc::Rc::new(model_reasoner);
-    let model_manager = std::rc::Rc::new(std::cell::RefCell::new(model_manager));
-
-    let oracle = PropertySubsumptionOracle {
-        ontology,
-        candidates,
-        subsumes: {
-            let configuration = configuration.clone();
-            move |o: &SetOntology<crate::structural::A>,
-                  sub: &OPE<crate::structural::A>,
-                  sup: &OPE<crate::structural::A>| {
-                // Internal oracle: the non-throwing reduction (classification has
-                // already verified consistency; the public *_with applies
-                // checkPreConditions).
-                is_object_property_subsumed_by_core_with(o, sub.clone(), sup.clone(), &configuration)
-            }
-        },
-        subsumes_union: {
-            let model_reasoner = std::rc::Rc::clone(&model_reasoner);
-            let model_manager = std::rc::Rc::clone(&model_manager);
-            move |o: &SetOntology<crate::structural::A>,
-                  sub: &OPE<crate::structural::A>,
-                  sups: &std::collections::HashSet<OPE<crate::structural::A>>| {
-                let subsumed = is_object_property_subsumed_by_union_with(o, sub.clone(), sups, &configuration)?;
-                // readKnownSubsumersFromRootNode: on a positive union test, read the
-                // picked role's deterministic edge-subsumers off the witnessing model
-                // (only the union candidates are checked, exactly as the class path
-                // reads only the atomic concepts on the witnessing root). Read only
-                // when subsumed; the known set is ignored otherwise.
-                let mut known: std::collections::HashSet<OPE<crate::structural::A>> =
-                    std::collections::HashSet::new();
-                if subsumed {
-                    let candidates: Vec<OPE<crate::structural::A>> = sups.iter().cloned().collect();
-                    if let Some(holds) = model_reasoner.object_property_deterministic_edge_subsumers(
-                        &mut model_manager.borrow_mut(),
-                        sub,
-                        &candidates,
-                    ) {
-                        known = holds;
-                    }
-                }
-                Ok((subsumed, known))
-            }
-        },
-        build_model_fn: {
-            let model_reasoner = std::rc::Rc::clone(&model_reasoner);
-            let model_manager = std::rc::Rc::clone(&model_manager);
-            move |picked: &OPE<crate::structural::A>,
-                  candidates: &[OPE<crate::structural::A>]| {
-                // Read the subsumers off one saturated model of picked(a,b); top is a
-                // deterministic (known) subsumer, the rest are possible.
-                let holds = model_reasoner.object_property_edge_subsumers(
-                    &mut model_manager.borrow_mut(),
-                    picked,
-                    candidates,
-                )?;
-                let mut possible = holds;
-                possible.remove(picked);
-                possible.remove(&model_top);
-                let known: std::collections::HashSet<OPE<crate::structural::A>> =
-                    std::iter::once(model_top.clone()).collect();
-                Some((known, possible))
-            }
-        },
-        error: None,
+    let mut proxies_for_roles: HashMap<Role, Class<crate::structural::A>> = HashMap::new();
+    let mut inverse_proxies: HashMap<Class<crate::structural::A>, Class<crate::structural::A>> =
+        HashMap::new();
+    let mut add_proxy = |proxy: Class<crate::structural::A>,
+                         role: OPE<crate::structural::A>,
+                         dl_role: Role| {
+        extended.insert(Component::EquivalentClasses(EquivalentClasses(vec![
+            CE::Class(proxy.clone()),
+            CE::ObjectSomeValuesFrom { ope: role.clone(), bce: Box::new(fresh_concept.clone()) },
+        ])));
+        roles_for_proxies.insert(proxy.clone(), role);
+        proxies_for_roles.insert(dl_role, proxy);
     };
+    for role in &named_roles {
+        let iri = role.0.to_string();
+        let proxy = build.class(format!("internal:prop#{iri}"));
+        let atomic_role = AtomicRole::create(iri.clone());
+        let named_role = OPE::ObjectProperty(role.clone());
+        add_proxy(proxy.clone(), named_role, Role::AtomicRole(atomic_role));
+        if has_inverse_roles {
+            let inverse_proxy = build.class(format!("internal:prop#inv#{iri}"));
+            add_proxy(
+                inverse_proxy.clone(),
+                OPE::InverseObjectProperty(role.clone()),
+                Role::InverseRole(InverseRole::create(atomic_role)),
+            );
+            inverse_proxies.insert(proxy.clone(), inverse_proxy.clone());
+            inverse_proxies.insert(inverse_proxy, proxy);
+        }
+    }
+    extended.insert(Component::ClassAssertion(ClassAssertion {
+        ce: fresh_concept,
+        i: fresh_anonymous_individual("fresh-individual"),
+    }));
+    roles_for_proxies.insert(thing.clone(), top.clone());
+    roles_for_proxies.insert(nothing.clone(), bottom.clone());
+    proxies_for_roles.insert(Role::AtomicRole(*AtomicRole::top_object_role()), thing.clone());
+    proxies_for_roles.insert(Role::AtomicRole(*AtomicRole::bottom_object_role()), nothing.clone());
+    // owl:topObjectProperty and owl:bottomObjectProperty are their own inverses.
+    inverse_proxies.insert(thing.clone(), thing);
+    inverse_proxies.insert(nothing.clone(), nothing);
 
-    let mut classifier = QuasiOrderClassification::new_for_roles(
-        oracle,
-        top.clone(),
-        bottom.clone(),
-        elements.clone(),
-        if has_inverse_roles { Some(inverse_concept) } else { None },
+    classify_property_proxies(
+        &extended,
+        configuration,
+        top,
+        bottom,
+        roles_for_proxies,
+        &proxies_for_roles,
+        has_inverse_roles.then_some(inverse_proxies),
+    )
+}
+
+/// HermiT's reduction of role classification to concept classification, shared
+/// by `classifyObjectProperties` and `classifyDataProperties`
+/// (Reasoner.java:945-1029, 1355-1425). `extended` is the ontology plus one
+/// proxy concept `C_R ≡ ∃R.M` (object roles, with `M` inhabited) or
+/// `C_P ≡ ∃P.U` (data roles, with `U` a fresh unknown datatype) per role;
+/// `properties` maps each proxy -- and owl:Thing / owl:Nothing -- to its
+/// property, and `proxies` maps the roles of the DL clauses to their proxies.
+///
+/// `R ⊑ S` holds exactly when `C_R ⊑ C_S` does. If `R ⊑ S`, then `∃R.M ⊑ ∃S.M`.
+/// If some model has `R(x, y)` but not `S(x, y)`, interpreting the fresh `M`
+/// (or `U`) as `{y}` makes `x` an instance of `C_R` but not of `C_S`. Because
+/// `M` has an instance, a role `R` with every pair of elements has `C_R ≡ ⊤`,
+/// so a role equivalent to the universal role is found; an empty role has an
+/// unsatisfiable proxy. Subsumptions forced only through role chains,
+/// transitivity, nominals or data values are therefore found as well, which
+/// reading role labels off one model edge misses: the absence of a label on
+/// an edge does not establish non-subsumption.
+///
+/// The extended ontology is clausified once, and the proxies are classified by
+/// the concept classifier over one reasoner, so no subsumption test clausifies
+/// anything. The concept hierarchy is transformed back to properties.
+fn classify_property_proxies<P>(
+    extended: &SetOntology<crate::structural::A>,
+    configuration: &crate::configuration::Configuration,
+    top: P,
+    bottom: P,
+    properties: HashMap<Class<crate::structural::A>, P>,
+    proxies: &HashMap<crate::model::Role, Class<crate::structural::A>>,
+    inverse_proxies: Option<HashMap<Class<crate::structural::A>, Class<crate::structural::A>>>,
+) -> Result<crate::hierarchy::Hierarchy<P>, String>
+where
+    P: Eq + std::hash::Hash + Clone,
+{
+    use crate::model::{AtomicConcept, Role};
+    use std::collections::HashSet;
+
+    let build = Build::new_arc();
+    let thing = build.class("http://www.w3.org/2002/07/owl#Thing");
+    let nothing = build.class("http://www.w3.org/2002/07/owl#Nothing");
+    let dl_ontology = clausify_ontology_with_configuration(extended, configuration)?;
+    let reasoner = Reasoner::with_configuration(&dl_ontology, configuration.clone());
+    // `checkPreConditions` throws on an inconsistent ontology under the default
+    // flag; otherwise the hierarchy is empty (Reasoner.java:956-959, 1362-1363).
+    // The proxy definitions extend the ontology conservatively, so they do not
+    // change its consistency.
+    if !reasoner.is_consistent() {
+        if configuration.throw_inconsistent_ontology_exception {
+            return Err(INCONSISTENT_ONTOLOGY_ERROR.to_string());
+        }
+        let elements: Vec<P> = properties.into_values().collect();
+        return Ok(crate::hierarchy::Hierarchy::empty_hierarchy(&elements, top, bottom));
+    }
+    // Without roles to classify, only top and bottom remain (the `!hasDatatypes`
+    // branch of classifyDataProperties, Reasoner.java:1421-1422).
+    if properties.len() <= 2 {
+        return Ok(crate::hierarchy::Hierarchy::trivial_hierarchy(top, bottom));
+    }
+
+    // Told subsumers: the role inclusions `S(x,y) ← R(x,y)` among the classified
+    // roles, where `S(y,x) ← R(x,y)` gives `Inv(R) ⊑ S`
+    // (QuasiOrderClassificationForRoles.initialiseKnownSubsumptionsUsingToldSubsumers).
+    let told = |_: &HashSet<Class<crate::structural::A>>| {
+        let mut told = Vec::new();
+        for clause in dl_ontology.get_dl_clauses() {
+            if clause.get_head_length() != 1 || clause.get_body_length() != 1 {
+                continue;
+            }
+            let (head_atom, body_atom) = (clause.get_head_atom(0), clause.get_body_atom(0));
+            if let (DLPredicate::AtomicRole(head), DLPredicate::AtomicRole(body)) =
+                (head_atom.get_dl_predicate(), body_atom.get_dl_predicate())
+            {
+                let sub = if body_atom.get_argument(0) == head_atom.get_argument(0) {
+                    Role::AtomicRole(*body)
+                } else {
+                    body.get_inverse()
+                };
+                if let (Some(sub), Some(sup)) =
+                    (proxies.get(&sub), proxies.get(&Role::AtomicRole(*head)))
+                {
+                    told.push((sub.clone(), sup.clone()));
+                }
+            }
+        }
+        told
+    };
+    let elements: HashSet<Class<crate::structural::A>> = properties.keys().cloned().collect();
+    let relevant = RelevantConcepts::Only(std::sync::Arc::new(
+        elements.iter().map(|c| AtomicConcept::create(c.0.to_string())).collect(),
+    ));
+    let hierarchy = classify_atomic_concepts(
+        &reasoner,
+        thing,
+        nothing,
+        elements,
+        told,
+        inverse_proxies,
+        relevant,
+        &mut crate::hierarchy::NoProgressMonitor,
     );
-    // Seed told role inclusions (sub ⊑ sup, and the inverse mirror).
-    let told: Vec<(OPE<crate::structural::A>, OPE<crate::structural::A>, bool)> = axioms
-        .simple_object_property_inclusions
-        .iter()
-        .map(|[sub, sup]| (sub.clone(), sup.clone(), false))
-        .collect();
-    classifier.initialise_known_subsumptions_using_told_subsumers(
-        &told
-            .iter()
-            .map(|(s, p, _)| (s.clone(), p.clone()))
-            .collect::<Vec<_>>(),
-    );
-    let hierarchy = classifier.classify();
-    Ok(hierarchy)
+    Ok(hierarchy.transform(|proxy| properties[proxy].clone()))
 }
 
 /// Classifies the data properties into a subsumption
-/// [`Hierarchy`](crate::hierarchy::Hierarchy) -- the data-role analogue of
-/// [`classify_object_property_expressions`] (HermiT's `classifyDataProperties`,
-/// `Reasoner.java:1355` / `m_dataRoleHierarchy`). There are no inverse data
-/// roles, so this runs the plain [`QuasiOrderClassification`](crate::quasi_order)
-/// (no `inverse_concept`) with the subsumption oracle
-/// ([`is_sub_data_property_of`]). Top/bottom are
-/// `owl:topDataProperty`/`owl:bottomDataProperty`.
+/// [`Hierarchy`](crate::hierarchy::Hierarchy) -- HermiT's `classifyDataProperties`
+/// (`Reasoner.java:1355-1425`, `m_dataRoleHierarchy`). Each data property `P`
+/// gets a proxy concept `internal:prop#P ≡ ∃P.U`, where `U` is a fresh unknown
+/// datatype (`internal:unknown-datatype#A`) that the tableau treats as an
+/// arbitrary set of data values; owl:topDataProperty and
+/// owl:bottomDataProperty map to owl:Thing and owl:Nothing. The proxies are
+/// classified like atomic concepts, as in
+/// [`classify_object_property_expressions`].
 pub fn classify_data_properties(
     ontology: &SetOntology<crate::structural::A>,
 ) -> Result<
@@ -3930,9 +3838,9 @@ pub fn classify_data_properties(
 }
 
 /// As [`classify_data_properties`], but runs the data-property classification
-/// under an explicit [`Configuration`](crate::configuration::Configuration):
-/// the consistency precheck and every subsumption test
-/// ([`is_sub_data_property_of_with`]) are threaded through `configuration`.
+/// under an explicit [`Configuration`](crate::configuration::Configuration),
+/// which governs the clausification of the proxy definitions, the consistency
+/// check and every tableau of the concept classifier.
 pub fn classify_data_properties_with_configuration(
     ontology: &SetOntology<crate::structural::A>,
     configuration: &crate::configuration::Configuration,
@@ -3940,15 +3848,9 @@ pub fn classify_data_properties_with_configuration(
     crate::hierarchy::Hierarchy<horned_owl::model::DataProperty<crate::structural::A>>,
     String,
 > {
-    // `Reasoner.classifyDataProperties`/`getSub|SuperDataProperties`
-    // (Reasoner.java) call `checkPreConditions` first, so they throw on an
-    // inconsistent ontology under the default flag.
-    throw_inconsistent_ontology_exception_if_necessary(ontology, configuration)?;
-    use crate::quasi_order::QuasiOrderClassification;
+    use crate::model::{AtomicRole, Role};
     use crate::structural::{OWLAxioms, OWLNormalization};
-    use horned_owl::model::DataProperty;
-    use std::collections::HashSet;
-    let configuration = configuration.clone();
+    use horned_owl::model::{DataProperty, DataRange, EquivalentClasses};
 
     let build = Build::new_arc();
     let top = build.data_property("http://www.w3.org/2002/07/owl#topDataProperty");
@@ -3958,7 +3860,14 @@ pub fn classify_data_properties_with_configuration(
     normalization.process_ontology(ontology)?;
     let axioms = normalization.into_axioms();
 
-    let mut elements: HashSet<DataProperty<crate::structural::A>> = HashSet::new();
+    // `C_P ≡ ∃P.U` for every data property (Reasoner.java:1366-1387).
+    let unknown_datatype = DataRange::Datatype(build.datatype("internal:unknown-datatype#A"));
+    let mut extended = ontology.clone();
+    let mut properties_for_proxies: HashMap<
+        Class<crate::structural::A>,
+        DataProperty<crate::structural::A>,
+    > = HashMap::new();
+    let mut proxies_for_roles: HashMap<Role, Class<crate::structural::A>> = HashMap::new();
     for property in &axioms.data_properties {
         let iri = property.0.to_string();
         if iri.starts_with("internal:")
@@ -3967,149 +3876,30 @@ pub fn classify_data_properties_with_configuration(
         {
             continue;
         }
-        elements.insert(property.clone());
+        let proxy = build.class(format!("internal:prop#{iri}"));
+        extended.insert(Component::EquivalentClasses(EquivalentClasses(vec![
+            CE::Class(proxy.clone()),
+            CE::DataSomeValuesFrom { dp: property.clone(), dr: unknown_datatype.clone() },
+        ])));
+        properties_for_proxies.insert(proxy.clone(), property.clone());
+        proxies_for_roles.insert(Role::AtomicRole(AtomicRole::create(iri)), proxy);
     }
-    elements.insert(top.clone());
-    elements.insert(bottom.clone());
+    let thing = build.class("http://www.w3.org/2002/07/owl#Thing");
+    let nothing = build.class("http://www.w3.org/2002/07/owl#Nothing");
+    properties_for_proxies.insert(thing.clone(), top.clone());
+    properties_for_proxies.insert(nothing.clone(), bottom.clone());
+    proxies_for_roles.insert(Role::AtomicRole(*AtomicRole::top_data_role()), thing);
+    proxies_for_roles.insert(Role::AtomicRole(*AtomicRole::bottom_data_role()), nothing);
 
-    if !is_ontology_consistent_with_configuration(ontology, &configuration)? {
-        let elements_vec: Vec<DataProperty<crate::structural::A>> =
-            elements.into_iter().collect();
-        return Ok(crate::hierarchy::Hierarchy::empty_hierarchy(
-            &elements_vec,
-            top,
-            bottom,
-        ));
-    }
-
-    // `Reasoner.classifyDataProperties` (Reasoner.java:1365,1422-1423): when the
-    // ontology has no datatypes the data-role hierarchy is the trivial one
-    // (only top and bottom; named data roles are treated as fresh entities and
-    // their told inclusions are NOT reflected).
-    if !clausify_for_query(ontology)?.has_datatypes() {
-        return Ok(crate::hierarchy::Hierarchy::trivial_hierarchy(top, bottom));
-    }
-
-    let candidates: Vec<DataProperty<crate::structural::A>> = elements
-        .iter()
-        .filter(|e| **e != top && **e != bottom)
-        .cloned()
-        .collect();
-
-    // A persistent reasoner used to read each data property's subsumers off a
-    // single saturated model (HermiT's buildModelForConcept).
-    let dl_ontology = clausify_for_query(ontology)?;
-    let model_reasoner = Reasoner::new(&dl_ontology);
-    let mut model_manager = model_reasoner.new_manager();
-
-    // Deterministic (Horn) ontologies: read each data property's subsumers off
-    // its one saturated model with no subsumption tests -- HermiT's
-    // `DeterministicClassification` (Reasoner.java:1404 -> 2047).
-    if model_reasoner.is_deterministic() && !configuration.force_quasi_order_classification {
-        let mut subsumers: HashMap<
-            DataProperty<crate::structural::A>,
-            HashSet<DataProperty<crate::structural::A>>,
-        > = HashMap::new();
-        for element in &elements {
-            let mut element_subsumers: HashSet<DataProperty<crate::structural::A>> = HashSet::new();
-            element_subsumers.insert(top.clone());
-            element_subsumers.insert(element.clone());
-            if *element == top {
-                // owl:topDataProperty is subsumed only by itself.
-            } else if *element == bottom {
-                element_subsumers.extend(elements.iter().cloned());
-            } else {
-                match model_reasoner.data_property_edge_subsumers(
-                    &mut model_manager,
-                    element,
-                    &candidates,
-                ) {
-                    Some(holds) => element_subsumers.extend(holds),
-                    None => element_subsumers.extend(elements.iter().cloned()),
-                }
-            }
-            subsumers.insert(element.clone(), element_subsumers);
-        }
-        return Ok(crate::hierarchy::build_hierarchy(top, bottom, subsumers));
-    }
-
-    // Shared by the build-model and union-test read-offs (one reusable
-    // reasoner/manager, like HermiT's single classification `m_tableau`).
-    let model_reasoner = std::rc::Rc::new(model_reasoner);
-    let model_manager = std::rc::Rc::new(std::cell::RefCell::new(model_manager));
-
-    let oracle = PropertySubsumptionOracle {
-        ontology,
-        candidates,
-        subsumes: {
-            let configuration = configuration.clone();
-            move |o: &SetOntology<crate::structural::A>,
-                  sub: &DataProperty<crate::structural::A>,
-                  sup: &DataProperty<crate::structural::A>| {
-                is_sub_data_property_of_core_with(o, sub.clone(), sup.clone(), &configuration)
-            }
-        },
-        subsumes_union: {
-            let model_reasoner = std::rc::Rc::clone(&model_reasoner);
-            let model_manager = std::rc::Rc::clone(&model_manager);
-            move |o: &SetOntology<crate::structural::A>,
-                  sub: &DataProperty<crate::structural::A>,
-                  sups: &std::collections::HashSet<DataProperty<crate::structural::A>>| {
-                let subsumed =
-                    is_sub_data_property_of_union_with(o, sub.clone(), sups, &configuration)?;
-                // readKnownSubsumersFromRootNode: on a positive union test, read the
-                // picked data property's deterministic edge-subsumers off the
-                // witnessing model (only the union candidates are checked).
-                let mut known: std::collections::HashSet<DataProperty<crate::structural::A>> =
-                    std::collections::HashSet::new();
-                if subsumed {
-                    let candidates: Vec<DataProperty<crate::structural::A>> =
-                        sups.iter().cloned().collect();
-                    if let Some(holds) = model_reasoner.data_property_deterministic_edge_subsumers(
-                        &mut model_manager.borrow_mut(),
-                        sub,
-                        &candidates,
-                    ) {
-                        known = holds;
-                    }
-                }
-                Ok((subsumed, known))
-            }
-        },
-        build_model_fn: {
-            let model_reasoner = std::rc::Rc::clone(&model_reasoner);
-            let model_manager = std::rc::Rc::clone(&model_manager);
-            let model_top = top.clone();
-            move |picked: &DataProperty<crate::structural::A>,
-                  candidates: &[DataProperty<crate::structural::A>]| {
-                // Read the subsumers off one saturated model of picked(a,k); top is a
-                // deterministic (known) subsumer, the rest are possible.
-                let holds = model_reasoner.data_property_edge_subsumers(
-                    &mut model_manager.borrow_mut(),
-                    picked,
-                    candidates,
-                )?;
-                let mut possible = holds;
-                possible.remove(picked);
-                possible.remove(&model_top);
-                let known: std::collections::HashSet<DataProperty<crate::structural::A>> =
-                    std::iter::once(model_top.clone()).collect();
-                Some((known, possible))
-            }
-        },
-        error: None,
-    };
-
-    let mut classifier =
-        QuasiOrderClassification::new(oracle, top.clone(), bottom.clone(), elements.clone());
-    // Seed told data-property inclusions (sub ⊑ sup).
-    let told: Vec<(DataProperty<crate::structural::A>, DataProperty<crate::structural::A>)> = axioms
-        .data_property_inclusions
-        .iter()
-        .map(|[sub, sup]| (sub.clone(), sup.clone()))
-        .collect();
-    classifier.initialise_known_subsumptions_using_told_subsumers(&told);
-    Ok(classifier.classify())
+    classify_property_proxies(
+        &extended,
+        configuration,
+        top,
+        bottom,
+        properties_for_proxies,
+        &proxies_for_roles,
+        None,
+    )
 }
 
 /// The data properties that subsume `property` (`Reasoner.getSuperDataProperties`,
@@ -4343,43 +4133,6 @@ fn node_merge_chain_is_deterministic(tableau: &Tableau, node: NodeId) -> bool {
         walk = into;
     }
     true
-}
-
-/// Whether the role tuple `role(from, to)` is present on the (already canonical)
-/// edge with an *empty* dependency set -- i.e. a deterministic consequence. `role`
-/// must be a [`Role::AtomicRole`](crate::model::Role::AtomicRole) and the endpoints
-/// already oriented onto the named property (as `add_role_assertion` stores them),
-/// matching the role-edge read in `read_off_role_instances`. This is the role-tuple
-/// analogue of the empty-dependency-set filter `read_off_node_concepts` applies to
-/// concept tuples (`readKnownSubsumersFromRootNode`).
-fn role_assertion_is_deterministic(
-    tableau: &Tableau,
-    role: &crate::model::Role,
-    from: NodeId,
-    to: NodeId,
-) -> bool {
-    use crate::model::{DLPredicate, Role};
-    use crate::tableau::dependency_set::DependencySetOps;
-    let r = match role {
-        Role::AtomicRole(r) => r.clone(),
-        // The deterministic read-off only ever builds atomic-role tuples; an
-        // inverse role here would not match the stored (named-property) tuple.
-        Role::InverseRole(_) => return false,
-    };
-    let tuple = [
-        TableauObject::DLPredicate(DLPredicate::AtomicRole(r)),
-        TableauObject::Node(from),
-        TableauObject::Node(to),
-    ];
-    let index = tableau.ternary_extension_table.get_tuple_index(&tuple);
-    if index == -1 || !tableau.node(from).is_active() || !tableau.node(to).is_active() {
-        return false;
-    }
-    let empty_set = tableau.dependency_set_factory.empty_set();
-    tableau
-        .ternary_extension_table
-        .get_dependency_set(index as usize, &empty_set)
-        .is_empty()
 }
 
 /// The pairs of named individuals entailed for an object property expression.
@@ -5089,7 +4842,7 @@ mod object_property_read_off_tests {
         let (raw, _) = reasoner.concept_model_read_off(&mut manager, &a).unwrap();
         assert!(raw.iter().any(|c| c.iri().starts_with("internal:")));
         let (known, labels) = reasoner
-            .classification_model_read_off(&mut manager, &a)
+            .classification_model_read_off(&mut manager, &a, &RelevantConcepts::Named)
             .unwrap();
         assert!(known.contains(&a));
         assert!(known
@@ -7563,14 +7316,12 @@ impl<'a> Reasoner<'a> {
     /// `m_checkDatatypes` from `hasDatatypes()` and `m_checkUnknownDatatypeRestrictions`
     /// from `hasUnknownDatatypeRestrictions()`, the latter also seeding the unknown
     /// restriction set (`DatatypeManager.m_unknownDatatypeRestrictionsPermanent`).
-    /// The unknown-restriction set is only ever non-empty in the non-default
-    /// `ignoreUnsupportedDatatypes` mode, which we also require explicitly so the
-    /// default path leaves both the flag and the set untouched (byte-for-byte).
+    /// The set holds the unsupported datatypes of the `ignoreUnsupportedDatatypes`
+    /// mode and the `internal:unknown-datatype#` marker of the data-property
+    /// classification; it is empty, and the flag unset, otherwise.
     fn configure_tableau_datatypes(&self, tableau: &mut Tableau) {
         tableau.check_datatypes = self.dl_ontology.has_datatypes();
-        if self.configuration.ignore_unsupported_datatypes
-            && self.dl_ontology.has_unknown_datatype_restrictions()
-        {
+        if self.dl_ontology.has_unknown_datatype_restrictions() {
             tableau.check_unknown_datatype_restrictions = true;
             tableau.unknown_datatype_restrictions =
                 self.dl_ontology.get_all_unknown_datatype_restrictions().clone();
@@ -8039,25 +7790,28 @@ impl<'a> Reasoner<'a> {
         std::collections::HashSet<crate::model::AtomicConcept>,
         Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
     )> {
-        self.concept_model_read_off_filtered(manager, element, false)
+        self.concept_model_read_off_filtered(manager, element, |_| true)
     }
 
+    /// As [`concept_model_read_off`](Self::concept_model_read_off), reading only
+    /// the `relevant` concepts off the model.
     fn classification_model_read_off(
         &self,
         manager: &mut HyperresolutionManager,
         element: &crate::model::AtomicConcept,
+        relevant: &RelevantConcepts,
     ) -> Option<(
         std::collections::HashSet<crate::model::AtomicConcept>,
         Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
     )> {
-        self.concept_model_read_off_filtered(manager, element, true)
+        self.concept_model_read_off_filtered(manager, element, |c| relevant.contains(c))
     }
 
     fn concept_model_read_off_filtered(
         &self,
         manager: &mut HyperresolutionManager,
         element: &crate::model::AtomicConcept,
-        classification_only: bool,
+        include: impl Fn(crate::model::AtomicConcept) -> bool,
     ) -> Option<(
         std::collections::HashSet<crate::model::AtomicConcept>,
         Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
@@ -8096,11 +7850,9 @@ impl<'a> Reasoner<'a> {
         let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
             std::collections::HashSet::new();
         if root_deterministic {
-            for label in
-                read_off_node_concepts_matching(&*tableau, canonical_root, &empty_set, |c| {
-                    !classification_only || !c.iri().starts_with("internal:")
-                })
-            {
+            let labels =
+                read_off_node_concepts_matching(&*tableau, canonical_root, &empty_set, &include);
+            for label in labels {
                 if label.known {
                     root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
                 }
@@ -8113,12 +7865,8 @@ impl<'a> Reasoner<'a> {
         let mut node = tableau.get_first_tableau_node();
         while let Some(id) = node {
             if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
-                let label: std::collections::HashSet<crate::model::AtomicConcept> = tableau
-                    .atomic_concepts_on_node_matching(id, |c| {
-                        !classification_only || !c.iri().starts_with("internal:")
-                    })
-                    .into_iter()
-                    .collect();
+                let label: std::collections::HashSet<crate::model::AtomicConcept> =
+                    tableau.atomic_concepts_on_node_matching(id, &include).into_iter().collect();
                 if !label.is_empty() {
                     node_labels.push(label);
                 }
@@ -8126,215 +7874,6 @@ impl<'a> Reasoner<'a> {
             node = tableau.node(id).get_next_tableau_node();
         }
         Some((root_known, node_labels))
-    }
-
-    /// Reads the object-property subsumers of `picked` off a single saturated
-    /// model (the role analogue of `concept_subsumers` and HermiT's
-    /// `buildModelForConcept`): assert `picked(a,b)` for fresh `a,b`, saturate, and
-    /// return the candidate OPEs that hold on the edge -- `r` if `r(a,b)`, `Inv(r)`
-    /// if `r(b,a)`. A candidate that does *not* hold in this model is provably not a
-    /// subsumer (`picked ⋢ s`), so this narrows the possible-subsumer set to the
-    /// roles that co-occur on the edge; the remaining ones are confirmed by
-    /// `does_subsume`. Returns `None` when `picked` is unsatisfiable (`picked ⊑ ⊥`).
-    pub fn object_property_edge_subsumers(
-        &self,
-        manager: &mut HyperresolutionManager,
-        picked: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-        candidates: &[horned_owl::model::ObjectPropertyExpression<crate::structural::A>],
-    ) -> Option<std::collections::HashSet<horned_owl::model::ObjectPropertyExpression<crate::structural::A>>>
-    {
-        use crate::model::{AtomicRole, Role};
-        use horned_owl::model::ObjectPropertyExpression as OPE;
-        let role_of = |p: &horned_owl::model::ObjectProperty<crate::structural::A>| {
-            Role::AtomicRole(AtomicRole::create(&p.0.to_string()))
-        };
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let a = tableau.create_new_named_node(&empty);
-        let b = tableau.create_new_named_node(&empty);
-        // Assert picked(a,b): Inv(r)(a,b) is r(b,a).
-        match picked {
-            OPE::ObjectProperty(r) => tableau.add_role_assertion(role_of(r), a, b, &empty, true),
-            OPE::InverseObjectProperty(r) => tableau.add_role_assertion(role_of(r), b, a, &empty, true),
-        };
-        if tableau.contains_clash() {
-            return None;
-        }
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-        let ca = tableau.get_canonical_node(a);
-        let cb = tableau.get_canonical_node(b);
-        let mut holds = std::collections::HashSet::new();
-        for candidate in candidates {
-            let (role, from, to) = match candidate {
-                OPE::ObjectProperty(r) => (role_of(r), ca, cb),
-                OPE::InverseObjectProperty(r) => (role_of(r), cb, ca),
-            };
-            if tableau.contains_role_assertion(&role, from, to) {
-                holds.insert(candidate.clone());
-            }
-        }
-        Some(holds)
-    }
-
-    /// The object-property analogue of
-    /// [`atomic_subsumed_by_union_with_known`](Self::atomic_subsumed_by_union_with_known):
-    /// reads `picked`'s *deterministic* (known) object-property subsumers off one
-    /// saturated edge model -- the `readKnownSubsumersFromRootNode` half of
-    /// `isEveryPossibleSubsumerNonSubsumer`'s positive branch for the role path.
-    ///
-    /// Assert `picked(a,b)` for fresh `a,b` with the empty dependency set, saturate,
-    /// and return the candidate OPEs that hold on the canonical edge *with an empty
-    /// dependency set* -- i.e. forced by `picked` alone, never the consequence of a
-    /// non-deterministic choice. This mirrors Java's
-    /// `readKnownSubsumersFromRootNode` (which only reads empty-dependency-set
-    /// extension-table tuples, under the canonical-node determinism guard).
-    ///
-    /// This is the *known*-subsumer counterpart of
-    /// [`object_property_edge_subsumers`](Self::object_property_edge_subsumers)
-    /// (which returns *all* edge-subsumers, deterministic or not). The union test's
-    /// negated candidates are loaded by the caller with a non-backtrackable dummy
-    /// dependency set, so they can never enter any empty-dependency derivation;
-    /// hence the deterministic subsumers of `picked` are identical whether read off
-    /// the union-test model or this plain `picked(a,b)` model. Returns `None` when
-    /// `picked` is unsatisfiable (`picked ⊑ ⊥`).
-    pub fn object_property_deterministic_edge_subsumers(
-        &self,
-        manager: &mut HyperresolutionManager,
-        picked: &horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
-        candidates: &[horned_owl::model::ObjectPropertyExpression<crate::structural::A>],
-    ) -> Option<std::collections::HashSet<horned_owl::model::ObjectPropertyExpression<crate::structural::A>>>
-    {
-        use crate::model::{AtomicRole, Role};
-        use horned_owl::model::ObjectPropertyExpression as OPE;
-        let role_of = |p: &horned_owl::model::ObjectProperty<crate::structural::A>| {
-            Role::AtomicRole(AtomicRole::create(&p.0.to_string()))
-        };
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let a = tableau.create_new_named_node(&empty);
-        let b = tableau.create_new_named_node(&empty);
-        // Assert picked(a,b): Inv(r)(a,b) is r(b,a).
-        match picked {
-            OPE::ObjectProperty(r) => tableau.add_role_assertion(role_of(r), a, b, &empty, true),
-            OPE::InverseObjectProperty(r) => tableau.add_role_assertion(role_of(r), b, a, &empty, true),
-        };
-        if tableau.contains_clash() {
-            return None;
-        }
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-        // readKnownSubsumersFromRootNode's determinism guard: only read off the
-        // canonical edge when neither endpoint was merged non-deterministically (a
-        // non-deterministic merge would make the canonical-edge labels uncertain).
-        if !node_merge_chain_is_deterministic(&*tableau, a)
-            || !node_merge_chain_is_deterministic(&*tableau, b)
-        {
-            return Some(std::collections::HashSet::new());
-        }
-        let ca = tableau.get_canonical_node(a);
-        let cb = tableau.get_canonical_node(b);
-        let mut known = std::collections::HashSet::new();
-        for candidate in candidates {
-            let (role, from, to) = match candidate {
-                OPE::ObjectProperty(r) => (role_of(r), ca, cb),
-                OPE::InverseObjectProperty(r) => (role_of(r), cb, ca),
-            };
-            if role_assertion_is_deterministic(&*tableau, &role, from, to) {
-                known.insert(candidate.clone());
-            }
-        }
-        Some(known)
-    }
-
-    /// The data-property analogue of [`object_property_edge_subsumers`]: assert
-    /// `picked(a,k)` for a fresh individual `a` and a fresh data successor `k`,
-    /// saturate, and return the candidate data properties `s` with `s(a,k)` -- the
-    /// (possible) subsumers read off the model. Returns `None` when `picked` is
-    /// unsatisfiable.
-    ///
-    /// [`object_property_edge_subsumers`]: Self::object_property_edge_subsumers
-    pub fn data_property_edge_subsumers(
-        &self,
-        manager: &mut HyperresolutionManager,
-        picked: &horned_owl::model::DataProperty<crate::structural::A>,
-        candidates: &[horned_owl::model::DataProperty<crate::structural::A>],
-    ) -> Option<std::collections::HashSet<horned_owl::model::DataProperty<crate::structural::A>>> {
-        use crate::model::{AtomicRole, Role};
-        let role_of = |p: &horned_owl::model::DataProperty<crate::structural::A>| {
-            Role::AtomicRole(AtomicRole::create(&p.0.to_string()))
-        };
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let a = tableau.create_new_named_node(&empty);
-        let k = tableau.create_new_concrete_node(&empty, a);
-        tableau.add_role_assertion(role_of(picked), a, k, &empty, true);
-        if tableau.contains_clash() {
-            return None;
-        }
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-        let ca = tableau.get_canonical_node(a);
-        let ck = tableau.get_canonical_node(k);
-        let mut holds = std::collections::HashSet::new();
-        for candidate in candidates {
-            if tableau.contains_role_assertion(&role_of(candidate), ca, ck) {
-                holds.insert(candidate.clone());
-            }
-        }
-        Some(holds)
-    }
-
-    /// The data-property analogue of
-    /// [`object_property_deterministic_edge_subsumers`]: reads `picked`'s
-    /// *deterministic* (known) data-property subsumers off one saturated
-    /// `picked(a,k)` model, keeping only the candidates whose edge tuple carries an
-    /// empty dependency set (`readKnownSubsumersFromRootNode`). Returns `None` when
-    /// `picked` is unsatisfiable.
-    ///
-    /// [`object_property_deterministic_edge_subsumers`]: Self::object_property_deterministic_edge_subsumers
-    pub fn data_property_deterministic_edge_subsumers(
-        &self,
-        manager: &mut HyperresolutionManager,
-        picked: &horned_owl::model::DataProperty<crate::structural::A>,
-        candidates: &[horned_owl::model::DataProperty<crate::structural::A>],
-    ) -> Option<std::collections::HashSet<horned_owl::model::DataProperty<crate::structural::A>>> {
-        use crate::model::{AtomicRole, Role};
-        let role_of = |p: &horned_owl::model::DataProperty<crate::structural::A>| {
-            Role::AtomicRole(AtomicRole::create(&p.0.to_string()))
-        };
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let a = tableau.create_new_named_node(&empty);
-        let k = tableau.create_new_concrete_node(&empty, a);
-        tableau.add_role_assertion(role_of(picked), a, k, &empty, true);
-        if tableau.contains_clash() {
-            return None;
-        }
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-        if !node_merge_chain_is_deterministic(&*tableau, a)
-            || !node_merge_chain_is_deterministic(&*tableau, k)
-        {
-            return Some(std::collections::HashSet::new());
-        }
-        let ca = tableau.get_canonical_node(a);
-        let ck = tableau.get_canonical_node(k);
-        let mut known = std::collections::HashSet::new();
-        for candidate in candidates {
-            if role_assertion_is_deterministic(&*tableau, &role_of(candidate), ca, ck) {
-                known.insert(candidate.clone());
-            }
-        }
-        Some(known)
     }
 
     /// Reusable atomic-class subsumption test `sub ⊑ sup`: true iff `sub ⊓ ¬sup` is
@@ -8608,6 +8147,10 @@ impl<'a> Reasoner<'a> {
         tableau.merge_extension_flags(&additional_manager);
         tableau.check_datatypes |= delta.has_datatypes();
         tableau.check_unknown_datatype_restrictions |= delta.has_unknown_datatype_restrictions();
+        // DatatypeManager.m_unknownDatatypeRestrictionsAdditional.
+        tableau
+            .unknown_datatype_restrictions
+            .extend(delta.get_all_unknown_datatype_restrictions().iter().cloned());
         // Java decides via Tableau.supportsAdditionalDLOntology whether the cached
         // permanent tableau may be reused (its blocking was configured for the
         // permanent ontology) or whether a fresh tableau over the COMBINED ontology
@@ -10064,11 +9607,6 @@ mod description_graph_reasoner_tests {
 #[cfg(test)]
 mod batched_subsumption_tests {
     use super::*;
-    use horned_owl::model::{
-        DataProperty, DisjointDataProperties, ObjectPropertyExpression as OPE, SubDataPropertyOf,
-        SubObjectPropertyExpression, SubObjectPropertyOf,
-    };
-    use std::collections::HashSet;
 
     // is_consistent_with_additional_axioms: the additional hyperresolution manager
     // (HermiT's setAdditionalDLOntology fast path) reasons over the delta clauses,
@@ -10115,79 +9653,6 @@ mod batched_subsumption_tests {
         }));
         assert!(reasoner.is_consistent_with_additional_axioms(&harmless).unwrap());
         assert!(reasoner.is_consistent());
-    }
-
-    // is_object_property_subsumed_by_union: r is subsumed by {s,t} when r ⊑ s.
-    #[test]
-    fn object_property_subsumed_by_union() {
-        let build = Build::new_arc();
-        let r = build.object_property("http://example.org/r");
-        let s = build.object_property("http://example.org/s");
-        let t = build.object_property("http://example.org/t");
-        let ope = |p: &_| OPE::ObjectProperty(std::clone::Clone::clone(p));
-        let mut o: SetOntology<crate::structural::A> = SetOntology::new();
-        o.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
-            sub: SubObjectPropertyExpression::ObjectPropertyExpression(ope(&r)),
-            sup: ope(&s),
-        }));
-        let cfg = crate::configuration::Configuration::default();
-        let sups: HashSet<_> = [ope(&s), ope(&t)].into_iter().collect();
-        // r ⊑ s, so r ⊑ s ⊔ t.
-        assert!(is_object_property_subsumed_by_union_with(&o, ope(&r), &sups, &cfg).unwrap());
-        // t is unrelated, so t is NOT subsumed by {r, s}.
-        let sups2: HashSet<_> = [ope(&r), ope(&s)].into_iter().collect();
-        assert!(!is_object_property_subsumed_by_union_with(&o, ope(&t), &sups2, &cfg).unwrap());
-    }
-
-    // is_sub_data_property_of_union: dr is subsumed by {ds,dt} when dr ⊑ ds.
-    #[test]
-    fn data_property_subsumed_by_union() {
-        let build = Build::new_arc();
-        let dr = build.data_property("http://example.org/dr");
-        let ds = build.data_property("http://example.org/ds");
-        let dt = build.data_property("http://example.org/dt");
-        let mut o: SetOntology<crate::structural::A> = SetOntology::new();
-        o.insert(Component::SubDataPropertyOf(SubDataPropertyOf {
-            sub: dr.clone(),
-            sup: ds.clone(),
-        }));
-        // Declare the disjointness so the properties exist (and dr,ds,dt are distinct).
-        o.insert(Component::DisjointDataProperties(DisjointDataProperties(vec![
-            ds.clone(),
-            dt.clone(),
-        ])));
-        let cfg = crate::configuration::Configuration::default();
-        let sups: HashSet<DataProperty<crate::structural::A>> = [ds.clone(), dt.clone()].into_iter().collect();
-        assert!(is_sub_data_property_of_union_with(&o, dr.clone(), &sups, &cfg).unwrap());
-        let sups2: HashSet<DataProperty<crate::structural::A>> = [dr.clone(), ds.clone()].into_iter().collect();
-        assert!(!is_sub_data_property_of_union_with(&o, dt.clone(), &sups2, &cfg).unwrap());
-    }
-
-    // object_property_deterministic_edge_subsumers: the read-off used by the
-    // union test's positive branch reads `r`'s deterministic subsumers only. With
-    // r ⊑ s told (and t unrelated), the edge model of r(a,b) carries s(a,b) with an
-    // empty dependency set, so `s` is returned; `t` (not forced) is not.
-    #[test]
-    fn deterministic_edge_subsumers_reads_only_known_role_subsumers() {
-        let build = Build::new_arc();
-        let r = build.object_property("http://example.org/r");
-        let s = build.object_property("http://example.org/s");
-        let t = build.object_property("http://example.org/t");
-        let ope = |p: &_| OPE::ObjectProperty(std::clone::Clone::clone(p));
-        let mut o: SetOntology<crate::structural::A> = SetOntology::new();
-        o.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
-            sub: SubObjectPropertyExpression::ObjectPropertyExpression(ope(&r)),
-            sup: ope(&s),
-        }));
-        let dl = clausify_for_query(&o).unwrap();
-        let reasoner = Reasoner::new(&dl);
-        let mut manager = reasoner.new_manager();
-        let candidates = [ope(&s), ope(&t)];
-        let known = reasoner
-            .object_property_deterministic_edge_subsumers(&mut manager, &ope(&r), &candidates)
-            .expect("r is satisfiable");
-        assert!(known.contains(&ope(&s)), "r ⊑ s is deterministic, so s is a known subsumer");
-        assert!(!known.contains(&ope(&t)), "t is unrelated, so it is not a known subsumer");
     }
 }
 

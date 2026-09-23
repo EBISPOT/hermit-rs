@@ -74,14 +74,15 @@ pub struct Tableau {
     /// Port of Tableau.m_checkUnknownDatatypeRestrictions (Tableau.java:247,255):
     /// set once from permanentDLOntology.hasUnknownDatatypeRestrictions() and used
     /// to gate the per-iteration applyUnknownDatatypeRestrictionSemantics() phase.
-    /// This is only ever set (a non-empty unknown set is only produced) in the
-    /// NON-default `ignoreUnsupportedDatatypes` mode, so the default path is
-    /// untouched.
+    /// An ontology has unknown datatype restrictions only in the NON-default
+    /// `ignoreUnsupportedDatatypes` mode or when it carries the
+    /// `internal:unknown-datatype#` marker of the data-property classification.
     pub(crate) check_unknown_datatype_restrictions: bool,
     /// Port of DatatypeManager.m_unknownDatatypeRestrictionsPermanent
     /// (DatatypeManager.java:52,81): the datatype restrictions over unsupported
     /// datatypes that `ignoreUnsupportedDatatypes` treats as fresh infinite value
-    /// spaces (a restriction D and its negation ¬D must be kept disjoint).
+    /// spaces, and over `internal:unknown-datatype#` (a restriction D and its
+    /// negation ¬D must be kept disjoint).
     pub(crate) unknown_datatype_restrictions:
         std::collections::HashSet<crate::model::DatatypeRestriction>,
 

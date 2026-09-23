@@ -1,47 +1,15 @@
 {
-  "reasoner.ClassificationIndividualReuseTest.testDolce": {
-    "origin": "resource limit",
-    "signature": "allocation budget"
-  },
-  "reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
-  },
   "reasoner.ReasonerCoreBlockingTest.testDirect": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testDirect\" operation 1: \"getTypes\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting1": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "\"reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
   },
   "reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
     "signature": "\"reasoner.ReasonerCoreBlockingTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
   },
-  "reasoner.ReasonerCoreBlockingTest.testRoleChains": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testRoleSubsumption": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
-  },
   "reasoner.ReasonerCoreBlockingTest.testSubProperties": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
   },
   "reasoner.ReasonerCoreBlockingTest.testWidmann1": {
     "origin": "Rust/Java discrepancy",
@@ -55,85 +23,29 @@
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\""
   },
-  "reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
-  },
   "reasoner.ReasonerIndividualReuseTest.testDirect": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testDirect\" operation 1: \"getTypes\""
-  },
-  "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting1": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "\"reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
   },
   "reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
     "signature": "\"reasoner.ReasonerIndividualReuseTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
   },
-  "reasoner.ReasonerIndividualReuseTest.testRoleChains": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerIndividualReuseTest.testRoleSubsumption": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
-  },
   "reasoner.ReasonerIndividualReuseTest.testSubProperties": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
-  },
-  "reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerIndividualReuseTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
-  },
-  "reasoner.ReasonerTest.testDataPropertyEntailment": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testDataPropertyEntailment\" operation 1: \"getSuperDataProperties\""
   },
   "reasoner.ReasonerTest.testDirect": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testDirect\" operation 1: \"getTypes\""
   },
-  "reasoner.ReasonerTest.testHierarchyPrinting1": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "\"reasoner.ReasonerTest.testHierarchyPrinting1\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
-  },
   "reasoner.ReasonerTest.testHierarchyPrinting3": {
     "origin": "Rust/Java discrepancy",
     "signature": "\"reasoner.ReasonerTest.testHierarchyPrinting3\" operation 1: \"printHierarchies\"\nassertion `left == right` failed"
   },
-  "reasoner.ReasonerTest.testRoleChains": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleChains\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleChains\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerTest.testRoleSubsumption": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumption\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testRoleSubsumptionWithChainsTransitiveSymmetric\" operation 1: \"getSuperObjectProperties\""
-  },
-  "reasoner.ReasonerTest.testSemanticDataPropertyClassification": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testSemanticDataPropertyClassification\" operation 1: \"getEquivalentDataProperties\""
-  },
   "reasoner.ReasonerTest.testSubProperties": {
     "origin": "Rust/Java discrepancy",
     "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testSubProperties\" operation 13: \"getSubObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testSubProperties\" operation 13: \"getSubObjectProperties\""
-  },
-  "reasoner.ReasonerTest.testTopOPEquivalence": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\"\nassertion `left == right` failed: \"reasoner.ReasonerTest.testTopOPEquivalence\" operation 1: \"getEquivalentObjectProperties\""
   },
   "reasoner::java_blocking_tests::testInvalidBlockWithAnnotatedEqualities": {
     "origin": "upstream assertion also fails",

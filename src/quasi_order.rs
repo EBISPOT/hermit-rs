@@ -127,11 +127,12 @@ impl MemoryGovernor {
 }
 
 /// Fallback path only: when the oracle exposes a [`StreamingModelPool`] (the
-/// concrete tableau oracle does), the leaf-node strategy runs the barrier-free
-/// streaming pipeline in
+/// concrete tableau oracle does when it runs several workers), the leaf-node
+/// strategy runs the barrier-free streaming pipeline in
 /// [`try_streaming_leaf_node_strategy`](QuasiOrderClassification::try_streaming_leaf_node_strategy)
 /// and this batched-round path is unused. It remains for oracles without a
-/// streaming backend (e.g. the in-memory test oracle).
+/// streaming backend; an oracle that builds its models one at a time (see
+/// [`SubsumptionOracle::builds_models_in_parallel`]) drains rounds of one.
 ///
 /// How many concepts the leaf-node strategy drains from the worklist per round
 /// before building their (independent) models together via the oracle's
@@ -436,6 +437,14 @@ pub trait SubsumptionOracle<E> {
     /// (independent) model construction is parallelised.
     fn build_models_batch(&mut self, concepts: &[E]) -> Vec<Option<ModelReadOff<E>>> {
         concepts.iter().map(|c| self.build_model(c)).collect()
+    }
+    /// Whether [`build_models_batch`](Self::build_models_batch) builds its models
+    /// in parallel. When it does not, the leaf-node strategy builds one model at a
+    /// time and harvests it before choosing the next concept, as HermiT's serial
+    /// loop does, so that a concept whose possible subsumers an earlier model
+    /// harvested needs no model of its own.
+    fn builds_models_in_parallel(&self) -> bool {
+        false
     }
     /// Open a [`StreamingModelPool`] of persistent workers for the leaf-node
     /// strategy, or `None` if this oracle has no parallel streaming backend (the
@@ -909,6 +918,13 @@ where
         // its now-stale read-off is dropped at harvest time by the same
         // `concept_has_been_processed_already` guard the serial loop applied before
         // each build. The only cost is a few redundant builds; the answer is unchanged.
+        // An oracle that builds its models serially gains nothing from a round, so it
+        // builds one model per round and each build sees every earlier harvest.
+        let round_size = if self.oracle.as_ref().is_some_and(|o| o.builds_models_in_parallel()) {
+            LEAF_NODE_BATCH_SIZE
+        } else {
+            1
+        };
         while !to_process.is_empty() {
             // Drain a round of distinct, not-yet-processed nodes (deduped so a
             // concept is never built twice in one round).
@@ -922,7 +938,7 @@ where
                 if seen_in_batch.insert(node) {
                     batch_nodes.push(node);
                 }
-                if batch_nodes.len() >= LEAF_NODE_BATCH_SIZE {
+                if batch_nodes.len() >= round_size {
                     break;
                 }
             }

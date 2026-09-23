@@ -47,12 +47,19 @@ provide the starting point. Java is pinned to
 
 ## Suggested starting points
 
-Property hierarchy failures share an incomplete classifier: absence of a property
-label on one model edge does not establish non-subsumption. Java reduces object
-roles to proxy concepts `C_R = exists R.M` with a fresh inhabited marker `M`, and
-data roles to `C_P = exists P.U` with a fresh unknown datatype `U`. Reuse the
-existing concept classifier for the proxy subset; avoid quadratic repeated
-clausification and preserve configuration/inverse-role handling.
+The property classifiers now reduce object roles to proxy concepts
+`C_R = exists R.M` with a fresh inhabited marker `M`, and data roles to
+`C_P = exists P.U` with a fresh unknown datatype `U`, and classify the proxies
+with the concept classifier (#22). Issue #26 remains: property queries must look
+up `ObjectInverseOf(owl:topObjectProperty)` and
+`ObjectInverseOf(owl:bottomObjectProperty)` as the built-in properties.
+
+The role automata keep a HermiT flaw that no imported case covers:
+`buildInversePropertiesMap` records `SubObjectPropertyOf(R ObjectInverseOf(S))`
+as if `R` and `S` were inverses, so when `S` is not simple, `forall R.C` also
+propagates along `Inv(S)`. With `TransitiveObjectProperty(S)`, `R <= Inv(S)` then
+yields `Inv(S) <= R` in class reasoning, `isSubObjectPropertyExpressionOf` and
+the property classifiers alike, as in Java.
 
 Several datatype failures share missing subtraction of negative ranges or
 excluded values during cardinality counting/enumeration. Keep emptiness,
@@ -76,21 +83,21 @@ two overrides are empty in the original Java source.
 | [#10](https://github.com/EBISPOT/hermit-rs/issues/10) | Respect excluded URI values in finite pattern/length intersections (**resolved**) | 1 |
 | [#11](https://github.com/EBISPOT/hermit-rs/issues/11) | Respect URI exclusions after complementing a length restriction (**resolved** with #10) | 1 |
 | [#12](https://github.com/EBISPOT/hermit-rs/issues/12) | Count finite binary ranges after subtracting length restrictions (**resolved**) | 1 |
-| [#13](https://github.com/EBISPOT/hermit-rs/issues/13) | Keep individual-reuse classification of Dolce within the worker memory budget | 1 |
+| [#13](https://github.com/EBISPOT/hermit-rs/issues/13) | Keep individual-reuse classification of Dolce within the worker memory budget (**resolved** with #22) | 1 |
 | [#14](https://github.com/EBISPOT/hermit-rs/issues/14) | Count dateTime boundary values after subtracting an open interval (**resolved**) | 1 |
 | [#15](https://github.com/EBISPOT/hermit-rs/issues/15) | Enumerate finite mixed numeric ranges for inequality assignment (**resolved**) | 1 |
 | [#16](https://github.com/EBISPOT/hermit-rs/issues/16) | Subtract enumerated exclusions from mixed numeric value spaces (**resolved** with #15) | 1 |
 | [#17](https://github.com/EBISPOT/hermit-rs/issues/17) | Detect an empty plain-literal range after excluding its sole value (**resolved**) | 1 |
-| [#18](https://github.com/EBISPOT/hermit-rs/issues/18) | Infer data-property subsumption forced by singleton values | 3 |
+| [#18](https://github.com/EBISPOT/hermit-rs/issues/18) | Infer data-property subsumption forced by singleton values (**resolved** with #22) | 3 |
 | [#19](https://github.com/EBISPOT/hermit-rs/issues/19) | Return only the most specific direct individual types | 3 |
-| [#20](https://github.com/EBISPOT/hermit-rs/issues/20) | Correct property hierarchy axioms emitted by printHierarchies | 3 |
+| [#20](https://github.com/EBISPOT/hermit-rs/issues/20) | Correct property hierarchy axioms emitted by printHierarchies (**resolved** with #22) | 3 |
 | [#21](https://github.com/EBISPOT/hermit-rs/issues/21) | Avoid declaring built-in bottom classes in collapsed hierarchies | 3 |
-| [#22](https://github.com/EBISPOT/hermit-rs/issues/22) | Infer role subsumption implied by chains and existential restrictions | 3 |
-| [#23](https://github.com/EBISPOT/hermit-rs/issues/23) | Infer role subsumption forced by nominals and transitivity | 3 |
-| [#24](https://github.com/EBISPOT/hermit-rs/issues/24) | Classify role subsumption with chains, transitivity and symmetry | 3 |
-| [#25](https://github.com/EBISPOT/hermit-rs/issues/25) | Recognize equivalent data properties forced to a common singleton range | 3 |
+| [#22](https://github.com/EBISPOT/hermit-rs/issues/22) | Infer role subsumption implied by chains and existential restrictions (**resolved**) | 3 |
+| [#23](https://github.com/EBISPOT/hermit-rs/issues/23) | Infer role subsumption forced by nominals and transitivity (**resolved** with #22) | 3 |
+| [#24](https://github.com/EBISPOT/hermit-rs/issues/24) | Classify role subsumption with chains, transitivity and symmetry (**resolved** with #22) | 3 |
+| [#25](https://github.com/EBISPOT/hermit-rs/issues/25) | Recognize equivalent data properties forced to a common singleton range (**resolved** with #22) | 3 |
 | [#26](https://github.com/EBISPOT/hermit-rs/issues/26) | Normalize inverse built-in roles in property hierarchy queries | 3 |
-| [#27](https://github.com/EBISPOT/hermit-rs/issues/27) | Recognize object properties equivalent to the universal role | 3 |
+| [#27](https://github.com/EBISPOT/hermit-rs/issues/27) | Recognize object properties equivalent to the universal role (**resolved** with #22) | 3 |
 | [#28](https://github.com/EBISPOT/hermit-rs/issues/28) | Reject the first unsatisfiable Widmann case under core blocking | 1 |
 | [#29](https://github.com/EBISPOT/hermit-rs/issues/29) | Reject the second unsatisfiable Widmann case under core blocking | 1 |
 | [#30](https://github.com/EBISPOT/hermit-rs/issues/30) | Reject the third unsatisfiable Widmann case under core blocking | 1 |

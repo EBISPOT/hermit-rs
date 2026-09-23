@@ -4,28 +4,28 @@ Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
 #10/#11 excluded-URI fix, the issue #12 binary-length fix, the issue #14
 dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
-string value-space fix and the issue #31 XMLLiteral disjointness fix. All 598
-declared Java methods are accounted for; inherited methods also run under their
-individual-reuse and core-blocking suites.
+string value-space fix, the issue #31 XMLLiteral disjointness fix and the issue
+#22 property classification fix, which also resolved #13, #18, #20, #23, #24,
+#25 and #27. All 598 declared Java methods are accounted for; inherited methods
+also run under their individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 871 | 51 | 2 |
+| Query/structural replay | 893 | 29 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 921 | 54 | 2 |
+| Total, excluding OWL WG | 943 | 32 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 54 failures are:
+The Rust port does **not** yet have full Java test parity. The 32 failures are:
 
-* **34 Rust/Java discrepancies**, including inherited repetitions: property
-  hierarchy and entailment results; direct results and hierarchy printing;
-  three core-blocking Widmann scenarios; and description-graph/SWRL integration.
+* **13 Rust/Java discrepancies**, including inherited repetitions: property
+  hierarchy lookups of the inverted built-in properties; direct results and
+  hierarchy printing; three core-blocking Widmann scenarios; and
+  description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure
   messages are retained, rather than rewritten to match Rust's output.
-* **One resource limit**: individual-reuse classification of Dolce exceeds the
-  512 MiB allocation budget. This is a failed case, not a consistency verdict.
 
 One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
 expects `xsd:anyURI[minLength 0]` intersected with the complement of
@@ -188,6 +188,68 @@ rdf:XMLLiteral has no facets, so its value space holds every XML literal,
 infinitely many, unless rdf:XMLLiteral is negated. The complement of another
 datatype within the data domain holds every XML literal. Fixed XML literals
 were already checked correctly.
+
+Issues #18, #22, #23, #24, #25 and #27 had one cause, in the property
+classifiers. They read a role's subsumers off the role labels of one model edge,
+but the absence of a label does not establish non-subsumption. The role automata
+enforce a role chain or transitivity by propagating universal restrictions, not
+by adding edges, so `s1 ⊑ s2`, forced by `s1 ∘ r ∘ r⁻ ⊑ s2` and `⊤ ⊑ ∃r.⊤`,
+left no `s2` label (#22; #24 adds transitivity and symmetry). A subsumption
+forced by nominals (#23), by equal data values (#18, #25) or by a one-element
+domain (#27, where a role holds every pair) left none either. The classifiers now
+follow HermiT's `classifyObjectProperties` and `classifyDataProperties`. Each
+role R gets a proxy concept `∃R.M`, for a fresh concept M with an instance, and
+each data property P a proxy `∃P.U`, for a fresh unknown datatype U; the top
+and bottom properties are owl:Thing and owl:Nothing. R ⊑ S holds exactly when
+the proxy of R is subsumed by that of S: if a model has R(x, y) but not S(x, y),
+interpreting M (or U) as {y} separates the two proxies, and since M has an
+instance, a role that holds every pair has a proxy equivalent to owl:Thing. The
+ontology is clausified once with the proxy definitions, and the concept
+classifier classifies the proxies, mirroring every subsumption onto the inverse
+roles as HermiT's `QuasiOrderClassificationForRoles` does. Before, each
+subsumption test of the non-deterministic path clausified the ontology twice.
+U also needed HermiT's unknown-datatype semantics: the tableau keeps the values
+of U apart from those of its negation, and the datatype checker ignores both.
+Rust kept them apart only in the `ignoreUnsupportedDatatypes` mode, and its
+checker excluded every known value from an unknown datatype; both now follow
+HermiT, whenever the ontology has an unknown datatype. The regressions
+check each hierarchy, pair by pair, against the separate subsumption tests
+(`isSubObjectPropertyExpressionOf`, `isSubDataPropertyOf`) under the default,
+core-blocking, individual-reuse and quasi-order configurations.
+
+The fix also resolved #20 and #13. `SubObjectPropertyOf(owl:topObjectProperty
+op6)` makes `op6` and its inverse hold every pair, so `printHierarchies` must
+print them as equivalent to owl:topObjectProperty, but Rust printed them as its
+sub-properties (`ReasonerTest.testHierarchyPrinting1`); the rest of the
+expected hierarchy also follows from the fixture's axioms. Individual-reuse
+classification of Dolce (#13) ran out of memory in the object-property
+classifier, which built its models with a reasoner of the default
+configuration instead of the requested one. Under the default creation-order
+strategy its first Dolce model kept expanding: the resident set grew from
+54 MiB after the classes to 1.2 GiB about a minute later, before that model
+was complete. This was the expansion of one model under the wrong strategy,
+not allocations retained across tests. The proxy classifier builds every
+tableau under the requested configuration, and the case now passes in about
+70 seconds, within its 120-second deadline, with a peak resident set of 75 MiB.
+
+Three changes keep the proxy classification fast. Without worker threads, the
+quasi-order classifier builds one model at a time and harvests it before it
+chooses the next concept, as HermiT's serial loop does, rather than rounds of
+up to 256 models, many of which an earlier model of the round made unnecessary;
+`ClassificationTest.testWine` takes about 6 seconds instead of 10. The
+unknown-datatype phase walks only the assertions of the last round, as
+HermiT's does, rather than every assertion. On Horn ontologies an inverse role
+takes the inverses of its role's subsumers instead of a model of its own. A
+proxy's model is larger than one edge, and in an ontology with nominals every
+proxy test loads the ABox, as HermiT's does, so the object properties of Galen,
+and of Wine under individual reuse, take one to six seconds longer to classify
+than the edge read-off did.
+
+`ReasonerTest.testSubProperties` (#26) still fails, at operation 13. Java looks
+up `ObjectInverseOf(owl:bottomObjectProperty)` and
+`ObjectInverseOf(owl:topObjectProperty)` as the built-in properties themselves
+(`AtomicRole.getInverse`); Rust treats them as fresh properties. Its other 44
+assertions pass.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
