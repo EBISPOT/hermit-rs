@@ -101,6 +101,12 @@ pub struct Hierarchy<E> {
     nodes: Vec<HierarchyNode<E>>,
     top: NodeRef,
     bottom: NodeRef,
+    /// The top and bottom elements, such as owl:Thing and owl:Nothing. They
+    /// represent the top and bottom nodes, except in a hierarchy collapsed to
+    /// one node ([`Hierarchy::empty_hierarchy`]), which the top element
+    /// represents.
+    top_element: E,
+    bottom_element: E,
     nodes_by_elements: HashMap<E, NodeRef>,
     /// Other names of elements ([`Hierarchy::add_alias`]): found by the lookups,
     /// but members of no node.
@@ -269,7 +275,8 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     /// * `EquivalentClasses( m1 m2 ... )` — for any node with more than one
     ///   member.
     /// * `Declaration( Class( X ) )` — for each member that is neither the top
-    ///   nor the bottom element (`needsDeclaration`).
+    ///   nor the bottom element (`needsDeclaration`; see
+    ///   [`print_functional_syntax_with`](Self::print_functional_syntax_with)).
     ///
     /// Note the inner-paren spacing (`SubClassOf( a b )`, not `SubClassOf(a b)`):
     /// this is byte-for-byte Java's `m_out.print("SubClassOf( ")` etc.
@@ -280,6 +287,9 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     /// (i.e. some named class collapsed into owl:Nothing) an
     /// `EquivalentClasses( owl:Nothing :Unsat )` line plus
     /// `Declaration( Class( :Unsat ) )` entries are produced for those classes.
+    /// In the hierarchy of an inconsistent ontology, whose one node is both
+    /// the top and the bottom node, this prints every element as equivalent,
+    /// again without declaring owl:Thing or owl:Nothing.
     ///
     /// Members of a node are ordered with bottom first, then top, then the rest
     /// by rendered form (HermiT's `AtomicConceptComparator`, where
@@ -295,15 +305,14 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         F: Fn(&E) -> String,
     {
         // Class hierarchy: SubClassOf / EquivalentClasses / Declaration( Class( ... ) ).
-        // needsDeclaration mirrors AtomicConceptPrinter.needsDeclaration (not top/bottom).
-        let top_repr = render(&self.nodes[self.top].representative);
-        let bottom_repr = render(&self.nodes[self.bottom].representative);
+        // AtomicConceptPrinter.needsDeclaration excludes only the top and bottom
+        // elements, which the printer never declares.
         self.print_functional_syntax_with(
             render,
             "SubClassOf",
             "EquivalentClasses",
             "Class",
-            |m: &str| m != top_repr && m != bottom_repr,
+            |_: &str| true,
         )
     }
 
@@ -313,8 +322,18 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     /// * `sub_keyword` — e.g. `"SubClassOf"` / `"SubObjectPropertyOf"` / `"SubDataPropertyOf"`
     /// * `equivalent_keyword` — e.g. `"EquivalentClasses"` / `"EquivalentObjectProperties"` / `"EquivalentDataProperties"`
     /// * `decl_keyword` — the inner constructor in `Declaration( K( x ) )`, e.g. `"Class"` / `"ObjectProperty"` / `"DataProperty"`
-    /// * `needs_declaration` — mirrors `RolePrinter.needsDeclaration` (HierarchyPrinterFSS.java:259-260):
-    ///   returns `false` for top/bottom AND for inverse roles (only `AtomicRole` instances are declared).
+    /// * `needs_declaration` — mirrors `RolePrinter.needsDeclaration` (HierarchyPrinterFSS.java:259-260)
+    ///   for the members other than the top and bottom elements: returns `false` for inverse roles
+    ///   (only `AtomicRole` instances are declared).
+    ///
+    /// The printer never declares the top and bottom elements, and neither
+    /// does HermiT's `needsDeclaration`: every OWL 2 ontology implicitly
+    /// declares owl:Thing, owl:Nothing and the top and bottom object and data
+    /// properties (OWL 2 Structural Specification §5.8, Table 5). Like the
+    /// member order, this identifies the two as elements, as HermiT's printers
+    /// compare with `AtomicConcept.THING`, `AtomicRole.TOP_OBJECT_ROLE` and so
+    /// on, not as the representatives of the top and bottom nodes, which
+    /// coincide in a hierarchy collapsed to one node.
     pub fn print_functional_syntax_with<F, D>(
         &self,
         render: F,
@@ -327,16 +346,16 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         F: Fn(&E) -> String,
         D: Fn(&str) -> bool,
     {
-        let top_repr = render(&self.nodes[self.top].representative);
-        let bottom_repr = render(&self.nodes[self.bottom].representative);
+        let rendered_top = render(&self.top_element);
+        let rendered_bottom = render(&self.bottom_element);
         // `AtomicConceptComparator`: bottom (0) < top (1) < others (2 by IRI).
         let sorted_members = |node: NodeRef| -> Vec<String> {
             let mut m: Vec<String> =
                 self.nodes[node].equivalent_elements.iter().map(&render).collect();
             let rank = |s: &String| -> u8 {
-                if *s == bottom_repr {
+                if *s == rendered_bottom {
                     0
-                } else if *s == top_repr {
+                } else if *s == rendered_top {
                     1
                 } else {
                     2
@@ -344,6 +363,9 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
             };
             m.sort_by(|a, b| rank(a).cmp(&rank(b)).then_with(|| a.cmp(b)));
             m
+        };
+        let declared = |member: &str| {
+            member != rendered_top && member != rendered_bottom && needs_declaration(member)
         };
 
         let mut lines: Vec<String> = Vec::new();
@@ -370,7 +392,7 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
             // RolePrinter.needsDeclaration (HierarchyPrinterFSS.java:259-260): excludes top/bottom
             // AND inverse roles (only AtomicRole instances get a Declaration).
             for member in &members {
-                if needs_declaration(member.as_str()) {
+                if declared(member.as_str()) {
                     lines.push(format!("Declaration( {decl_keyword}( {member} ) )"));
                 }
             }
@@ -382,7 +404,7 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
             lines.push(format!("{equivalent_keyword}( {} )", bottom_members.join(" ")));
         }
         for member in &bottom_members {
-            if needs_declaration(member.as_str()) {
+            if declared(member.as_str()) {
                 lines.push(format!("Declaration( {decl_keyword}( {member} ) )"));
             }
         }
@@ -414,9 +436,9 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     {
         // Sort a node's members with bottom < top < (others by rendered form).
         let rank = |element: &E| -> u8 {
-            if *element == self.nodes[self.bottom].representative {
+            if *element == self.bottom_element {
                 0
-            } else if *element == self.nodes[self.top].representative {
+            } else if *element == self.top_element {
                 1
             } else {
                 2
@@ -488,9 +510,9 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     {
         // Sort a node's members with bottom < top < (others by rendered form).
         let rank = |element: &E| -> u8 {
-            if *element == self.nodes[self.bottom].representative {
+            if *element == self.bottom_element {
                 0
-            } else if *element == self.nodes[self.top].representative {
+            } else if *element == self.top_element {
                 1
             } else {
                 2
@@ -560,6 +582,8 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
             nodes: vec![node],
             top: 0,
             bottom: 0,
+            top_element,
+            bottom_element,
             nodes_by_elements,
             aliases: HashMap::new(),
         }
@@ -576,21 +600,24 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         top_node.children.insert(1);
         bottom_node.parents.insert(0);
         let mut nodes_by_elements = HashMap::new();
-        nodes_by_elements.insert(top_element, 0usize);
-        nodes_by_elements.insert(bottom_element, 1usize);
+        nodes_by_elements.insert(top_element.clone(), 0usize);
+        nodes_by_elements.insert(bottom_element.clone(), 1usize);
         Hierarchy {
             nodes: vec![top_node, bottom_node],
             top: 0,
             bottom: 1,
+            top_element,
+            bottom_element,
             nodes_by_elements,
             aliases: HashMap::new(),
         }
     }
 
     /// Port of `Hierarchy.transform` (without its optional ordering): the same
-    /// nodes and edges, with every element and alias mapped through `transform`.
-    /// A node's representative is the image of its old representative
-    /// (`determineRepresentative` in HermiT's role classifiers).
+    /// nodes and edges, with every element and alias mapped through `transform`,
+    /// the top and bottom elements too. A node's representative is the image of
+    /// its old representative (`determineRepresentative` in HermiT's role
+    /// classifiers).
     pub fn transform<T, F>(&self, transform: F) -> Hierarchy<T>
     where
         T: Eq + Hash + Clone,
@@ -613,7 +640,15 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
             }
         }
         let aliases = self.aliases.iter().map(|(alias, &node)| (transform(alias), node)).collect();
-        Hierarchy { nodes, top: self.top, bottom: self.bottom, nodes_by_elements, aliases }
+        Hierarchy {
+            nodes,
+            top: self.top,
+            bottom: self.bottom,
+            top_element: transform(&self.top_element),
+            bottom_element: transform(&self.bottom_element),
+            nodes_by_elements,
+            aliases,
+        }
     }
 }
 
@@ -794,6 +829,8 @@ impl<E: Eq + Hash + Clone> HierarchyBuilder<E> {
             nodes: self.nodes,
             top: self.top,
             bottom: self.bottom,
+            top_element: self.top_element,
+            bottom_element: self.bottom_element,
             nodes_by_elements: self.nodes_by_elements,
             aliases: HashMap::new(),
         }
@@ -1175,6 +1212,62 @@ SubClassOf( B owl:Thing )";
         // The satisfiable class A is still declared and placed under top.
         assert!(fss.contains("Declaration( Class( A ) )"), "got:\n{fss}");
         assert!(fss.contains("SubClassOf( A owl:Thing )"), "got:\n{fss}");
+    }
+
+    #[test]
+    fn print_functional_syntax_declares_no_built_in_of_a_collapsed_hierarchy() {
+        // An inconsistent ontology's hierarchy is one node, both top and bottom,
+        // which the top element represents.
+        let hierarchy = Hierarchy::empty_hierarchy(&["A", "B"], "top", "bottom");
+        let render = |e: &&str| match *e {
+            "top" => "owl:Thing".to_string(),
+            "bottom" => "owl:Nothing".to_string(),
+            other => other.to_string(),
+        };
+        // Neither owl:Thing nor owl:Nothing is declared, and owl:Nothing leads
+        // the members, as in a hierarchy whose bottom node is its own.
+        let expected = "\
+Declaration( Class( A ) )
+Declaration( Class( B ) )
+EquivalentClasses( owl:Nothing owl:Thing A B )";
+        assert_eq!(hierarchy.print_functional_syntax(render), expected);
+        // The dumpers order the members alike.
+        assert_eq!(
+            hierarchy.dump_functional_syntax("EquivalentClasses", "SubClassOf", render),
+            "EquivalentClasses( owl:Nothing owl:Thing A B )\n\n"
+        );
+        let dump = hierarchy.dump_functional_syntax_java_data(
+            "EquivalentDataProperties",
+            "SubDataPropertyOf",
+            |e: &&str| format!("<{e}>"),
+            |e: &&str| format!(">{e}>"),
+        );
+        assert_eq!(dump, "EquivalentDataProperties( <bottom> >top> >A> >B> )\n\n");
+
+        // The role classifiers transform the hierarchy of their proxy concepts;
+        // the transformed top and bottom elements are the built-in properties.
+        let roles = hierarchy.transform(|e: &&str| match *e {
+            "A" => "r",
+            "B" => "r-",
+            other => other,
+        });
+        let render_role = |e: &&str| match *e {
+            "top" => "owl:topObjectProperty".to_string(),
+            "bottom" => "owl:bottomObjectProperty".to_string(),
+            "r-" => "ObjectInverseOf( <r> )".to_string(),
+            other => format!("<{other}>"),
+        };
+        let fss = roles.print_functional_syntax_with(
+            render_role,
+            "SubObjectPropertyOf",
+            "EquivalentObjectProperties",
+            "ObjectProperty",
+            |m: &str| !m.starts_with("ObjectInverseOf"),
+        );
+        let expected = "\
+Declaration( ObjectProperty( <r> ) )
+EquivalentObjectProperties( owl:bottomObjectProperty owl:topObjectProperty <r> ObjectInverseOf( <r> ) )";
+        assert_eq!(fss, expected);
     }
 
     #[test]

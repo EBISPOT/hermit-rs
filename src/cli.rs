@@ -1171,16 +1171,14 @@ fn classify_hierarchies(
         if pretty_print {
             // RolePrinter (HierarchyPrinterFSS.java:206-209): SubObjectPropertyOf /
             // EquivalentObjectProperties / Declaration( ObjectProperty( ... ) );
-            // needsDeclaration (line 259-260) suppresses top/bottom AND inverse roles.
-            let top_repr = "<http://www.w3.org/2002/07/owl#topObjectProperty>".to_string();
-            let bottom_repr =
-                "<http://www.w3.org/2002/07/owl#bottomObjectProperty>".to_string();
+            // needsDeclaration (line 259-260) suppresses top/bottom, which the
+            // printer never declares, AND inverse roles, which this hierarchy lacks.
             sections.push(hierarchy.print_functional_syntax_with(
                 |p| format!("<{}>", p.0),
                 "SubObjectPropertyOf",
                 "EquivalentObjectProperties",
                 "ObjectProperty",
-                |m: &str| m != top_repr && m != bottom_repr,
+                |_: &str| true,
             ));
         } else {
             sections.push(hierarchy.dump_functional_syntax(
@@ -1194,15 +1192,14 @@ fn classify_hierarchies(
         let hierarchy = reasoner::classify_data_properties_with_configuration(ontology, config)?;
         if pretty_print {
             // RolePrinter (HierarchyPrinterFSS.java:208-209): SubDataPropertyOf /
-            // EquivalentDataProperties / Declaration( DataProperty( ... ) ).
-            let top_repr = "<http://www.w3.org/2002/07/owl#topDataProperty>".to_string();
-            let bottom_repr = "<http://www.w3.org/2002/07/owl#bottomDataProperty>".to_string();
+            // EquivalentDataProperties / Declaration( DataProperty( ... ) ); the
+            // printer never declares top/bottom.
             sections.push(hierarchy.print_functional_syntax_with(
                 |p| format!("<{}>", p.0),
                 "SubDataPropertyOf",
                 "EquivalentDataProperties",
                 "DataProperty",
-                |m: &str| m != top_repr && m != bottom_repr,
+                |_: &str| true,
             ));
         } else {
             // Use the java-data variant to reproduce the Java bug in
