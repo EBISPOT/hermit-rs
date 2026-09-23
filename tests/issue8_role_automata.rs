@@ -115,3 +115,104 @@ fn inverse_transitive_chain_still_entails_complete_paths() {
         .unwrap());
     }
 }
+#[test]
+fn ro_import_consistency_is_independent_of_shuffled_axiom_order() {
+    let lines: Vec<_> = MINIMAL.lines().collect();
+    let axioms = &lines[2..lines.len() - 1];
+    let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+    for seed in 0..64 {
+        let mut ordered = axioms.to_vec();
+        for i in (1..ordered.len()).rev() {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            ordered.swap(i, ((state >> 33) as usize) % (i + 1));
+        }
+        let mut input = format!("{}\n{}\n{}\n)", lines[0], lines[1], ordered.join("\n"));
+        if seed % 2 == 1 {
+            for (index, old) in ["BFO_0000050", "BFO_0000051", "RO_0000056", "RO_0000057"]
+                .iter()
+                .enumerate()
+            {
+                input = input.replace(old, &format!("shuffled_{}_{index}", (seed * 5 + index) % 7));
+            }
+        }
+        assert!(
+            reasoner::is_ontology_consistent(&parse(&input)).unwrap(),
+            "seed={seed}: {ordered:?}"
+        );
+    }
+}
+/// The second half of issue #8: an inconsistency that only arises through the
+/// inverse-transitive chain must still be explainable. As in Java HermiT with
+/// `throwInconsistentOntologyException=false` under the OWL API's black-box
+/// explanation, the justification of `owl:Thing ⊑ owl:Nothing` is the explanation of
+/// the inconsistency; the public entailment query keeps throwing by default.
+#[test]
+fn chain_dependent_inconsistency_is_explained_not_rejected() {
+    use hermit_rs::configuration::Configuration;
+    use std::collections::BTreeSet;
+    let text = MINIMAL.replace(
+        "\n)",
+        "\nClassAssertion(obo:BFO_0000002 obo:ENVO_01001600)\n\
+         ClassAssertion(ObjectSomeValuesFrom(obo:RO_0000057 owl:Thing) obo:ENVO_01001600)\n)",
+    );
+    let text = format!("Prefix(owl:=<http://www.w3.org/2002/07/owl#>)\n{text}");
+    let o = parse(&text);
+    assert!(!reasoner::is_ontology_consistent(&o).unwrap());
+    let b = Build::new_arc();
+    let class = |s: &str| ClassExpression::Class(b.class(s));
+    let contradiction: Component<A> = SubClassOf {
+        sub: class("http://www.w3.org/2002/07/owl#Thing"),
+        sup: class("http://www.w3.org/2002/07/owl#Nothing"),
+    }
+    .into();
+    let unrelated: Component<A> = SubClassOf {
+        sub: class("urn:test:X"),
+        sup: class("urn:test:Y"),
+    }
+    .into();
+
+    // Default public queries keep Java's InconsistentOntologyException contract.
+    assert_eq!(
+        reasoner::is_entailed(&o, &contradiction),
+        Err(reasoner::INCONSISTENT_ONTOLOGY_ERROR.to_string())
+    );
+    // With the throw disabled, an inconsistent ontology entails everything.
+    let configuration = Configuration {
+        throw_inconsistent_ontology_exception: false,
+        ..Default::default()
+    };
+    let mut lenient = reasoner::IncrementalReasoner::with_configuration(o.clone(), configuration);
+    assert!(lenient.is_entailed(&contradiction).unwrap());
+    assert!(lenient.is_entailed(&unrelated).unwrap());
+
+    // Everything except the transitivity and the domain axiom is needed.
+    let expected: BTreeSet<Component<A>> = o
+        .iter()
+        .map(|ac| ac.component.clone())
+        .filter(|c| {
+            !matches!(
+                c,
+                Component::TransitiveObjectProperty(_)
+                    | Component::ObjectPropertyDomain(_)
+                    | Component::OntologyID(_)
+                    | Component::DocIRI(_)
+            )
+        })
+        .collect();
+    assert_eq!(expected.len(), 8);
+    let support = reasoner::explain(&o, &contradiction)
+        .unwrap()
+        .expect("inconsistency justification");
+    assert_eq!(support.iter().cloned().collect::<BTreeSet<_>>(), expected);
+    let all = reasoner::all_explanations(&o, &contradiction).unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].iter().cloned().collect::<BTreeSet<_>>(), expected);
+    // Any axiom is entailed by an inconsistent ontology; its justification is the
+    // inconsistency itself.
+    let support = reasoner::explain(&o, &unrelated)
+        .unwrap()
+        .expect("justification");
+    assert_eq!(support.into_iter().collect::<BTreeSet<_>>(), expected);
+}
