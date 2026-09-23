@@ -4,23 +4,23 @@ Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
 the issue #8 inverse-role fix, the issue #9 expectation correction, the issue
 #10/#11 excluded-URI fix, the issue #12 binary-length fix, the issue #14
 dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
-string value-space fix, the issue #31 XMLLiteral disjointness fix and the issue
+string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #22 property classification fix, which also resolved #13, #18, #20, #23, #24,
-#25 and #27. All 598 declared Java methods are accounted for; inherited methods
+#25 and #27, and the issue #26 fix for the inverses of the built-in object
+properties. All 598 declared Java methods are accounted for; inherited methods
 also run under their individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 893 | 29 | 2 |
+| Query/structural replay | 896 | 26 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 943 | 32 | 2 |
+| Total, excluding OWL WG | 946 | 29 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 32 failures are:
+The Rust port does **not** yet have full Java test parity. The 29 failures are:
 
-* **13 Rust/Java discrepancies**, including inherited repetitions: property
-  hierarchy lookups of the inverted built-in properties; direct results and
-  hierarchy printing; three core-blocking Widmann scenarios; and
+* **10 Rust/Java discrepancies**, including inherited repetitions: direct
+  results and hierarchy printing; three core-blocking Widmann scenarios; and
   description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
@@ -245,11 +245,44 @@ proxy test loads the ABox, as HermiT's does, so the object properties of Galen,
 and of Wine under individual reuse, take one to six seconds longer to classify
 than the edge read-off did.
 
-`ReasonerTest.testSubProperties` (#26) still fails, at operation 13. Java looks
-up `ObjectInverseOf(owl:bottomObjectProperty)` and
-`ObjectInverseOf(owl:topObjectProperty)` as the built-in properties themselves
-(`AtomicRole.getInverse`); Rust treats them as fresh properties. Its other 44
-assertions pass.
+Issue #26 was a gap in the lookups of the object-property hierarchy. Under the
+OWL 2 Direct Semantics owl:topObjectProperty holds every pair of elements and
+owl:bottomObjectProperty none (§2.2), and `ObjectInverseOf` swaps the pairs of
+its property (Table 1), so each of the two is its own inverse. HermiT's
+`Reasoner.H` resolves `ObjectInverseOf(owl:topObjectProperty)` and
+`ObjectInverseOf(owl:bottomObjectProperty)` to the properties themselves
+(`AtomicRole.getInverse`). The classification already gave the inverses that
+meaning, but the hierarchy, which has no node for them, looked them up as fresh
+properties, between its top and bottom nodes. So the sub-properties of
+`ObjectInverseOf(owl:bottomObjectProperty)` were owl:bottomObjectProperty, not
+none (`ReasonerTest.testSubProperties`, operation 13), the super-properties of
+`ObjectInverseOf(owl:topObjectProperty)` were owl:topObjectProperty, and each
+inverse was equivalent only to itself. The hierarchy now looks each inverse up
+as the property itself, in every sub-, super- and equivalent-property query,
+direct or not, and so in `getInverseObjectProperties`; as in Java, no node
+lists the inverses.
+
+One correction deviates from Java; no Java case covers it.
+`getDisjointObjectProperties` of `ObjectInverseOf(owl:bottomObjectProperty)`
+now returns every property, as for owl:bottomObjectProperty, because the empty
+role is disjoint from every role (Table 6). Java tests
+`isOWLBottomObjectProperty()`, which does not unwrap the inverse, and so
+searches the hierarchy below owl:topObjectProperty with the atom `bottom(a, b)`.
+That atom clashes only when the ontology mentions owl:bottomObjectProperty, the
+only case in which it is axiomatized, so Java returns the bottom node alone, or
+every node except the top node.
+
+The other queries that take an object property expression already answered
+alike for the inverses and the properties: the subsumption, equivalence,
+inverse and disjointness entailments, property chains, the property
+characteristics, domains, ranges and instances. Each reduces the query to a
+test ontology, whose clausification gives the inverses their meaning, or to
+role atoms or pairs, whose direction does not matter for a built-in property.
+The regressions compare each of these queries on the two inverses with the
+same query on the properties, over ontologies that mention the built-in
+properties, their inverses or neither. They also check the hierarchy lookups
+under the default, core-blocking, individual-reuse and quasi-order
+configurations, and against the separate subsumption test.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB

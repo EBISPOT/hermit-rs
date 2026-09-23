@@ -68,3 +68,21 @@ pub fn inverse_property(ope: &ObjectPropExpr) -> ObjectPropExpr {
         }
     }
 }
+
+/// The property that a query on `ope` is about: owl:topObjectProperty for
+/// `ObjectInverseOf(owl:topObjectProperty)`, owl:bottomObjectProperty for
+/// `ObjectInverseOf(owl:bottomObjectProperty)`, and `ope` itself otherwise.
+/// The universal and the empty role are their own inverses (OWL 2 Direct
+/// Semantics §2.2 and Table 1), as HermiT's `Reasoner.H` resolves them through
+/// `AtomicRole.getInverse`.
+pub fn canonical_property(ope: &ObjectPropExpr) -> ObjectPropExpr {
+    match ope {
+        ObjectPropertyExpression::InverseObjectProperty(p)
+            if p.0.as_ref() == crate::model::AtomicRole::top_object_role().iri()
+                || p.0.as_ref() == crate::model::AtomicRole::bottom_object_role().iri() =>
+        {
+            ObjectPropertyExpression::ObjectProperty(p.clone())
+        }
+        _ => ope.clone(),
+    }
+}

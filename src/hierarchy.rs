@@ -102,6 +102,9 @@ pub struct Hierarchy<E> {
     top: NodeRef,
     bottom: NodeRef,
     nodes_by_elements: HashMap<E, NodeRef>,
+    /// Other names of elements ([`Hierarchy::add_alias`]): found by the lookups,
+    /// but members of no node.
+    aliases: HashMap<E, NodeRef>,
 }
 
 impl<E: Eq + Hash + Clone> Hierarchy<E> {
@@ -114,8 +117,18 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     pub fn bottom_node(&self) -> NodeRef {
         self.bottom
     }
+    /// The node of `element`, or of the element that `element` is an alias of.
     pub fn node_for_element(&self, element: &E) -> Option<NodeRef> {
-        self.nodes_by_elements.get(element).copied()
+        self.nodes_by_elements.get(element).or_else(|| self.aliases.get(element)).copied()
+    }
+    /// Makes `alias` another name of `element`, which must be an element of the
+    /// hierarchy: every lookup of `alias` finds the node of `element`, as
+    /// HermiT's `getNodeForElement(H(...))` finds one element for the OWL API
+    /// expressions that `H` maps to it. `alias` is no element itself, so no node
+    /// lists it and [`Hierarchy::all_elements`] omits it.
+    pub(crate) fn add_alias(&mut self, alias: E, element: &E) {
+        let node = self.nodes_by_elements[element];
+        self.aliases.insert(alias, node);
     }
     pub fn all_elements(&self) -> impl Iterator<Item = &E> {
         self.nodes_by_elements.keys()
@@ -161,7 +174,7 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
     }
 
     /// The elements equivalent to `element` (its hierarchy node's members,
-    /// including `element` itself).
+    /// including `element` itself unless it is an alias).
     ///
     /// For an element absent from the classified hierarchy (a *fresh* class/role
     /// the caller passed that does not occur in the ontology) this mirrors
@@ -525,7 +538,13 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         for element in &node.equivalent_elements {
             nodes_by_elements.insert(element.clone(), 0usize);
         }
-        Hierarchy { nodes: vec![node], top: 0, bottom: 0, nodes_by_elements }
+        Hierarchy {
+            nodes: vec![node],
+            top: 0,
+            bottom: 0,
+            nodes_by_elements,
+            aliases: HashMap::new(),
+        }
     }
 
     /// `Hierarchy.trivialHierarchy`: a hierarchy containing only the top and
@@ -541,12 +560,18 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
         let mut nodes_by_elements = HashMap::new();
         nodes_by_elements.insert(top_element, 0usize);
         nodes_by_elements.insert(bottom_element, 1usize);
-        Hierarchy { nodes: vec![top_node, bottom_node], top: 0, bottom: 1, nodes_by_elements }
+        Hierarchy {
+            nodes: vec![top_node, bottom_node],
+            top: 0,
+            bottom: 1,
+            nodes_by_elements,
+            aliases: HashMap::new(),
+        }
     }
 
     /// Port of `Hierarchy.transform` (without its optional ordering): the same
-    /// nodes and edges, with every element mapped through `transform`. A node's
-    /// representative is the image of its old representative
+    /// nodes and edges, with every element and alias mapped through `transform`.
+    /// A node's representative is the image of its old representative
     /// (`determineRepresentative` in HermiT's role classifiers).
     pub fn transform<T, F>(&self, transform: F) -> Hierarchy<T>
     where
@@ -569,7 +594,8 @@ impl<E: Eq + Hash + Clone> Hierarchy<E> {
                 nodes_by_elements.insert(element.clone(), index);
             }
         }
-        Hierarchy { nodes, top: self.top, bottom: self.bottom, nodes_by_elements }
+        let aliases = self.aliases.iter().map(|(alias, &node)| (transform(alias), node)).collect();
+        Hierarchy { nodes, top: self.top, bottom: self.bottom, nodes_by_elements, aliases }
     }
 }
 
@@ -751,6 +777,7 @@ impl<E: Eq + Hash + Clone> HierarchyBuilder<E> {
             top: self.top,
             bottom: self.bottom,
             nodes_by_elements: self.nodes_by_elements,
+            aliases: HashMap::new(),
         }
     }
 
@@ -1243,6 +1270,52 @@ SubDataPropertyOf( <d1> <d2> )";
         assert_eq!(
             hierarchy.sub_elements(&"Fresh", true),
             ["bottom"].into_iter().collect::<Set<_>>()
+        );
+    }
+
+    #[test]
+    fn an_alias_is_looked_up_as_its_element() {
+        // top > A > bottom, with "Top" another name of top and "Bottom" of bottom.
+        let mut subsumers: HashMap<&str, HashSet<&str>> = HashMap::new();
+        subsumers.insert("top", ["top"].into_iter().collect());
+        subsumers.insert("bottom", ["top", "A", "bottom"].into_iter().collect());
+        subsumers.insert("A", ["A", "top"].into_iter().collect());
+        let mut hierarchy = build_hierarchy("top", "bottom", subsumers);
+        hierarchy.add_alias("Top", &"top");
+        hierarchy.add_alias("Bottom", &"bottom");
+
+        // Unlike a fresh element, an alias has the node of its element.
+        for (alias, element) in [("Top", "top"), ("Bottom", "bottom")] {
+            assert_eq!(hierarchy.node_for_element(&alias), hierarchy.node_for_element(&element));
+            assert_eq!(
+                hierarchy.equivalent_elements_of(&alias),
+                [element].into_iter().collect::<Set<_>>()
+            );
+            for direct in [true, false] {
+                assert_eq!(
+                    hierarchy.sub_elements(&alias, direct),
+                    hierarchy.sub_elements(&element, direct)
+                );
+                assert_eq!(
+                    hierarchy.super_elements(&alias, direct),
+                    hierarchy.super_elements(&element, direct)
+                );
+            }
+        }
+        assert_eq!(hierarchy.sub_elements(&"Top", true), ["A"].into_iter().collect::<Set<_>>());
+        // An alias is no element.
+        assert_eq!(
+            hierarchy.all_elements().copied().collect::<Set<_>>(),
+            ["top", "A", "bottom"].into_iter().collect::<Set<_>>()
+        );
+        assert_eq!(hierarchy.all_nodes().len(), 3);
+
+        // A transformed hierarchy keeps the aliases.
+        let primed = hierarchy.transform(|e| format!("{e}'"));
+        assert_eq!(primed.node_for_element(&"Top'".to_string()), Some(primed.top_node()));
+        assert_eq!(
+            primed.super_elements(&"Bottom'".to_string(), true),
+            ["A'".to_string()].into_iter().collect::<Set<_>>()
         );
     }
 
