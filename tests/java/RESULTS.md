@@ -7,22 +7,22 @@ dateTime-interval fix, the issue #15/#16 numeric value-space fix, the issue #17
 string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 #22 property classification fix, which also resolved #13, #18, #20, #23, #24,
 #25 and #27, the issue #26 fix for the inverses of the built-in object
-properties, the issue #19 fix for the direct types of individuals, and the
-issue #21 fix for the declarations in printed hierarchies. All 598 declared
-Java methods are accounted for; inherited methods also run under their
+properties, the issue #19 fix for the direct types of individuals, the issue
+#21 fix for the declarations in printed hierarchies, and the issue #28
+core-blocking fix, which also resolved #29 and #30. All 598 declared Java
+methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 902 | 20 | 2 |
+| Query/structural replay | 905 | 17 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 952 | 23 | 2 |
+| Total, excluding OWL WG | 955 | 20 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 23 failures are:
+The Rust port does **not** yet have full Java test parity. The 20 failures are:
 
-* **4 Rust/Java discrepancies**: three core-blocking Widmann scenarios and
-  description-graph/SWRL integration.
+* **1 Rust/Java discrepancy**: description-graph/SWRL integration.
 * **19 assertions that also fail in the pinned Java checkout**: 17 structural
   control comparisons and both blocking-validator tests. The original Java
   aggregate suites exclude these classes. The original controls and Java failure

@@ -1,16 +1,4 @@
 {
-  "reasoner.ReasonerCoreBlockingTest.testWidmann1": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann1\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann1\" operation 1: \"isConsistent\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testWidmann2": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann2\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann2\" operation 1: \"isConsistent\""
-  },
-  "reasoner.ReasonerCoreBlockingTest.testWidmann3": {
-    "origin": "Rust/Java discrepancy",
-    "signature": "assertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\"\nassertion `left == right` failed: \"reasoner.ReasonerCoreBlockingTest.testWidmann3\" operation 1: \"isConsistent\""
-  },
   "reasoner::java_blocking_tests::testInvalidBlockWithAnnotatedEqualities": {
     "origin": "upstream assertion also fails",
     "signature": "\nassertion failed: t.nodes[a2].is_directly_blocked() && t.nodes[a2].get_blocker() == Some(a1)"

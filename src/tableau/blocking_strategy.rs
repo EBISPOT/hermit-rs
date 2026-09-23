@@ -273,17 +273,31 @@ impl Tableau {
     /// `AnywhereValidatedBlocking.validationInfoChanged`: marks `node` as changed
     /// since the last block validation and rewinds the validation frontier so the
     /// next `validate_blocks` reconsiders it. Unlike `note_blocking_node_changed`
-    /// it does NOT touch `first_changed_node` (that is `updateNodeChange`'s job)
-    /// nor invalidate the cached blocking labels -- it is the pure
+    /// it does not invalidate the cached blocking labels -- it is the
     /// `setHasChangedSinceValidation` + frontier-rewind that the validated strategy
     /// applies to a node's *parent* (concept changes) or the *other endpoint* (role
-    /// changes) in addition to the directly-affected node.
+    /// changes) in addition to the directly-affected node. Once a validation has
+    /// run, it also moves `first_changed_node` back to `node`, which HermiT does
+    /// not (see below).
     pub(crate) fn validation_info_changed(&mut self, node: NodeId) {
         let id = self.nodes[node].node_id;
         if let Some(current) = self.last_validated_unchanged_node {
             if id < self.nodes[current].node_id {
                 self.last_validated_unchanged_node = Some(node);
             }
+            // After a validation, pre-blocking blocks a node only when the node or
+            // a candidate blocker has changed since, or when the candidate is its
+            // validated blocker (S-core blocking: Glimm, Horrocks and Motik,
+            // "Optimized Description Logic Reasoning via Core Blocking", IJCAR 2010,
+            // Definition 3). Terminating depends on a changed node being
+            // reconsidered: its label may since have grown into one that blocks
+            // validly. HermiT's pre-blocking resumes only from the first node whose
+            // *core* label changed, so it never reconsiders a node whose block was
+            // invalid, and the expansion below that node need not end: a node that
+            // gets its label from its descendants never has a valid blocker while it
+            // is a leaf, and HermiT never re-blocks it once it has descendants. So
+            // pre-blocking resumes from every node that changed.
+            self.update_node_change(node);
         }
         self.nodes[node].has_changed_since_validation = true;
     }
@@ -487,7 +501,9 @@ impl Tableau {
     /// signature, but -- once a validation has run -- only re-blocks a node whose
     /// own or candidate-blocker's validation state changed (or that keeps its
     /// previous blocker), which is what makes the pre-block/validate loop
-    /// terminate. No block is validated here.
+    /// terminate. After a validation, every change of validation state moves the
+    /// first changed node back (`validation_info_changed`), so each such node is
+    /// reconsidered. No block is validated here.
     fn compute_pre_blocking(&mut self) {
         let Some(start) = self.first_changed_node else {
             return;
@@ -543,6 +559,12 @@ impl Tableau {
                 if !self.nodes[current].is_blocked() {
                     let signature = self.validated_block_signature(current);
                     self.validated_cache_add(current, signature);
+                    // As in the anywhere pass: the expansion walk moves its cursor
+                    // past blocked nodes, so pull it back to a node left unblocked
+                    // with existentials still to expand.
+                    if self.nodes[current].has_unprocessed_existentials() {
+                        self.note_unprocessed_existential(current);
+                    }
                 }
             }
             self.nodes[current].has_blocking_info_changed = false;
@@ -612,11 +634,18 @@ impl Tableau {
                             }
                         }
                     }
-                    if valid_blocker.is_none()
-                        && self.nodes[current].has_unprocessed_existentials()
-                        && first_invalidly_blocked.is_none()
+                    if valid_blocker.is_none() && self.nodes[current].has_unprocessed_existentials()
                     {
-                        first_invalidly_blocked = Some(current);
+                        if first_invalidly_blocked.is_none() {
+                            first_invalidly_blocked = Some(current);
+                        }
+                        // The node is unblocked, and expansion must continue from
+                        // it, but the expansion walk moved its cursor past the node
+                        // while it was blocked. Unless the cursor is pulled back,
+                        // the final-chance walk finds nothing to expand, and the
+                        // tableau is taken for a model although the existentials
+                        // of this node are unsatisfied (issues #28-#30).
+                        self.note_unprocessed_existential(current);
                     }
                     self.nodes[current].set_blocked(valid_blocker, valid_blocker.is_some());
                 }
@@ -627,13 +656,21 @@ impl Tableau {
                 self.validated_cache_add(current, signature);
             }
         }
-        // Reset the per-node validation flags for the next pass.
+        // Reset the per-node validation flags for the next pass. `is_block_valid`
+        // checks a blocked node's parent once per pass and records that on the
+        // parent, which can precede `first_validated`. HermiT resets the record
+        // only from there, so a later pass skipped the check of such a parent and
+        // accepted a block that violates the parent's constraints; reset the
+        // parents of the validated nodes too.
         let mut node = first_validated;
         while let Some(current) = node {
             if self.nodes[current].is_active() {
                 self.nodes[current].has_changed_since_validation = false;
                 self.nodes[current].block_violates_parent_constraints = false;
                 self.nodes[current].has_already_been_checked = false;
+                if let Some(parent) = self.nodes[current].get_parent() {
+                    self.nodes[parent].has_already_been_checked = false;
+                }
             }
             node = self.nodes[current].next_tableau_node;
         }
@@ -872,5 +909,182 @@ impl Tableau {
         label.sort_unstable_by_key(|c| c.intern_ptr());
         label.dedup();
         label
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::configuration::{
+        BlockingSignatureCacheType, BlockingStrategyType, Configuration, DirectBlockingType,
+    };
+    use crate::model::{
+        AtLeastConcept, Atom, AtomicConcept, AtomicRole, Concept, DLClause, DLPredicate,
+        LiteralConcept, Role, Term, Variable,
+    };
+    use crate::tableau::blocking_validator::BlockingValidator;
+    use crate::tableau::dependency_set::DependencySet;
+    use crate::tableau::node::NodeId;
+    use crate::tableau::tableau::Tableau;
+
+    fn atomic(name: &str) -> AtomicConcept {
+        AtomicConcept::create(format!("http://example.org/{name}"))
+    }
+    fn concept(name: &str) -> Concept {
+        Concept::AtomicConcept(atomic(name))
+    }
+    fn role(name: &str) -> Role {
+        Role::AtomicRole(AtomicRole::create(format!("http://example.org/{name}")))
+    }
+    fn empty(tableau: &mut Tableau) -> DependencySet {
+        DependencySet::Permanent(tableau.dependency_set_factory().empty_set())
+    }
+
+    /// `A ⊑ ∀r.C`, the HT-clause `C(Y1) :- A(X), r(X,Y1)`.
+    fn a_implies_all_r_c() -> DLClause {
+        let atom = |predicate: DLPredicate, variables: &[&str]| {
+            Atom::create(
+                predicate,
+                variables.iter().map(|v| Term::Variable(Variable::create(*v))).collect(),
+            )
+        };
+        let r = AtomicRole::create("http://example.org/r");
+        DLClause::create(
+            vec![atom(DLPredicate::AtomicConcept(atomic("C")), &["Y1"])],
+            vec![
+                atom(DLPredicate::AtomicConcept(atomic("A")), &["X"]),
+                atom(DLPredicate::AtomicRole(r), &["X", "Y1"]),
+            ],
+        )
+    }
+
+    /// `∃r.D`, an existential that a node still has to expand.
+    fn some_r_d() -> Concept {
+        Concept::AtLeastConcept(AtLeastConcept::create(
+            1,
+            role("r"),
+            LiteralConcept::AtomicConcept(atomic("D")),
+        ))
+    }
+
+    /// A tableau with simple core blocking and the single checker, for an ontology
+    /// without inverse roles, whose blocks are validated against `clauses`.
+    fn core_blocking_tableau(clauses: Vec<DLClause>) -> Tableau {
+        let configuration = Configuration {
+            blocking_strategy_type: BlockingStrategyType::SimpleCore,
+            direct_blocking_type: DirectBlockingType::Single,
+            blocking_signature_cache_type: BlockingSignatureCacheType::NotCached,
+            ..Configuration::default()
+        };
+        let mut tableau = Tableau::with_configuration(&configuration);
+        tableau.configure_blocking(&configuration, false, false);
+        tableau.set_blocking_validator(BlockingValidator::new(&clauses.into_iter().collect()));
+        tableau
+    }
+
+    /// A root `A`, which requires `C` of its `r`-successors.
+    fn root(tableau: &mut Tableau) -> NodeId {
+        let empty = empty(tableau);
+        let node = tableau.create_new_named_node(&empty);
+        tableau.add_concept_assertion(concept("A"), node, &empty, true);
+        node
+    }
+
+    /// A `role`-successor of `parent` created for `D`, its core label.
+    fn successor(tableau: &mut Tableau, parent: NodeId, role_name: &str) -> NodeId {
+        let empty = empty(tableau);
+        let node = tableau.create_new_tree_node(&empty, parent);
+        tableau.add_role_assertion(role(role_name), parent, node, &empty, true);
+        tableau.add_concept_assertion(concept("D"), node, &empty, true);
+        node
+    }
+
+    /// Adds a derived, non-core concept.
+    fn derive(tableau: &mut Tableau, node: NodeId, concept: Concept) {
+        let empty = empty(tableau);
+        tableau.add_concept_assertion(concept, node, &empty, false);
+    }
+
+    #[test]
+    fn final_chance_expands_the_nodes_that_validation_unblocks() {
+        let mut tableau = core_blocking_tableau(vec![a_implies_all_r_c()]);
+        let a = root(&mut tableau);
+        let s = successor(&mut tableau, a, "s");
+        let r = successor(&mut tableau, a, "r");
+        derive(&mut tableau, r, concept("C"));
+        derive(&mut tableau, r, some_r_d());
+        // `r` has the core label of `s`, so pre-blocking blocks it, and the
+        // expansion walk moves past it.
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert_eq!(tableau.node(r).get_blocker(), Some(s));
+        // The block is invalid: `s` would stand in for an `r`-successor of `a`, but
+        // lacks `C`. Validation unblocks `r`, whose existential must be expanded.
+        assert!(tableau.expand_existentials_final_chance(true));
+        assert!(!tableau.node(r).is_blocked());
+        assert!(!tableau.node(r).has_unprocessed_existentials());
+    }
+
+    #[test]
+    fn expansion_reaches_the_nodes_that_pre_blocking_unblocks() {
+        let mut tableau = core_blocking_tableau(Vec::new());
+        let a = root(&mut tableau);
+        let s = successor(&mut tableau, a, "s");
+        let r = successor(&mut tableau, a, "r");
+        derive(&mut tableau, r, some_r_d());
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert_eq!(tableau.node(r).get_blocker(), Some(s));
+        // A core concept of `s` makes its core label differ from that of `r`, so
+        // pre-blocking unblocks `r`, whose existential must now be expanded.
+        let empty = empty(&mut tableau);
+        tableau.add_concept_assertion(concept("E"), s, &empty, true);
+        assert!(tableau.expand_existentials_final_chance(false));
+        assert!(!tableau.node(r).is_blocked());
+        assert!(!tableau.node(r).has_unprocessed_existentials());
+    }
+
+    #[test]
+    fn a_changed_blocker_is_reconsidered_after_validation() {
+        let mut tableau = core_blocking_tableau(vec![a_implies_all_r_c()]);
+        let a = root(&mut tableau);
+        let s = successor(&mut tableau, a, "s");
+        let r = successor(&mut tableau, a, "r");
+        derive(&mut tableau, r, concept("C"));
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert!(!tableau.expand_existentials_final_chance(true));
+        assert!(!tableau.node(r).is_blocked(), "`s` lacks `C`");
+        // Once `s` has `C`, it can stand in for `r`. Only a non-core label changes,
+        // but `s` changed since the validation, so pre-blocking reconsiders it.
+        derive(&mut tableau, s, concept("C"));
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert_eq!(tableau.node(r).get_blocker(), Some(s));
+        assert!(!tableau.expand_existentials_final_chance(true));
+        assert_eq!(tableau.node(r).get_blocker(), Some(s), "the block is valid");
+    }
+
+    #[test]
+    fn each_validation_checks_the_parents_again() {
+        let mut tableau = core_blocking_tableau(vec![a_implies_all_r_c()]);
+        let a = root(&mut tableau);
+        let s1 = successor(&mut tableau, a, "s");
+        let s2 = successor(&mut tableau, a, "s");
+        let r = successor(&mut tableau, a, "r");
+        derive(&mut tableau, r, concept("C"));
+        // `s1` validly blocks `s2`, but not `r`, since `s1` lacks `C`.
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert!(!tableau.expand_existentials_final_chance(true));
+        assert_eq!(tableau.node(s2).get_blocker(), Some(s1));
+        assert!(!tableau.node(r).is_blocked());
+        // A successor of `s2` changes `s2` alone, so the next validation starts
+        // after `a` but checks it again for the block of `s2`.
+        successor(&mut tableau, s2, "s");
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert!(!tableau.expand_existentials_final_chance(true));
+        assert_eq!(tableau.node(s2).get_blocker(), Some(s1));
+        // A successor of `r` changes `r`, which pre-blocking blocks by `s1` again.
+        // The validation after that must check `a` anew and reject the block.
+        successor(&mut tableau, r, "s");
+        assert!(!tableau.expand_existentials_final_chance(false));
+        assert_eq!(tableau.node(r).get_blocker(), Some(s1));
+        assert!(!tableau.expand_existentials_final_chance(true));
+        assert!(!tableau.node(r).is_blocked(), "`s1` still lacks `C`");
     }
 }

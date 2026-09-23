@@ -107,9 +107,9 @@ two overrides are empty in the original Java source.
 | [#25](https://github.com/EBISPOT/hermit-rs/issues/25) | Recognize equivalent data properties forced to a common singleton range (**resolved** with #22) | 3 |
 | [#26](https://github.com/EBISPOT/hermit-rs/issues/26) | Normalize inverse built-in roles in property hierarchy queries (**resolved**) | 3 |
 | [#27](https://github.com/EBISPOT/hermit-rs/issues/27) | Recognize object properties equivalent to the universal role (**resolved** with #22) | 3 |
-| [#28](https://github.com/EBISPOT/hermit-rs/issues/28) | Reject the first unsatisfiable Widmann case under core blocking | 1 |
-| [#29](https://github.com/EBISPOT/hermit-rs/issues/29) | Reject the second unsatisfiable Widmann case under core blocking | 1 |
-| [#30](https://github.com/EBISPOT/hermit-rs/issues/30) | Reject the third unsatisfiable Widmann case under core blocking | 1 |
+| [#28](https://github.com/EBISPOT/hermit-rs/issues/28) | Reject the first unsatisfiable Widmann case under core blocking (**resolved**) | 1 |
+| [#29](https://github.com/EBISPOT/hermit-rs/issues/29) | Reject the second unsatisfiable Widmann case under core blocking (**resolved** with #28) | 1 |
+| [#30](https://github.com/EBISPOT/hermit-rs/issues/30) | Reject the third unsatisfiable Widmann case under core blocking (**resolved** with #28) | 1 |
 | [#31](https://github.com/EBISPOT/hermit-rs/issues/31) | Reject intersections of XMLLiteral and disjoint datatype spaces (**resolved**) | 1 |
 | [#32](https://github.com/EBISPOT/hermit-rs/issues/32) | Repair the obsolete annotated-equality blocking-validator fixture | 1 |
 | [#33](https://github.com/EBISPOT/hermit-rs/issues/33) | Repair the obsolete one-invalid-block validator fixture and check its assertions | 1 |
