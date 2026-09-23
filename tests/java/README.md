@@ -24,6 +24,10 @@ There are two forms of executable port:
   datatype value sets, indices, and key clausification. These retain the original
   assertion scenarios. Clause comparison permits consistent variable renaming;
   normalization comparison treats OWL set-valued operands as unordered.
+  Replayed clausification controls are compared semantically by
+  `tests/support/clause_compare.rs`. Literals are compared by data value,
+  enumerations and clause atoms as sets, and fresh auxiliary predicates up to
+  one consistent renaming. Everything else must match exactly.
 
 A trace is not evidence that Rust passes it. `expected-failures.json` lists the
 remaining discrepancies explicitly. Every case still executes: normal CI checks

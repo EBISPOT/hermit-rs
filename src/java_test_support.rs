@@ -1,4 +1,6 @@
 //! Process and allocation limits for imported tests against private internals.
+#[path = "../tests/support/clause_compare.rs"]
+mod clause_compare;
 #[path = "../tests/support/memory_budget.rs"]
 mod memory_budget;
 #[path = "../tests/support/java_outcome.rs"]

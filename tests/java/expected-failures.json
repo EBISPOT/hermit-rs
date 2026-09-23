@@ -1,51 +1,7 @@
 {
-  "structural.ClausificationDatatypesTest.testDataComplementOf3": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataComplementOf3\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataComplementOf4": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataComplementOf4\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataComplementOf2\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf2\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf3\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesDataOneOf4\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesHasValue1": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesHasValue1\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationDatatypesTest.testDataPropertiesHasValue2": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationDatatypesTest.testDataPropertiesHasValue2\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
   "structural.ClausificationTest.testBasic": {
     "origin": "upstream assertion also fails",
     "signature": "\"structural.ClausificationTest.testBasic\" operation 0: \"clausify\"\nassertion `left == right` failed"
-  },
-  "structural.ClausificationTest.testExistsSelf1": {
-    "origin": "upstream assertion also fails",
-    "signature": "\"structural.ClausificationTest.testExistsSelf1\" operation 0: \"clausify\"\nassertion `left == right` failed"
   },
   "structural.ClausificationTest.testNominals1": {
     "origin": "upstream assertion also fails",

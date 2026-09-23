@@ -10,19 +10,19 @@ string value-space fix, the issue #31 XMLLiteral disjointness fix, the issue
 properties, the issue #19 fix for the direct types of individuals, the issue
 #21 fix for the declarations in printed hierarchies, the issue #28
 core-blocking fix, which also resolved #29 and #30, the issue #32/#33
-blocking-validator fixture repair, and the issue #34 description-graph rule
-fix. All 598 declared Java
-methods are accounted for; inherited methods also run under their
+blocking-validator fixture repair, the issue #34 description-graph rule
+fix, and the semantic clause comparison for issues #35 to #44 and #46. All 598
+declared Java methods are accounted for; inherited methods also run under their
 individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 905 | 17 | 2 |
+| Query/structural replay | 916 | 6 | 2 |
 | Native internal tests | 53 | 0 | 0 |
-| Total, excluding OWL WG | 958 | 17 | 2 |
+| Total, excluding OWL WG | 969 | 6 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 17 failures are
+The Rust port does **not** yet have full Java test parity. The 6 failures are
 assertions that also fail in the pinned Java checkout: structural control
 comparisons. The original Java aggregate suites exclude these classes. The
 original controls and Java failure messages are retained, rather than rewritten
@@ -398,6 +398,35 @@ now clausifies through this path rather than adding start clauses by hand.
 Regressions check that a graph rule fires on an anonymous vertex while a
 DL-safe rule over an ordinary property does not, the kind inference for
 rule-only properties, and the rejections. Nothing deviates from Java.
+
+Issues #35 to #44 and #46 were obsolete structural controls, not clausifier
+defects. The pinned Java checkout fails all eleven. The `ClausificationDatatypesTest`
+controls spell every integer as `xsd:int` and `xsd:string` literals as plain
+literals, as an older HermiT printed them. Current Java and Rust print the
+literals as written: in `testDataComplementOf3`, for example,
+`"5"^^xsd:nonNegativeInteger` and `"5"^^xsd:integer` where the control has
+`"5"^^xsd:int` twice. The controls also list enumerations in Java's hash order.
+`testExistsSelf1` numbers its two fresh `def:` predicates the other way round. The
+structural runner now compares printed clause sets semantically
+(`tests/support/clause_compare.rs`). Under OWL 2 and XSD 1.1, a literal whose lexical form is
+valid for its datatype becomes one key per data value: `"18"^^xsd:int`,
+`"18"^^xsd:integer` and `"18.0"^^xsd:decimal` are the same number, and a plain
+literal without a language tag abbreviates `xsd:string`. Enumerations and clause
+heads and bodies compare as sets. One bijection renames the fresh `def:`,
+`defdata:`, `nnq:` and `all:` predicates, each within its own family, across all
+clauses and facts together. Everything else must match exactly: ordinary and
+nominal names, variables, negation, numbers, clause count and direction,
+distinct value spaces such as `xsd:double` against `xsd:decimal`, and ill-typed
+literals. Unit tests show that the comparator still rejects different values,
+ill-typed literals, an inconsistent or cross-family renaming, and every other
+structural change. When the comparison fails, the runner still reports the literal
+set difference. The Rust clauses were checked by hand against each input: for
+example, `A <= all dp.not(D1 and D2)` yields `dp(X,Y) -> defdata:0(Y)` and
+`defdata:0 <= not D1 or not D2`. In `testExistsSelf1`, `a` is in `def:1 <= exists r.Self`
+and in `not def:0`, where `exists r.Thing <= def:0`, which matches the input
+assertions `a: exists r.Self` and `a: all r.Nothing`. The upstream traces are unchanged
+and need no correction, because each control is semantically equal to the
+clauses. Nothing deviates from Java's clausification.
 
 The commands and regeneration procedure are in [README.md](README.md). Tests
 run serially in CI; isolated Java workers have a 120-second deadline and 512 MiB
