@@ -2463,10 +2463,11 @@ fn clausify_for_query(ontology: &SetOntology<crate::structural::A>) -> Result<DL
     manager.rewrite_negative_object_property_assertions(&mut axioms, definitions_count);
     manager.rewrite_axioms(&mut axioms, 0)?;
     let expressivity = OWLAxiomsExpressivity::new(&axioms);
-    OWLClausification::new(Configuration::default()).clausify(
+    OWLClausification::new(Configuration::default()).clausify_with_description_graphs(
         "http://hermit-rs/anonymous-ontology",
         &axioms,
         &expressivity,
+        &ambient_description_graphs(),
     )
 }
 
@@ -3608,7 +3609,10 @@ pub fn classify_object_properties_with_configuration(
         let mut element_subsumers: HashSet<ObjectProperty<crate::structural::A>> = HashSet::new();
         element_subsumers.insert(top.clone());
         element_subsumers.insert(element.clone());
-        if *element != top && *element != bottom {
+        // owl:topObjectProperty is looked up too: the named properties that
+        // share its OPE node are its subsumers, so a property equivalent to it
+        // lands in the top node instead of below it.
+        if *element != bottom {
             if let Some(node) = ope_hierarchy.node_for_element(&OPE::ObjectProperty(element.clone()))
             {
                 for ancestor in ope_hierarchy.ancestor_nodes(node) {
@@ -7133,7 +7137,13 @@ pub fn is_ontology_consistent_with_configuration(
     // Deviation from Java: an ontology of acyclic class definitions and
     // assertions is checked through an equisatisfiable lazy unfolding, which
     // avoids HermiT's exponential search on it (WebOnt description-logic-208).
-    let unfolded = crate::structural::definitorial_unfolding::unfold_definitions(ontology);
+    // The unfolding removes defined class names, which a description graph's
+    // start concepts may be, so it is skipped when graphs are in scope.
+    let unfolded = if ambient_description_graphs().is_empty() {
+        crate::structural::definitorial_unfolding::unfold_definitions(ontology)
+    } else {
+        None
+    };
     let dl_ontology = clausify_ontology(unfolded.as_ref().unwrap_or(ontology))?;
     Ok(Reasoner::with_configuration(&dl_ontology, configuration.clone()).is_consistent())
 }
@@ -7169,7 +7179,45 @@ fn clausify_ontology_with_role_automata(
     ),
     String,
 > {
-    clausify_ontology_with_description_graphs(ontology, configuration, &[])
+    clausify_ontology_with_description_graphs(ontology, configuration, &ambient_description_graphs())
+}
+
+thread_local! {
+    /// The description graphs of the [`IncrementalReasoner`] whose query runs on
+    /// this thread (Java's `Reasoner(Configuration, OWLOntology,
+    /// Collection<DescriptionGraph>)` keeps them in the reasoner). The query
+    /// entry points are free functions that clausify the ontology themselves,
+    /// so the reasoner installs its graphs here for the duration of each query
+    /// and every clausification of the ontology picks them up. Empty outside a
+    /// query, so the free functions reason without graphs. Worker threads only
+    /// share an already clausified `DLOntology`, which carries the graphs.
+    static AMBIENT_DESCRIPTION_GRAPHS: std::cell::RefCell<Vec<crate::model::DescriptionGraph>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The description graphs installed on this thread by [`DescriptionGraphScope`].
+fn ambient_description_graphs() -> Vec<crate::model::DescriptionGraph> {
+    AMBIENT_DESCRIPTION_GRAPHS.with(|graphs| graphs.borrow().clone())
+}
+
+/// Installs a reasoner's description graphs as this thread's ambient graphs
+/// and restores the previous ones when dropped, so nested reasoners (and
+/// panics) leave no graphs behind.
+struct DescriptionGraphScope(Vec<crate::model::DescriptionGraph>);
+
+impl DescriptionGraphScope {
+    fn enter(graphs: &[crate::model::DescriptionGraph]) -> DescriptionGraphScope {
+        let previous = AMBIENT_DESCRIPTION_GRAPHS
+            .with(|ambient| std::mem::replace(&mut *ambient.borrow_mut(), graphs.to_vec()));
+        DescriptionGraphScope(previous)
+    }
+}
+
+impl Drop for DescriptionGraphScope {
+    fn drop(&mut self) {
+        let previous = std::mem::take(&mut self.0);
+        AMBIENT_DESCRIPTION_GRAPHS.with(|ambient| *ambient.borrow_mut() = previous);
+    }
 }
 
 /// `OWLClausification.preprocessAndClausify(ontology, descriptionGraphs)`: the
@@ -8772,6 +8820,9 @@ pub struct IncrementalReasoner {
     precomputed_inferences: std::collections::HashSet<InferenceType>,
     /// Shared property read-off and resolved candidates for the current snapshot.
     object_property_index: Option<ObjectPropertyInstanceIndex>,
+    /// Java's `m_descriptionGraphs`: the description graphs clausified with the
+    /// ontology (see [`IncrementalReasoner::with_description_graphs`]).
+    description_graphs: Vec<crate::model::DescriptionGraph>,
 }
 
 impl IncrementalReasoner {
@@ -8812,7 +8863,72 @@ impl IncrementalReasoner {
         ontology: SetOntology<crate::structural::A>,
         configuration: crate::configuration::Configuration,
     ) -> IncrementalReasoner {
+        IncrementalReasoner::with_description_graphs(ontology, configuration, Vec::new())
+    }
+
+    /// Builds an incremental reasoner that reasons over `ontology` together with
+    /// `description_graphs` (Java's `Reasoner(Configuration, OWLOntology,
+    /// Collection<DescriptionGraph>)`). OWL syntax cannot express description
+    /// graphs, so this is their only public input path. Every clausification of
+    /// the ontology the reasoner makes includes the graphs: the start clauses of
+    /// each graph are added, and SWRL rules over graph properties also apply to
+    /// anonymous graph vertices. So they reach every reasoning service:
+    /// consistency, satisfiability and subsumption, classification, instances,
+    /// property instances and entailment.
+    ///
+    /// ```
+    /// use hermit_rs::configuration::Configuration;
+    /// use hermit_rs::model::{AtomicConcept, AtomicRole, DescriptionGraph, Edge};
+    /// use hermit_rs::reasoner::IncrementalReasoner;
+    /// use horned_owl::model::{Build, Class, Component, ClassExpression};
+    /// use horned_owl::ontology::set::SetOntology;
+    ///
+    /// let ex = |name: &str| format!("http://example.org/{name}");
+    /// // Graph G: vertex 0 labelled :Car has an :hasPart edge to vertex 1
+    /// // labelled :Engine; every :Car starts an instance of G at vertex 0.
+    /// let car = AtomicConcept::create(ex("Car"));
+    /// let graph = DescriptionGraph::new(
+    ///     ex("G"),
+    ///     vec![car, AtomicConcept::create(ex("Engine"))],
+    ///     vec![Edge::new(AtomicRole::create(ex("hasPart")), 0, 1)],
+    ///     [car].into_iter().collect(),
+    /// );
+    ///
+    /// // A rule over the graph property :hasPart makes a :Car :Motorised; it
+    /// // applies to the anonymous :Engine vertex the graph creates.
+    /// let text = "Prefix(:=<http://example.org/>)
+    ///     Ontology(
+    ///         DLSafeRule(Body(ObjectPropertyAtom(:hasPart Variable(:x) Variable(:y))
+    ///                         ClassAtom(:Engine Variable(:y)))
+    ///                    Head(ClassAtom(:Motorised Variable(:x))))
+    ///         ClassAssertion(:Car :herbie))";
+    /// let (ontology, _): (SetOntology<_>, _) =
+    ///     horned_owl::io::ofn::reader::read(&mut text.as_bytes(), Default::default()).unwrap();
+    ///
+    /// let mut reasoner = IncrementalReasoner::with_description_graphs(
+    ///     ontology,
+    ///     Configuration::default(),
+    ///     vec![graph],
+    /// );
+    /// let build = Build::new_arc();
+    /// let motorised: Class<_> = build.class(ex("Motorised"));
+    /// assert!(reasoner.is_consistent().unwrap());
+    /// assert!(reasoner.sub_classes(&motorised, false).unwrap().contains(&build.class(ex("Car"))));
+    /// assert!(reasoner.instances(&motorised, false).unwrap().contains(&build.named_individual(ex("herbie"))));
+    /// assert!(reasoner
+    ///     .is_entailed(&Component::SubClassOf(horned_owl::model::SubClassOf {
+    ///         sub: ClassExpression::Class(build.class(ex("Car"))),
+    ///         sup: ClassExpression::Class(motorised),
+    ///     }))
+    ///     .unwrap());
+    /// ```
+    pub fn with_description_graphs(
+        ontology: SetOntology<crate::structural::A>,
+        configuration: crate::configuration::Configuration,
+        description_graphs: Vec<crate::model::DescriptionGraph>,
+    ) -> IncrementalReasoner {
         IncrementalReasoner {
+            description_graphs,
             ontology,
             configuration,
             pending_changes: Vec::new(),
@@ -8826,6 +8942,18 @@ impl IncrementalReasoner {
         }
     }
 
+    /// The description graphs this reasoner clausifies with the ontology
+    /// (empty unless built by [`with_description_graphs`](Self::with_description_graphs)).
+    pub fn description_graphs(&self) -> &[crate::model::DescriptionGraph] {
+        &self.description_graphs
+    }
+
+    /// Installs this reasoner's description graphs for the clausifications a
+    /// query makes, until the returned scope is dropped.
+    fn description_graph_scope(&self) -> DescriptionGraphScope {
+        DescriptionGraphScope::enter(&self.description_graphs)
+    }
+
     /// Port of `Reasoner.precomputeInferences` (Reasoner.java:555). Runs the
     /// requested inference tasks against the current ontology and records them so
     /// [`is_precomputed`](Self::is_precomputed) reflects the populated caches, matching
@@ -8835,6 +8963,7 @@ impl IncrementalReasoner {
     /// does: `doAll = prepareReasonerInferences==null`; when `Some`, the per-flag field
     /// controls whether that task runs (Reasoner.java:557-583).
     pub fn precompute(&mut self, inference_types: &[InferenceType]) -> Result<(), String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Java: boolean doAll = m_configuration.prepareReasonerInferences==null;
         let do_all = self.configuration.prepare_reasoner_inferences.is_none();
@@ -8949,6 +9078,7 @@ impl IncrementalReasoner {
     /// reasons over. Flushes any pending changes first (as Java's queries do) and
     /// materialises the clausification on demand.
     pub fn dl_ontology(&mut self) -> &DLOntology {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         if self.dl_ontology.is_none() {
             self.ensure_original_clausified();
@@ -8991,12 +9121,14 @@ impl IncrementalReasoner {
     /// NON_BUFFERING mode it takes effect immediately (Java's
     /// `flushChangesIfRequired`).
     pub fn add_axiom(&mut self, axiom: Component<crate::structural::A>) {
+        let _graphs = self.description_graph_scope();
         self.apply_changes(vec![OntologyChange::Add(axiom)]);
     }
 
     /// Submits a `RemoveAxiom` change (cf. `add_axiom`). Removing an axiom can
     /// restore consistency once flushed.
     pub fn remove_axiom(&mut self, axiom: Component<crate::structural::A>) {
+        let _graphs = self.description_graph_scope();
         self.apply_changes(vec![OntologyChange::Remove(axiom)]);
     }
 
@@ -9004,6 +9136,7 @@ impl IncrementalReasoner {
     /// change is appended to the pending buffer, then -- in NON_BUFFERING mode --
     /// `flushChangesIfRequired` flushes immediately so they take effect at once.
     pub fn apply_changes(&mut self, changes: Vec<OntologyChange>) {
+        let _graphs = self.description_graph_scope();
         for change in changes {
             self.pending_changes.push(change);
         }
@@ -9030,6 +9163,7 @@ impl IncrementalReasoner {
     /// kept in sync and the cached consistency is invalidated. With no pending
     /// changes this is a no-op (`if (!m_pendingChanges.isEmpty())`).
     pub fn flush(&mut self) {
+        let _graphs = self.description_graph_scope();
         if self.pending_changes.is_empty() {
             return;
         }
@@ -9135,6 +9269,7 @@ impl IncrementalReasoner {
     /// Whether the buffered changes are eligible for incremental ABox processing,
     /// matching Java's `Reasoner.canProcessPendingChangesIncrementally`.
     pub fn can_process_pending_changes_incrementally(&mut self) -> bool {
+        let _graphs = self.description_graph_scope();
         if self.original_dl_ontology.is_none() {
             self.ensure_original_clausified();
         }
@@ -9386,6 +9521,7 @@ impl IncrementalReasoner {
         &mut self,
         ope: horned_owl::model::ObjectPropertyExpression<crate::structural::A>,
     ) -> Result<ObjectPropertyInstances, String> {
+        let _graphs = self.description_graph_scope();
         self.ensure_object_property_index()?;
         self.object_property_index
             .as_mut()
@@ -9399,6 +9535,7 @@ impl IncrementalReasoner {
     /// the one built incrementally (reduced-ABox path) or by full reload on the
     /// last flush.
     pub fn is_consistent(&mut self) -> Result<bool, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         if let Some(consistent) = self.cached_consistent {
             return Ok(consistent);
@@ -9426,6 +9563,7 @@ impl IncrementalReasoner {
         &mut self,
         class_expression: CE<crate::structural::A>,
     ) -> Result<bool, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour THIS reasoner's throw_inconsistent_ontology_exception flag
         // rather than the default-config free function. is_concept_satisfiable returns
@@ -9445,6 +9583,7 @@ impl IncrementalReasoner {
         sub: CE<crate::structural::A>,
         sup: CE<crate::structural::A>,
     ) -> Result<bool, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         is_subsumed_by_with_configuration(&self.ontology, sub, sup, &self.configuration)
@@ -9457,6 +9596,7 @@ impl IncrementalReasoner {
         individual: NamedIndividual<crate::structural::A>,
         class_expression: CE<crate::structural::A>,
     ) -> Result<bool, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Under FreshEntityPolicy::Disallow, reject undeclared query entities
         // (Java checkPreConditions runs the fresh-entity throw BEFORE the inconsistency
@@ -9484,6 +9624,7 @@ impl IncrementalReasoner {
     pub fn classify(
         &mut self,
     ) -> Result<crate::hierarchy::Hierarchy<Class<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         classify_with_configuration(&self.ontology, &self.configuration)
@@ -9495,6 +9636,7 @@ impl IncrementalReasoner {
         &mut self,
         class: &Class<crate::structural::A>,
     ) -> Result<std::collections::HashSet<Class<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         equivalent_classes_with_configuration(&self.ontology, class, &self.configuration)
@@ -9507,6 +9649,7 @@ impl IncrementalReasoner {
         class: &Class<crate::structural::A>,
         direct: bool,
     ) -> Result<std::collections::HashSet<Class<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         sub_classes_with_configuration(&self.ontology, class, direct, &self.configuration)
@@ -9519,6 +9662,7 @@ impl IncrementalReasoner {
         class: &Class<crate::structural::A>,
         direct: bool,
     ) -> Result<std::collections::HashSet<Class<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         super_classes_with_configuration(&self.ontology, class, direct, &self.configuration)
@@ -9531,6 +9675,7 @@ impl IncrementalReasoner {
         class: &Class<crate::structural::A>,
         direct: bool,
     ) -> Result<std::collections::HashSet<NamedIndividual<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // Honour this reasoner's throw_inconsistent_ontology_exception flag.
         instances_with_configuration(&self.ontology, class, direct, &self.configuration)
@@ -9545,6 +9690,7 @@ impl IncrementalReasoner {
         ce: &CE<crate::structural::A>,
         direct: bool,
     ) -> Result<std::collections::HashSet<NamedIndividual<crate::structural::A>>, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         instances_of_expression_with_configuration(&self.ontology, ce, direct, &self.configuration)
     }
@@ -9555,6 +9701,7 @@ impl IncrementalReasoner {
         &mut self,
         axiom: &Component<crate::structural::A>,
     ) -> Result<bool, String> {
+        let _graphs = self.description_graph_scope();
         self.flush_changes_if_required();
         // EntailmentChecker.visit(OWLHasKeyAxiom) is the ONLY entailment visit that
         // runs throwFreshEntityExceptionIfNecessary (EntailmentChecker.java:459), over
@@ -9593,10 +9740,10 @@ impl IncrementalReasoner {
 
 /// Description-graph reasoning at the reasoner (`is_consistent`) level.
 ///
-/// OWL syntax cannot express description graphs, so the public API has no input
-/// path for them. A graph reaches the reasoner either through a `DLOntology`
-/// built directly (its constructor harvests the graphs from the
-/// `ExistsDescriptionGraph`/`DescriptionGraph` predicates in clauses/facts) or
+/// OWL syntax cannot express description graphs. A graph reaches the reasoner
+/// through [`IncrementalReasoner::with_description_graphs`], through a
+/// `DLOntology` built directly (its constructor harvests the graphs from the
+/// `ExistsDescriptionGraph`/`DescriptionGraph` predicates in clauses/facts), or
 /// through the crate-internal [`clausify_ontology_with_description_graphs`],
 /// which also decides which SWRL rules apply to anonymous graph vertices. These
 /// tests drive both paths end to end through the `DescriptionGraphManager`.

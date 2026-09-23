@@ -94,6 +94,16 @@ both was inconsistent and each local midnight was counted twice. Six
 `DateTimeTest` expectations are corrected in [corrections.json](corrections.json);
 see `tests/datetime_24h.rs` and [RESULTS.md](RESULTS.md).
 
+Two CLI output bugs and a description-graph API gap (**resolved**, no issue;
+see `tests/cli_hierarchy_output.rs` and `tests/description_graph_api.rs`). The
+`-O` hierarchy (`classify_object_properties`) looked up no subsumers for
+owl:topObjectProperty, so a property equivalent to it was printed below it.
+`--prettyPrint` had no `Prefix(...)`/`Ontology(...)` header; it now prints one
+document that the loader parses. `IncrementalReasoner::with_description_graphs`
+is the public counterpart of Java's `Reasoner(Configuration, OWLOntology,
+Collection<DescriptionGraph>)`: the reasoner installs its graphs for each query,
+and every clausification of the ontology includes them.
+
 An `xsd:base64Binary` literal denotes a base64Binary value (**resolved**, no
 issue, deliberately deviating from Java). HermiT's `BinaryData.parseBase64Binary`
 tagged it as hexBinary, so `"QQ=="^^xsd:base64Binary` was outside
