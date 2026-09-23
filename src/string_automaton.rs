@@ -193,11 +193,7 @@ impl Automaton {
 
     /// `self{min,}` (at least `min` repetitions).
     pub fn repeat_min(&self, min: usize) -> Automaton {
-        let mut a = Automaton::epsilon();
-        for _ in 0..min {
-            a = a.concatenate(self);
-        }
-        a.concatenate(&self.repeat())
+        self.repeat_range(min, min).concatenate(&self.repeat())
     }
 
     /// `self{min,max}` (between `min` and `max` repetitions, inclusive).
@@ -205,17 +201,25 @@ impl Automaton {
         if max < min {
             return Automaton::empty_language();
         }
+        // One copy after another, in time linear in the copies: the accepting
+        // states of the copies so far lead to the next copy, and stay
+        // accepting once there are `min` copies (the optional tail).
         let mut a = Automaton::epsilon();
-        for _ in 0..min {
-            a = a.concatenate(self);
+        let mut finals = vec![a.start];
+        let own_finals: Vec<usize> = (0..self.trans.len()).filter(|&s| self.accept[s]).collect();
+        for copy in 0..max {
+            let offset = a.trans.len();
+            a.append_states(self);
+            for &f in &finals {
+                a.eps[f].push(self.start + offset);
+                if copy < min {
+                    a.accept[f] = false;
+                }
+            }
+            finals = own_finals.iter().map(|&s| s + offset).collect();
         }
-        // optional tail: (self (self (... )?)?)? up to max-min times
-        let optional = self.optional();
-        let mut tail = Automaton::epsilon();
-        for _ in 0..(max - min) {
-            tail = optional.concatenate(&tail);
-        }
-        a.concatenate(&tail)
+        a.deterministic = false;
+        a
     }
 
     /// `self?` (zero or one).
@@ -621,13 +625,47 @@ impl Automaton {
 /// `None` for any construct we do not model (so the caller stays sound). The
 /// alphabet element of `.`/classes is the XML character set, matching dk.brics.
 pub fn xsd_pattern_to_automaton(pattern: &str) -> Option<Automaton> {
+    build_pattern(pattern).ok().flatten()
+}
+
+/// The automaton of a pattern, `Ok(None)` when it is not modelled, or
+/// `Err(PatternTooLarge)` when it would have more than `MAX_PATTERN_STATES`
+/// states.
+fn build_pattern(pattern: &str) -> Result<Option<Automaton>, PatternTooLarge> {
     let chars: Vec<char> = pattern.chars().collect();
-    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: false, deferred: None };
-    let a = p.parse_alternation()?;
-    if p.pos != chars.len() {
-        return None;
+    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: false, deferred: None, too_large: false };
+    let a = p.parse_alternation();
+    if p.too_large {
+        return Err(PatternTooLarge);
     }
-    Some(a)
+    Ok(a.filter(|_| p.pos == chars.len()))
+}
+
+/// The most states the automaton of a pattern may have. A bounded
+/// repetition is built one copy of its body per repetition unless
+/// `xsd_pattern_term` keeps it as a length window, so this bounds the memory
+/// a pattern takes, and a pattern past it is rejected
+/// (`pattern_resource_error`) rather than exhausting memory.
+pub const MAX_PATTERN_STATES: usize = 1 << 16;
+
+/// A pattern whose automaton would have more than `MAX_PATTERN_STATES` states.
+#[derive(Debug)]
+struct PatternTooLarge;
+
+/// Why the automaton of an XSD pattern cannot be built within
+/// `MAX_PATTERN_STATES` states, or `None` when it can (or when the pattern is
+/// not modelled). The clausifier rejects such a pattern with this message.
+pub fn pattern_resource_error(pattern: &str) -> Option<String> {
+    pattern_term_result(pattern).err().map(|_| {
+        format!(
+            "Resource limit: the automaton of xsd:pattern \"{pattern}\" would have more than \
+             {MAX_PATTERN_STATES} states. A bounded repetition of more than {LARGE_REPETITION} \
+             copies is reasoned about as a length window only when it is the one such \
+             repetition of the pattern, its body has words of one length, and every other \
+             piece of the pattern, outside any alternation or quantified group, has words of \
+             one length; otherwise it is built one state per copy."
+        )
+    })
 }
 
 /// A bounded repetition of more than this many copies is a large one:
@@ -641,59 +679,143 @@ const LARGE_REPETITION: usize = 256;
 /// whose words all have one length `l > 0`, all its other pieces having words
 /// of one length each (`l1` in all before it and `l2` after), is `F1 R* F2`
 /// restricted to the lengths `l1 + l2 + k·l` for `k` in `[m, n]`: a word of
-/// `F1 R* F2` of such a length holds exactly `k` copies of `R`. So
+/// `F1 R* F2` of such a length holds exactly `k` copies of `R`. Groups that
+/// are neither quantified nor hold an alternation are part of the
+/// concatenation, so `x(y(a{3000})z)` is `xya*z` of length 3003. So
 /// `a{2147483000}` is `a*` of length 2147483000 rather than 2147483000
 /// states, and the length window is reasoned about over the automaton's
 /// cycles (`is_empty_within`, `cardinality_within`). Any other pattern is its
-/// automaton with no length bound. `None` when the pattern is not modelled.
+/// automaton with no length bound, built one state per copy of a
+/// repetition: a large repetition in a quantified group or an alternation,
+/// beside a piece of varying length, or beside a second large repetition.
+/// `None` when the pattern is not modelled, or when its automaton would have
+/// more than `MAX_PATTERN_STATES` states (`pattern_resource_error`).
 pub fn xsd_pattern_term(pattern: &str) -> Option<(Automaton, LengthWindow)> {
+    pattern_term_result(pattern).ok().flatten()
+}
+
+/// Whether the group opened at `open` is neither quantified nor holds an
+/// alternation of its own, so that it is part of the concatenation around
+/// it. The parse checks both again; this only decides whether to try.
+fn plain_group(chars: &[char], open: usize) -> bool {
+    let mut depth = 0usize;
+    let mut i = open;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            '[' => {
+                // Skip the class, with its nested subtracted classes.
+                let mut nesting = 0usize;
+                while i < chars.len() {
+                    match chars[i] {
+                        '\\' => i += 1,
+                        '[' => nesting += 1,
+                        ']' => {
+                            nesting -= 1;
+                            if nesting == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return !matches!(chars.get(i + 1), Some('?' | '*' | '+' | '{'));
+                }
+            }
+            '|' if depth == 1 => return false,
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
+fn pattern_term_result(pattern: &str) -> Result<Option<(Automaton, LengthWindow)>, PatternTooLarge> {
     let chars: Vec<char> = pattern.chars().collect();
-    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: true, deferred: None };
+    let mut p = Parser { chars: &chars, pos: 0, depth: 0, defer: true, deferred: None, too_large: false };
     let mut automaton = Automaton::epsilon();
     let mut fixed: u64 = 0;
     let mut large: Option<(u64, Option<u64>)> = None;
     let mut symbolic = true;
+    // The plain groups open around the current piece.
+    let mut open_groups = 0usize;
     while let Some(c) = p.peek() {
+        if c == '(' && plain_group(&chars, p.pos) {
+            p.bump();
+            if p.peek() == Some('?') && p.chars.get(p.pos + 1) == Some(&':') {
+                p.bump();
+                p.bump();
+            }
+            open_groups += 1;
+            continue;
+        }
+        if c == ')' && open_groups > 0 {
+            p.bump();
+            open_groups -= 1;
+            if matches!(p.peek(), Some('?' | '*' | '+' | '{')) {
+                symbolic = false;
+                break;
+            }
+            continue;
+        }
         if c == '|' || c == ')' {
             symbolic = false;
             break;
         }
-        let piece = p.parse_quantified()?;
+        let Some(piece) = p.parse_quantified() else {
+            if p.too_large {
+                return Err(PatternTooLarge);
+            }
+            return Ok(None);
+        };
         let length = match p.deferred.take() {
             Some((body, min, max)) => match body.fixed_length() {
                 Some(0) => Some(0),
                 Some(l) if large.is_none() => {
                     if max.is_some_and(|max| max < min) {
-                        return Some((Automaton::empty_language(), (0, None)));
+                        return Ok(Some((Automaton::empty_language(), (0, None))));
                     }
                     let max = match max {
-                        Some(max) => Some((max as u64).checked_mul(l)?),
-                        None => None,
+                        Some(max) => (max as u64).checked_mul(l).map(Some),
+                        None => Some(None),
                     };
-                    large = Some(((min as u64).checked_mul(l)?, max));
-                    Some(0)
+                    match ((min as u64).checked_mul(l), max) {
+                        (Some(min), Some(max)) => {
+                            large = Some((min, max));
+                            Some(0)
+                        }
+                        _ => None,
+                    }
                 }
                 _ => None,
             },
             None => piece.fixed_length(),
         };
-        let Some(length) = length else {
+        let Some(length) = length.and_then(|length| fixed.checked_add(length)) else {
             symbolic = false;
             break;
         };
-        fixed = fixed.checked_add(length)?;
+        fixed = length;
         automaton = automaton.concatenate(&piece);
+        if automaton.trans.len() > MAX_PATTERN_STATES {
+            return Err(PatternTooLarge);
+        }
     }
     match large {
-        Some((min, max)) if symbolic => {
-            let min = min.checked_add(fixed)?;
-            let max = match max {
-                Some(max) => Some(max.checked_add(fixed)?),
-                None => None,
+        Some((min, max)) if symbolic && open_groups == 0 => {
+            let (Some(min), Some(max)) = (min.checked_add(fixed), max.map_or(Some(None), |max| max.checked_add(fixed).map(Some)))
+            else {
+                return build_pattern(pattern).map(|a| a.map(|a| (a, (0, None))));
             };
-            Some((automaton, (min, max)))
+            Ok(Some((automaton, (min, max))))
         }
-        _ => Some((xsd_pattern_to_automaton(pattern)?, (0, None))),
+        _ => build_pattern(pattern).map(|a| a.map(|a| (a, (0, None)))),
     }
 }
 
@@ -707,6 +829,9 @@ struct Parser<'a> {
     /// (`xsd_pattern_term`).
     defer: bool,
     deferred: Option<(Automaton, usize, Option<usize>)>,
+    /// Set when a repetition or concatenation would build more than
+    /// `MAX_PATTERN_STATES` states.
+    too_large: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -739,6 +864,10 @@ impl<'a> Parser<'a> {
             }
             let piece = self.parse_quantified()?;
             a = a.concatenate(&piece);
+            if a.trans.len() > MAX_PATTERN_STATES {
+                self.too_large = true;
+                return None;
+            }
         }
         Some(a)
     }
@@ -792,20 +921,34 @@ impl<'a> Parser<'a> {
                     }
                     self.pos = start;
                 }
+                // The copies are built one by one, within `MAX_PATTERN_STATES`.
+                let states = atom.trans.len();
+                let copies = |parser: &mut Parser, count: usize| -> Option<()> {
+                    if states.saturating_mul(count.saturating_add(1)) > MAX_PATTERN_STATES {
+                        parser.too_large = true;
+                        return None;
+                    }
+                    Some(())
+                };
                 match self.peek() {
                     Some('}') => {
+                        copies(self, min)?;
                         self.bump();
                         Some(atom.repeat_range(min, min))
                     }
                     Some(',') => {
                         self.bump();
                         if self.peek() == Some('}') {
+                            copies(self, min)?;
                             self.bump();
                             Some(atom.repeat_min(min))
                         } else {
                             let max = self.parse_number()?;
                             if self.peek() != Some('}') {
                                 return None;
+                            }
+                            if max >= min {
+                                copies(self, max)?;
                             }
                             self.bump();
                             Some(atom.repeat_range(min, max))
@@ -2735,9 +2878,20 @@ mod tests {
         // An empty range of repetitions is the empty language.
         let (a, _) = xsd_pattern_term("a{5000,4000}").unwrap();
         assert!(a.is_empty());
-        // Small repetitions, repetitions inside a group or beside a piece of
-        // varying length, and alternations are built as before.
-        for pattern in ["a{3}", "(a{300})b", "a*b{300}", "a{300}|b", "a{300}b{300}"] {
+        // A plain group is part of the concatenation around it.
+        let (a, window) = xsd_pattern_term("x(y(?:a{3000})z)").unwrap();
+        assert_eq!(window, (3003, Some(3003)));
+        assert!(states(&a) < 20);
+        let term = a.concatenate(&empty_lang_tag());
+        assert!(term.run(&format!("xy{}z\u{1}", "a".repeat(3000))));
+        assert_eq!(term.cardinality_within(&[window]), Some(1));
+        let (a, window) = xsd_pattern_term("(a{300})b").unwrap();
+        assert_eq!(window, (301, Some(301)));
+        assert!(states(&a) < 10);
+        // Small repetitions, repetitions inside a quantified group or an
+        // alternation, beside a piece of varying length or beside a second
+        // large repetition are built as before.
+        for pattern in ["a{3}", "(a{300})*b", "(a{300}b)?", "a*b{300}", "a{300}|b", "(a{300}|c)b", "a{300}b{300}"] {
             let (a, window) = xsd_pattern_term(pattern).unwrap();
             assert_eq!(window, (0, None), "{pattern}");
             let expected = xsd_pattern_to_automaton(pattern).unwrap();
@@ -2746,6 +2900,30 @@ mod tests {
         assert_eq!(xsd_pattern_to_automaton("ab{2}c").unwrap().fixed_length(), Some(4));
         assert_eq!(xsd_pattern_to_automaton("a|bc").unwrap().fixed_length(), None);
         assert_eq!(xsd_pattern_to_automaton("[ab]c|dd").unwrap().fixed_length(), Some(2));
+    }
+
+    #[test]
+    fn large_repetitions_that_are_not_length_windows_are_a_resource_error() {
+        // Each would be built one state per copy, and exhausted memory.
+        for pattern in [
+            "(a{2147483000})*",
+            "(a{2147483000}|b)",
+            "a*b{2147483000}",
+            "a{2147483000}b{2147483000}",
+            "(ab{70000})c*",
+            "([ab]{300}){250}",
+        ] {
+            assert!(xsd_pattern_term(pattern).is_none(), "{pattern}");
+            let message = pattern_resource_error(pattern).expect(pattern);
+            assert!(message.starts_with("Resource limit"), "{message}");
+        }
+        for pattern in ["a{2147483000}", "x(a{2147483000})y", "a{30000}b*", "([ab]{300}){300}"] {
+            assert!(pattern_resource_error(pattern).is_none(), "{pattern}");
+        }
+        // Built one copy after another.
+        let copies = xsd_pattern_to_automaton("a{3,30000}").unwrap();
+        assert!(copies.run(&"a".repeat(30000)) && copies.run("aaa"));
+        assert!(!copies.run("aa") && !copies.run(&"a".repeat(30001)));
     }
 
     #[test]
