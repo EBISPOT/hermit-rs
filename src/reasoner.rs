@@ -789,6 +789,14 @@ fn ontology_from(components: &[Component<crate::structural::A>]) -> SetOntology<
 /// One minimal justification is returned; enumerating *all* justifications
 /// (Reiter's hitting-set search over this single-justification oracle) is left
 /// to a caller.
+///
+/// Unlike the public queries, this does not call `check_pre_conditions`, so it
+/// works on an inconsistent ontology: explaining `owl:Thing ⊑ owl:Nothing` then
+/// returns a minimal inconsistent subset. This matches Java HermiT's
+/// `examples/Explanations.java`, which explains an inconsistency with the OWL API's
+/// `BlackBoxExplanation` over a reasoner whose `throwInconsistentOntologyException`
+/// is false. Any other axiom is also entailed by an inconsistent ontology, so its
+/// justification is likewise an inconsistent subset.
 pub fn explain(
     ontology: &SetOntology<crate::structural::A>,
     axiom: &Component<crate::structural::A>,
