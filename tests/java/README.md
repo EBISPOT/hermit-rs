@@ -33,6 +33,13 @@ labelled `XFAIL` are **not Rust conformance passes**. Use `HERMIT_JAVA_STRICT=1`
 to make every mismatch fail normally and obtain the actual parity count.
 See [RESULTS.md](RESULTS.md) for the measured results and remaining discrepancies.
 
+`corrections.json` records Java expectations that contradict the OWL 2 or XSD
+specifications. Each entry names the recorded operation and keeps Java's
+value beside the corrected one, with the specification evidence, the Java cause
+and independent regression tests. Traces stay as exported: the replay runner
+substitutes the corrected value, in strict mode too, only while the trace still
+records that Java value. The inventory check validates every entry.
+
 Missing operations, empty recordings, unexpected exceptions, timeouts, and
 allocation failures are failures, with the same explicit exception policy. `upstream-failures.json` separately preserves assertions that already fail
 in the pinned Java checkout; the original Java aggregate suite excludes the

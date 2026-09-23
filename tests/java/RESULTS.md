@@ -1,19 +1,20 @@
 # Imported suite results
 
 Measured against Java commit `37ec30aced32ac81ebecc5e33fad255ddefcb4c3`, after
-the issue #8 inverse-role fix. All 598 declared Java methods are accounted for;
-inherited methods also run under their individual-reuse and core-blocking suites.
+the issue #8 inverse-role fix and the issue #9 expectation correction. All 598
+declared Java methods are accounted for; inherited methods also run under their
+individual-reuse and core-blocking suites.
 
 | Executable cases | Pass | Fail | Empty upstream override |
 | --- | ---: | ---: | ---: |
-| Query/structural replay | 862 | 60 | 2 |
+| Query/structural replay | 863 | 59 | 2 |
 | Native internal tests | 50 | 3 | 0 |
-| Total, excluding OWL WG | 912 | 63 | 2 |
+| Total, excluding OWL WG | 913 | 62 | 2 |
 
 These are strict-mode results, before applying expected-failure exceptions.
-The Rust port does **not** yet have full Java test parity. The 63 failures are:
+The Rust port does **not** yet have full Java test parity. The 62 failures are:
 
-* **43 Rust/Java discrepancies**, including inherited repetitions: datatype
+* **42 Rust/Java discrepancies**, including inherited repetitions: datatype
   consistency (URI, binary, datetime, numeric, plain/XML literals); property
   hierarchy and entailment results; direct results and hierarchy printing;
   three core-blocking Widmann scenarios; and description-graph/SWRL integration.
@@ -23,6 +24,15 @@ The Rust port does **not** yet have full Java test parity. The 63 failures are:
   messages are retained, rather than rewritten to match Rust's output.
 * **One resource limit**: individual-reuse classification of Dolce exceeds the
   512 MiB allocation budget. This is a failed case, not a consistency verdict.
+
+One pass deliberately deviates from Java. `reasoner.AnyURITest.testIntersection`
+expects `xsd:anyURI[minLength 0]` intersected with the complement of
+`xsd:anyURI[minLength 1]` to be empty, but under XSD 1.1 and the OWL 2 Direct
+Semantics it contains exactly the empty URI (issue #9). Java misses it because
+dk.brics `getFiniteStrings` omits the empty word of a non-singleton automaton.
+The trace keeps Java's `false`; [corrections.json](corrections.json) records the
+corrected `true`, its evidence and independent membership and cardinality
+regressions.
 
 Every case still executes in the default gate. `expected-failures.json` identifies
 each discrepancy and its failing assertion. A new failure, a changed failing

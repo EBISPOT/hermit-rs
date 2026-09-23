@@ -6161,6 +6161,60 @@ mod tests {
     }
 
     #[test]
+    fn complemented_min_length_leaves_only_the_empty_uri() {
+        // Issue #9: anyURI[minLength 0] ⊓ ¬anyURI[minLength 1] is exactly
+        // {""^^xsd:anyURI}. The empty character sequence is an anyURI value (XSD
+        // 1.1 Part 2 §3.3.17.1) of length 0, so it satisfies minLength 0 and
+        // violates minLength 1 (§4.3.2.3). Java finds no value here because
+        // dk.brics getFiniteStrings never reports the empty word of a
+        // non-singleton automaton; tests/java/corrections.json records why.
+        let min_length = |n: &str| {
+            crate::model::DatatypeRestriction::create(
+                format!("{XSD}anyURI"),
+                vec![format!("{XSD}minLength")],
+                vec![Constant::create(n, format!("{XSD}integer"))],
+            )
+        };
+        let ranges = [
+            (LiteralDataRange::DatatypeRestriction(min_length("0")), ()),
+            (min_length("1").get_negation(), ()),
+        ];
+        let uri = |l: &str| parse_value(&Constant::create(l, format!("{XSD}anyURI"))).unwrap();
+        // Membership: the empty URI satisfies both ranges; a non-empty URI does not.
+        for (range, ()) in &ranges {
+            assert_eq!(value_in_range(&uri(""), range), Some(true));
+        }
+        assert_eq!(value_in_range(&uri("a"), &ranges[1].0), Some(false));
+        assert!(!conjunction_is_empty(&ranges));
+        // Cardinality: exactly one value, and it is the empty URI.
+        match node_value_space(None, &ranges) {
+            NodeValueSpace::Finite {
+                count: 1,
+                values: Some(values),
+            } => {
+                assert_eq!(values.len(), 1);
+                assert!(values_equal(&values[0], &uri("")));
+            }
+            _ => panic!("expected exactly the empty URI"),
+        }
+        // So one data node fits, but two pairwise-distinct nodes clash.
+        let one = node_value_space(None, &ranges);
+        assert!(!component_is_unsatisfiable(
+            &[&one],
+            &clique(1),
+            &no_specifics(1),
+            &[]
+        ));
+        let two: Vec<NodeValueSpace> = (0..2).map(|_| node_value_space(None, &ranges)).collect();
+        assert!(component_is_unsatisfiable(
+            &two.iter().collect::<Vec<_>>(),
+            &clique(2),
+            &no_specifics(2),
+            &[],
+        ));
+    }
+
+    #[test]
     fn strc_pattern_langrange_emptiness() {
         use crate::model::{AtomicDataRange, AtomicNegationDataRange};
         // FIX C: string / rdf:PlainLiteral pattern + langRange conjunction emptiness.

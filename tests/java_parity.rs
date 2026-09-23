@@ -365,6 +365,24 @@ fn query(reasoner: &mut r::IncrementalReasoner, row: &Value) -> Result<Value, St
         other => return Err(format!("unimplemented Java test operation: {other}")),
     })
 }
+// Replaces a recorded Java expectation that contradicts the OWL 2 or XSD
+// specifications with its documented correction (`java/corrections.json`). The
+// trace keeps the Java value, and the correction applies only while it still
+// matches, so regenerated traces cannot silently change what is corrected.
+fn correct(name: &str, rows: &mut [Value]) {
+    let corrections: HashMap<String, Value> =
+        serde_json::from_str(include_str!("java/corrections.json")).unwrap();
+    let Some(correction) = corrections.get(name) else {
+        return;
+    };
+    let row = &mut rows[correction["operation"].as_u64().unwrap() as usize];
+    assert_eq!(
+        (&row["op"], &row["expected"]),
+        (&correction["op"], &correction["java"]),
+        "{name}: stale correction of the recorded Java expectation"
+    );
+    row["expected"] = correction["corrected"].clone();
+}
 fn run_case(path: &Path) {
     let case: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     if case["java"]
@@ -378,8 +396,9 @@ fn run_case(path: &Path) {
     if !case["java"].as_str().unwrap().starts_with("structural.") {
         assert_eq!(case["java_errors"], json!([]), "upstream assertions failed");
     }
-    let rows = case["operations"].as_array().unwrap();
+    let mut rows = case["operations"].as_array().unwrap().clone();
     assert!(!rows.is_empty(), "case requires a native port");
+    correct(case["java"].as_str().unwrap(), &mut rows);
     let mut reasoners = HashMap::new();
     let mut assertions = 0;
     for (index, row) in rows.iter().enumerate() {

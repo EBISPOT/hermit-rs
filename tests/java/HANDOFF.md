@@ -26,6 +26,8 @@ The user explicitly said: **do not reproduce Java bugs**. Preserve the original
 Java fixture/source, establish the corrected behavior independently, document the
 evidence, and explicitly state any deliberate deviation from Java faithfulness
 in the commit message. The empty-URI cardinality case below is a confirmed example.
+Record a corrected replay expectation in [corrections.json](corrections.json),
+beside the unchanged trace; see [README.md](README.md).
 
 Run one local build/test/export job at a time. Use `CARGO_BUILD_JOBS=1`,
 `OWLMAKE_CLASSIFY_THREADS=1`, and serial test execution. Retain the 512 MiB worker
@@ -70,7 +72,7 @@ two overrides are empty in the original Java source.
 
 | Issue | Work | Cases |
 | --- | --- | ---: |
-| [#9](https://github.com/EBISPOT/hermit-rs/issues/9) | Correct the Java empty-URI cardinality expectation | 1 |
+| [#9](https://github.com/EBISPOT/hermit-rs/issues/9) | Correct the Java empty-URI cardinality expectation (**resolved**; see [corrections.json](corrections.json)) | 1 |
 | [#10](https://github.com/EBISPOT/hermit-rs/issues/10) | Respect excluded URI values in finite pattern/length intersections | 1 |
 | [#11](https://github.com/EBISPOT/hermit-rs/issues/11) | Respect URI exclusions after complementing a length restriction | 1 |
 | [#12](https://github.com/EBISPOT/hermit-rs/issues/12) | Count finite binary ranges after subtracting length restrictions | 1 |

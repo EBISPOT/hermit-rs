@@ -1,0 +1,24 @@
+{
+  "reasoner.AnyURITest.testIntersection": {
+    "issue": "https://github.com/EBISPOT/hermit-rs/issues/9",
+    "operation": 1,
+    "op": "isConsistent",
+    "java": false,
+    "corrected": true,
+    "justification": [
+      "XSD 1.1 Part 2 §3.3.17.1-§3.3.17.2: the value space and the lexical space of xsd:anyURI are the finite-length sequences of zero or more characters, and the lexical mapping is the identity. So \"\"^^xsd:anyURI denotes the empty anyURI value.",
+      "XSD 1.1 Part 2 §4.3.1 and §4.3.2.3 (Validation Rule: minLength Valid, clause 1.1): anyURI length is measured in characters, and a value satisfies minLength n iff its length is at least n. The empty anyURI value has length 0, so it satisfies minLength 0 and violates minLength 1.",
+      "OWL 2 Structural Specification §4.6: the OWL 2 datatype map provides xsd:anyURI as specified by XML Schema, with xsd:minLength among its normative facets.",
+      "OWL 2 Direct Semantics §2.2.2 (Table 3): DatatypeRestriction(DT F lt) is (DT)^DT ∩ (F, lt)^FA, and DataComplementOf(DR) is Δ_D \\ (DR)^DT. So anyURI[minLength 0] ∩ DataComplementOf(anyURI[minLength 1]) is exactly {\"\"^^xsd:anyURI}.",
+      "OWL 2 Direct Semantics §2.2.3 (Table 4), §2.3.1, §2.3.6, §2.4 and §2.5: Δ_I = {a}, A = {a} and dp = {(a, \"\"^^xsd:anyURI)} satisfy ClassAssertion(A a) and the three SubClassOf axioms (both DataAllValuesFrom restrictions and DataMinCardinality(1 dp)). The ontology has a model, so it is consistent.",
+      "The pinned Java suite agrees elsewhere: AnyURITest.testSize_1 and testSize_3 assert that anyURI[length 0] is exactly {\"\"}, a subset of this range.",
+      "Java cause: DatatypeChecker.DVariable.prepareAsValueSpaceSubset requires AnyURIValueSpaceSubset.hasCardinalityAtLeast(1), which counts the words of dk.brics.automaton 1.11-8 SpecialOperations.getFiniteStrings(automaton, 1). That method records a word only after following a transition, so it never reports the empty word of a non-singleton automaton. With the pinned jar, the difference built by conjoinWithDRNegation is non-empty, is not a singleton and accepts \"\", yet getFiniteStrings(1) returns no words. anyURI[length 0] is a singleton automaton, so testSize_1 and testSize_3 are counted correctly."
+    ],
+    "regressions": [
+      "string_automaton::tests::complement_and_minus",
+      "tableau::datatype_manager::tests::complemented_min_length_leaves_only_the_empty_uri",
+      "issue9_empty_uri::the_empty_uri_is_a_value_of_the_range",
+      "issue9_empty_uri::the_range_has_no_other_value"
+    ]
+  }
+}

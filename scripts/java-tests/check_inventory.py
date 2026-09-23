@@ -33,4 +33,13 @@ assert set(expected)<=executed, f'stale exception identities: {set(expected)-exe
 for name,failure in expected.items():
  assert failure['origin'] in {'Rust/Java discrepancy','upstream assertion also fails','resource limit'},name
  assert failure['signature'],name
-print(f"{len(listed)} declared Java methods accounted for; {len(native)} native ports; {len(list((fixtures/'cases').glob('*.json')))} replay fixtures (including inherited suites); {len(disabled)} empty upstream overrides.")
+corrections=json.loads((fixtures/'corrections.json').read_text())
+for name,c in corrections.items():
+ assert name in executed and name not in native.values() and not name.startswith('reasoner.DatalogEngineTest.'),f'{name}: corrections apply only to replayed traces'
+ row=json.loads((fixtures/'cases'/(name+'.json')).read_text())['operations'][c['operation']]
+ assert (row['op'],row['expected'])==(c['op'],c['java']) and c['corrected']!=c['java'],f'{name}: stale correction'
+ assert c['issue'] and c['justification'] and c['regressions'],name
+ for test in c['regressions']:
+  function=test.rsplit('::',1)[1]
+  assert any(re.search(r'fn\s+'+re.escape(function)+r'\s*\(',p.read_text()) for base in [root/'src',root/'tests'] for p in base.rglob('*.rs')),test
+print(f"{len(listed)} declared Java methods accounted for; {len(native)} native ports; {len(list((fixtures/'cases').glob('*.json')))} replay fixtures (including inherited suites); {len(disabled)} empty upstream overrides; {len(corrections)} documented Java expectation correction(s).")
