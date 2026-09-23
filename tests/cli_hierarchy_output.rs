@@ -10,6 +10,10 @@
 //!
 //! `--prettyPrint` concatenated its sections with no `Prefix(...)` /
 //! `Ontology(...)` header, so the output was not an ontology document.
+//!
+//! The plain `-D` dump reproduced HierarchyDumperFSS.java:127, which writes the
+//! non-first `EquivalentDataProperties` members as `>iri>`. Every member is now
+//! written `<iri>`, deliberately deviating from Java.
 use hermit_rs::cli;
 use hermit_rs::structural::A;
 use horned_owl::model::Build;
@@ -144,4 +148,29 @@ fn pretty_print_is_an_ontology_document_that_round_trips() {
     let pretty = run("-cP", &anonymous);
     assert!(pretty.contains("\nOntology(\n"), "{pretty}");
     cli::load_ontology(&write_temp("anonymous-printed.ofn", &pretty)).unwrap();
+}
+
+#[test]
+fn data_property_dump_writes_well_formed_iris() {
+    let path = write_temp("equivalent-data.ofn", "Prefix(:=<http://example.org/cli#>)
+Ontology(<http://example.org/equivalent-data>
+Declaration(DataProperty(:d))
+Declaration(DataProperty(:e))
+Declaration(DataProperty(:f))
+EquivalentDataProperties(:d :e :f)
+)");
+    let dump = run("-D", &path);
+    assert!(
+        dump.contains(&format!("EquivalentDataProperties( {} {} {} )", ex("d"), ex("e"), ex("f"))),
+        "{dump}"
+    );
+    assert!(!dump.contains(" >http"), "{dump}");
+    // The dump's axioms parse as functional syntax and restate the hierarchy.
+    let document = format!("Ontology(\n{dump})\n");
+    let reparsed = cli::load_ontology(&write_temp("equivalent-data-dump.ofn", &document)).unwrap();
+    assert_eq!(run("-D", &write_temp("equivalent-data-again.ofn", &document)), dump);
+    assert!(reparsed.iter().any(|c| matches!(
+        c.component,
+        horned_owl::model::Component::EquivalentDataProperties(_)
+    )));
 }

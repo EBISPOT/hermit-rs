@@ -7031,14 +7031,13 @@ pub fn dump_hierarchies(
     }
     if data_properties {
         let hierarchy = classify_data_properties(ontology)?;
-        // Use the java-data variant to reproduce the Java bug in
-        // HierarchyDumperFSS.printDataPropertyHierarchy (line 127): non-first
-        // EquivalentDataProperties members are emitted as ">iri>" not "<iri>".
-        sections.push(hierarchy.dump_functional_syntax_java_data(
+        // Every member is written `<iri>`, deliberately deviating from
+        // HierarchyDumperFSS.printDataPropertyHierarchy (line 127), which writes
+        // the non-first EquivalentDataProperties members as the malformed `>iri>`.
+        sections.push(hierarchy.dump_functional_syntax(
             "EquivalentDataProperties",
             "SubDataPropertyOf",
             |p: &horned_owl::model::DataProperty<crate::structural::A>| format!("<{}>", p.0),
-            |p: &horned_owl::model::DataProperty<crate::structural::A>| format!(">{}>", p.0),
         ));
     }
     // Each section already ends with \n\n (axioms + trailing blank line from
