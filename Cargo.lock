@@ -270,17 +270,29 @@ dependencies = [
  "quick-xml 0.37.5",
  "regex",
  "regex-syntax",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "serde_json",
  "web-time",
 ]
 
 [[package]]
+name = "horned-catalog"
+version = "1.0.0"
+source = "git+https://github.com/EBISPOT/horned-owl?rev=186a160#186a160db875f8b466dc73137a584503041c79db"
+dependencies = [
+ "quick-xml 0.37.5",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "horned-owl"
-version = "1.4.0"
+version = "4.0.0"
+source = "git+https://github.com/EBISPOT/horned-owl?rev=186a160#186a160db875f8b466dc73137a584503041c79db"
 dependencies = [
  "curie",
  "enum_meta",
+ "horned-catalog",
+ "horned-pretty-rdf",
  "indexmap 1.9.3",
  "lazy_static",
  "log",
@@ -289,10 +301,22 @@ dependencies = [
  "oxrdfio",
  "pest",
  "pest_derive",
- "pretty_rdf",
  "quick-xml 0.37.5",
- "rustc-hash",
+ "rustc-hash 2.1.2",
  "thiserror 1.0.69",
+ "web-time",
+]
+
+[[package]]
+name = "horned-pretty-rdf"
+version = "2.0.1"
+source = "git+https://github.com/EBISPOT/horned-owl?rev=186a160#186a160db875f8b466dc73137a584503041c79db"
+dependencies = [
+ "indexmap 1.9.3",
+ "oxrdf",
+ "oxrdfio",
+ "quick-xml 0.31.0",
+ "rustc-hash 1.1.0",
 ]
 
 [[package]]
@@ -558,18 +582,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretty_rdf"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef451f785c5b7a8f2bc55ebdc88864156bb39afcd67a9c6af35d71c87043505"
-dependencies = [
- "indexmap 1.9.3",
- "oxrdf",
- "oxrdfio",
- "quick-xml 0.31.0",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -668,6 +680,12 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc-hash"

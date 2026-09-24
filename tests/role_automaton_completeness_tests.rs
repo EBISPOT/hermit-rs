@@ -35,8 +35,11 @@ fn parse<R: std::io::BufRead>(mut reader: R) -> Onto {
             horned_owl::model::AnnotatedComponent<hermit_rs::structural::A>,
         >,
         _,
-    ) = horned_owl::io::ofn::reader::read_with_build(&mut reader, &Build::new_arc())
-        .expect("parse");
+    ) = horned_owl::io::ofn::reader::read(
+        &mut reader,
+        horned_owl::io::ParserConfiguration::new(Build::new_arc()),
+    )
+    .expect("parse");
     onto.into()
 }
 

@@ -280,8 +280,11 @@ mod tests {
              Ontology(<http://example.org/o>\n{axioms}\n)"
         );
         let build = Build::new_arc();
-        let (ontology, _): (SetOntology<A>, _) =
-            horned_owl::io::ofn::reader::read_with_build(&mut source.as_bytes(), &build).unwrap();
+        let (ontology, _): (SetOntology<A>, _) = horned_owl::io::ofn::reader::read(
+            &mut source.as_bytes(),
+            horned_owl::io::ParserConfiguration::new(&build),
+        )
+        .unwrap();
         ontology
     }
 

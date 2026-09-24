@@ -17,7 +17,7 @@ harness = false
 # the way of a wasm consumer that builds horned-owl with default-features = false;
 # a native consumer that wants `remote` still gets it via its own horned-owl dep
 # (Cargo unions features).
-horned-owl = { version = "1.4.0", default-features = false }
+horned-owl = { version = "4.0.0", default-features = false }
 regex = "1"
 # SCOPE-OUT 1: the XSD-Schema regex `\p{...}` / `\P{...}` Unicode general-category
 # and `Is<Block>` properties are resolved to their exact (char,char) range sets via
@@ -62,7 +62,12 @@ serde_json = "1.0.151"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1"
 
-# horned-owl widened to the OWL 2 spec-correct
-# InverseObjectProperties(ObjectPropertyExpression, ObjectPropertyExpression).
+# horned-owl comes from the EBISPOT fork rather than crates.io: it widens
+# InverseObjectProperties to the OWL 2 spec-correct
+# (ObjectPropertyExpression, ObjectPropertyExpression), which the upstream
+# 4.0.0 release does not. Pinned by rev so a build is reproducible without the
+# lockfile; bump it when the fork's devel moves. owlmake consumes hermit-rs
+# under its own root patch on the same fork, which is the one Cargo applies
+# there.
 [patch.crates-io]
-horned-owl = { path = "deps/horned-owl" }
+horned-owl = { git = "https://github.com/EBISPOT/horned-owl", rev = "186a160" }

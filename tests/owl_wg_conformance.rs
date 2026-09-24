@@ -414,20 +414,26 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
         Format::Functional => {
             let mut cur = std::io::Cursor::new(src.as_bytes());
             let (o, _prefixes): (O, _) =
-                horned_owl::io::ofn::reader::read_with_build(&mut cur, &build)
-                    .map_err(|e| format!("{e}"))?;
+                horned_owl::io::ofn::reader::read(
+                    &mut cur,
+                    horned_owl::io::ParserConfiguration::new(&build),
+                )
+                .map_err(|e| format!("{e}"))?;
             Ok(o)
         }
         Format::Owx => {
             let mut cur = std::io::Cursor::new(src.as_bytes());
             let (o, _prefixes): (O, _) =
-                horned_owl::io::owx::reader::read_with_build(&mut cur, &build)
-                    .map_err(|e| format!("{e}"))?;
+                horned_owl::io::owx::reader::read(
+                    &mut cur,
+                    horned_owl::io::ParserConfiguration::new(&build),
+                )
+                .map_err(|e| format!("{e}"))?;
             Ok(o)
         }
         Format::Rdf => {
             let mut cur = std::io::Cursor::new(src.as_bytes());
-            let mut parser = rdf_parser(&mut cur, &build);
+            let mut parser = rdf_parser(&mut cur, &build).map_err(|e| format!("{e}"))?;
             // Like OWLAPI, resolve entity kinds against the declarations of
             // the (bundled) import closure, so a property declared only in an
             // imported ontology is still typed while this document is parsed.
@@ -463,8 +469,14 @@ type RdfOntology = horned_owl::io::rdf::reader::ConcreteRDFOntology<A, Annotated
 fn rdf_parser<'b, R: std::io::BufRead>(
     src: &mut R,
     build: &'b Build<A>,
-) -> horned_owl::io::rdf::reader::OntologyParser<'b, A, AnnotatedComponent<A>, RdfOntology> {
-    horned_owl::io::rdf::reader::parser_with_build(src, build, Default::default())
+) -> Result<
+    horned_owl::io::rdf::reader::OntologyParser<A, AnnotatedComponent<A>, RdfOntology, &'b Build<A>>,
+    horned_owl::error::HornedError,
+> {
+    horned_owl::io::rdf::reader::parser_with_build(
+        src,
+        horned_owl::io::ParserConfiguration::new(build).into(),
+    )
 }
 
 /// The declarations of every bundled ontology in the transitive import closure
@@ -488,7 +500,8 @@ fn import_closure_declarations(
         let src = std::fs::read_to_string(&path)
             .map_err(|e| format!("cannot read import resource {path}: {e}"))?;
         let mut cur = std::io::Cursor::new(src.as_bytes());
-        let mut parser = rdf_parser(&mut cur, build);
+        let mut parser =
+            rdf_parser(&mut cur, build).map_err(|e| format!("parse import {iri} ({file}): {e}"))?;
         let nested = parser
             .parse_imports()
             .map_err(|e| format!("parse import {iri} ({file}): {e}"))?;

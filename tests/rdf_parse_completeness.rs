@@ -1,7 +1,7 @@
 use hermit_rs::structural::A;
 use horned_owl::{
     io::rdf::reader,
-    model::{AnnotatedComponent, Build, Component},
+    model::{AnnotatedComponent, Build, ClassExpression, Component, Individual},
 };
 fn parse(uses: &str) -> (usize, bool) {
     let (count, incomplete) = parse_with_residue(uses);
@@ -15,10 +15,9 @@ fn parse_with_residue(uses: &str) -> (usize, reader::IncompleteParse<A>) {
         r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:owl="http://www.w3.org/2002/07/owl#"><owl:ObjectProperty rdf:about="urn:p"/><owl:Class rdf:about="urn:C"/><owl:Restriction rdf:nodeID="restriction"><owl:onProperty rdf:resource="urn:p"/><owl:someValuesFrom rdf:resource="urn:C"/></owl:Restriction>{uses}</rdf:RDF>"#
     );
     let b: Build<A> = Build::new();
-    let (o, incomplete) = reader::read_with_build::<A, AnnotatedComponent<A>, _>(
+    let (o, incomplete) = reader::read::<A, AnnotatedComponent<A>, _, _>(
         &mut std::io::Cursor::new(rdf),
-        &b,
-        Default::default(),
+        horned_owl::io::ParserConfiguration::new(&b).into(),
     )
     .unwrap();
     let o: horned_owl::ontology::set::SetOntology<A> = o.into();
@@ -56,10 +55,9 @@ fn parse_components(body: &str) -> Vec<Component<A>> {
         r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:owl="http://www.w3.org/2002/07/owl#" xmlns:ex="urn:ex#">{body}</rdf:RDF>"#
     );
     let b: Build<A> = Build::new();
-    let (o, incomplete) = reader::read_with_build::<A, AnnotatedComponent<A>, _>(
+    let (o, incomplete) = reader::read::<A, AnnotatedComponent<A>, _, _>(
         &mut std::io::Cursor::new(rdf),
-        &b,
-        Default::default(),
+        horned_owl::io::ParserConfiguration::new(&b).into(),
     )
     .unwrap();
     assert!(incomplete.is_complete(), "{incomplete:?}");
@@ -87,15 +85,40 @@ fn blank_node_individuals_are_anonymous_individuals() {
     );
     let s = show(&c);
     assert_eq!(c.len(), 5, "{s}");
-    for expected in [
-        r#"ObjectPropertyAssertion { ope: ObjectProperty(ObjectProperty(IRI("urn:ex#p"))), from: Named(NamedIndividual(IRI("urn:ex#a"))), to: Anonymous(AnonymousIndividual("_:x")) }"#,
-        r#"ClassAssertion { ce: Class(Class(IRI("urn:ex#C"))), i: Anonymous(AnonymousIndividual("_:x")) }"#,
-        r#"ObjectPropertyAssertion { ope: ObjectProperty(ObjectProperty(IRI("urn:ex#p"))), from: Anonymous(AnonymousIndividual("_:x")), to: Anonymous(AnonymousIndividual("_:y")) }"#,
-        r#"DataPropertyAssertion { dp: DataProperty(IRI("urn:ex#d")), from: Anonymous(AnonymousIndividual("_:x"))"#,
-        r#"ClassAssertion { ce: Class(Class(IRI("http://www.w3.org/2002/07/owl#Thing"))), i: Anonymous(AnonymousIndividual("_:y")) }"#,
-    ] {
-        assert!(s.contains(expected), "missing {expected} in\n{s}");
-    }
+    // A blank node names one anonymous individual for the whole parse, whatever
+    // the reader calls it: `_:x` in all four of its triples, `_:y` in both of
+    // its, and the two apart.
+    let typed_by = |class: &str| {
+        c.iter()
+            .find_map(|c| match c {
+                Component::ClassAssertion(ca)
+                    if matches!(&ca.ce, ClassExpression::Class(cls) if cls.0.as_ref() == class) =>
+                {
+                    Some(ca.i.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no class assertion by {class} in\n{s}"))
+    };
+    let x = typed_by("urn:ex#C");
+    let y = typed_by("http://www.w3.org/2002/07/owl#Thing");
+    assert!(matches!(x, Individual::Anonymous(_)), "{s}");
+    assert!(matches!(y, Individual::Anonymous(_)), "{s}");
+    assert_ne!(x, y, "{s}");
+    let has = |f: &dyn Fn(&Component<A>) -> bool| c.iter().any(f);
+    assert!(
+        has(&|c| matches!(c, Component::ObjectPropertyAssertion(a)
+            if matches!(&a.from, Individual::Named(n) if n.0.as_ref() == "urn:ex#a") && a.to == x)),
+        "a p _:x missing in\n{s}"
+    );
+    assert!(
+        has(&|c| matches!(c, Component::ObjectPropertyAssertion(a) if a.from == x && a.to == y)),
+        "_:x p _:y missing in\n{s}"
+    );
+    assert!(
+        has(&|c| matches!(c, Component::DataPropertyAssertion(a) if a.from == x)),
+        "_:x d \"1\" missing in\n{s}"
+    );
 }
 
 #[test]
@@ -103,10 +126,9 @@ fn blank_node_with_non_assertion_triples_stays_unparsed() {
     // A malformed restriction (no filler) must not be read as an individual.
     let rdf = r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:owl="http://www.w3.org/2002/07/owl#"><owl:ObjectProperty rdf:about="urn:ex#p"/><owl:Restriction rdf:nodeID="r"><owl:onProperty rdf:resource="urn:ex#p"/></owl:Restriction></rdf:RDF>"#;
     let b: Build<A> = Build::new();
-    let (_, incomplete) = reader::read_with_build::<A, AnnotatedComponent<A>, _>(
+    let (_, incomplete) = reader::read::<A, AnnotatedComponent<A>, _, _>(
         &mut std::io::Cursor::new(rdf),
-        &b,
-        Default::default(),
+        horned_owl::io::ParserConfiguration::new(&b).into(),
     )
     .unwrap();
     assert!(!incomplete.is_complete());
@@ -186,10 +208,9 @@ fn untyped_enumeration_of_literals_or_nothing_stays_unparsed() {
             r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#" xmlns:owl="http://www.w3.org/2002/07/owl#"><owl:Class rdf:about="urn:ex#C"/><rdf:Description><rdfs:subClassOf rdf:resource="urn:ex#C"/>{one_of}</rdf:Description></rdf:RDF>"#
         );
         let b: Build<A> = Build::new();
-        let (_, incomplete) = reader::read_with_build::<A, AnnotatedComponent<A>, _>(
+        let (_, incomplete) = reader::read::<A, AnnotatedComponent<A>, _, _>(
             &mut std::io::Cursor::new(rdf),
-            &b,
-            Default::default(),
+            horned_owl::io::ParserConfiguration::new(&b).into(),
         )
         .unwrap();
         assert!(!incomplete.is_complete(), "{one_of}");

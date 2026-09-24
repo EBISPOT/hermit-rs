@@ -929,7 +929,7 @@ fn load_ontology_with_prefixes(
     let mut reader = BufReader::new(file);
     let lower = path.to_ascii_lowercase();
     let result: Result<(SetOntology<ArcStr>, _), _> = if lower.ends_with(".ofn") {
-        horned_owl::io::ofn::reader::read(reader, ParserConfiguration::default())
+        horned_owl::io::ofn::reader::read(&mut reader, ParserConfiguration::default())
     } else if lower.ends_with(".owx") || lower.ends_with(".owl") || lower.ends_with(".xml") {
         horned_owl::io::owx::reader::read(&mut reader, ParserConfiguration::default())
     } else {

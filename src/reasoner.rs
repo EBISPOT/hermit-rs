@@ -4792,9 +4792,9 @@ mod object_property_read_off_tests {
         let (onto, _): (
             ComponentMappedOntology<crate::structural::A, AnnotatedComponent<crate::structural::A>>,
             _,
-        ) = horned_owl::io::ofn::reader::read_with_build(
+        ) = horned_owl::io::ofn::reader::read(
             &mut std::io::Cursor::new(text),
-            &Build::new_arc(),
+            horned_owl::io::ParserConfiguration::new(Build::new_arc()),
         )
         .unwrap();
         onto.into()

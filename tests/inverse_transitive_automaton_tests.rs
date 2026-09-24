@@ -24,9 +24,9 @@ fn parse(text: &str) -> Onto {
             horned_owl::model::AnnotatedComponent<hermit_rs::structural::A>,
         >,
         _,
-    ) = horned_owl::io::ofn::reader::read_with_build(
+    ) = horned_owl::io::ofn::reader::read(
         &mut std::io::Cursor::new(text),
-        &Build::new_arc(),
+        horned_owl::io::ParserConfiguration::new(Build::new_arc()),
     )
     .expect("parse");
     onto.into()

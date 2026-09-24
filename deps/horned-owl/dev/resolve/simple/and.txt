@@ -1,1 +1,0 @@
-and.owl is to test the file resolution mechanism

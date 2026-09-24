@@ -57,6 +57,7 @@ fn annotation_assertion_is_entailed() {
         ann: Annotation {
             ap: b.annotation_property("http://example.org/p"),
             av: AnnotationValue::Literal(Literal::Simple { literal: "x".into() }),
+            ann: Default::default(),
         },
     });
     assert!(is_entailed(&onto, &ann).unwrap());

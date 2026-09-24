@@ -18,9 +18,9 @@ fn load(body: &str) -> SetOntology<A> {
         "Prefix(:=<http://ex/>) Prefix(owl:=<http://www.w3.org/2002/07/owl#>) Ontology({body})"
     );
     let (onto, _): (ComponentMappedOntology<A, AnnotatedComponent<A>>, _) =
-        horned_owl::io::ofn::reader::read_with_build(
+        horned_owl::io::ofn::reader::read(
             &mut std::io::Cursor::new(text),
-            &Build::new_arc(),
+            horned_owl::io::ParserConfiguration::new(Build::new_arc()),
         )
         .unwrap();
     onto.into()

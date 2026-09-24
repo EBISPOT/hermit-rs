@@ -31,9 +31,12 @@ fn main() -> Result<(), String> {
     for path in &args[1..] {
         let file = File::open(path).map_err(|e| format!("{path}: {e}"))?;
         let (part, _): (ComponentMappedOntology<A, AnnotatedComponent<A>>, _) =
-            horned_owl::io::ofn::reader::read_with_build(&mut BufReader::new(file), &build)
-                .map_err(|e| format!("{path}: {e}"))?;
-        for axiom in part.iter() {
+            horned_owl::io::ofn::reader::read(
+                &mut BufReader::new(file),
+                horned_owl::io::ParserConfiguration::new(&build),
+            )
+            .map_err(|e| format!("{path}: {e}"))?;
+        for axiom in horned_owl::model::Ontology::iter(&part) {
             if !matches!(
                 axiom.component,
                 Component::OntologyID(_) | Component::Import(_) | Component::OntologyAnnotation(_)
