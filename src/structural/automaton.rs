@@ -14,9 +14,27 @@
 // that identity faithfully because each automaton owns its own numbering).
 // A transition label of `None` is an epsilon (ε) transition.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
+
+use horned_owl::model::ObjectPropertyExpression as OPE;
 
 use super::{inverse_property, ObjectPropExpr};
+
+/// The order in which labels are taken wherever an automaton enumerates them:
+/// named properties before inverses, then by IRI. A minimised automaton numbers
+/// its states by discovering them in this order, so its states, and the clauses
+/// they become, depend only on its language.
+pub(crate) fn label_order_key(ope: &ObjectPropExpr) -> (u8, String) {
+    match ope {
+        OPE::ObjectProperty(p) => (0, p.0.to_string()),
+        OPE::InverseObjectProperty(p) => (1, p.0.to_string()),
+    }
+}
+
+/// The most states a determinisation builds before giving up and keeping the
+/// automaton as it is. The role automata of real ontologies determinise to a
+/// handful of states; the bound only guards against a pathological role box.
+const MAX_DETERMINISTIC_STATES: usize = 4096;
 
 pub type State = usize;
 
@@ -206,6 +224,139 @@ impl Automaton {
     }
 }
 
+impl Automaton {
+    /// The labels of the transitions, in label order, each once.
+    fn labels(&self) -> Vec<ObjectPropExpr> {
+        let mut labels: Vec<ObjectPropExpr> =
+            self.transitions.iter().filter_map(|t| t.label.clone()).collect();
+        labels.sort_by_cached_key(label_order_key);
+        labels.dedup();
+        labels
+    }
+
+    /// The automaton accepting the reversed words: every transition reversed
+    /// and the initial and terminal flags exchanged. The labels stay as they
+    /// are; [`mirrored_copy`] is the reversal that also inverts them.
+    fn reversed(&self) -> Automaton {
+        let mut reversed = Automaton::new();
+        for state in &self.states {
+            reversed.add_state(state.terminal, state.initial);
+        }
+        for t in &self.transitions {
+            reversed.add_transition(t.end, t.label.clone(), t.start);
+        }
+        reversed
+    }
+
+    /// The ε-free deterministic automaton with the same language, by the
+    /// subset construction from the ε-closure of the initial states. The
+    /// subsets are numbered as they are discovered, taking the labels in the
+    /// order of `labels`, so the numbering depends only on the automaton's
+    /// structure. Only subsets that a transition leads to are built, so no
+    /// state is unreachable. `None` when more than
+    /// [`MAX_DETERMINISTIC_STATES`] subsets arise.
+    fn determinized(&self, labels: &[ObjectPropExpr]) -> Option<Automaton> {
+        let n = self.states.len();
+        let index: HashMap<&ObjectPropExpr, usize> =
+            labels.iter().enumerate().map(|(i, l)| (l, i)).collect();
+        let mut epsilon: Vec<Vec<State>> = vec![Vec::new(); n];
+        let mut labelled: Vec<Vec<(usize, State)>> = vec![Vec::new(); n];
+        for t in &self.transitions {
+            match &t.label {
+                None => epsilon[t.start].push(t.end),
+                Some(label) => labelled[t.start].push((index[label], t.end)),
+            }
+        }
+        let closure = |seed: Vec<State>| -> BTreeSet<State> {
+            let mut set: BTreeSet<State> = BTreeSet::new();
+            let mut pending = seed;
+            while let Some(state) = pending.pop() {
+                if set.insert(state) {
+                    pending.extend(epsilon[state].iter().copied());
+                }
+            }
+            set
+        };
+        let accepting = |subset: &BTreeSet<State>| subset.iter().any(|&s| self.states[s].terminal);
+
+        let mut result = Automaton::new();
+        let mut ids: HashMap<BTreeSet<State>, State> = HashMap::new();
+        let mut subsets: Vec<BTreeSet<State>> = Vec::new();
+        let start = closure(self.initials());
+        ids.insert(start.clone(), result.add_state(true, accepting(&start)));
+        subsets.push(start);
+        let mut from = 0;
+        while from < subsets.len() {
+            let mut seeds: Vec<Vec<State>> = vec![Vec::new(); labels.len()];
+            for &state in &subsets[from] {
+                for &(label, end) in &labelled[state] {
+                    seeds[label].push(end);
+                }
+            }
+            for (label, seed) in seeds.into_iter().enumerate() {
+                if seed.is_empty() {
+                    continue;
+                }
+                let target = closure(seed);
+                let to = match ids.get(&target) {
+                    Some(&to) => to,
+                    None => {
+                        if subsets.len() >= MAX_DETERMINISTIC_STATES {
+                            return None;
+                        }
+                        let to = result.add_state(false, accepting(&target));
+                        ids.insert(target.clone(), to);
+                        subsets.push(target);
+                        to
+                    }
+                };
+                result.add_transition(from, Some(labels[label].clone()), to);
+            }
+            from += 1;
+        }
+        Some(result)
+    }
+
+    /// The minimal deterministic automaton with this automaton's language,
+    /// brought to one initial and one terminal state.
+    ///
+    /// It is Brzozowski's: determinising the reversal and then the reversal of
+    /// that gives the minimal automaton, in which no state is unreachable or
+    /// dead. Its states are numbered in the order the subset construction
+    /// discovers them, following [`label_order_key`], so equal languages give
+    /// equal automata whatever the shape they were assembled in. The one
+    /// initial state is the construction's; when the terminal states are not
+    /// exactly one, a fresh terminal state is reached from each by an ε
+    /// transition, as every consumer of an automaton expects. Should the
+    /// determinisation exceed [`MAX_DETERMINISTIC_STATES`], the automaton is
+    /// returned as it is.
+    pub fn minimized(&self) -> Automaton {
+        let labels = self.labels();
+        let minimal = self
+            .reversed()
+            .determinized(&labels)
+            .and_then(|reversed| reversed.reversed().determinized(&labels));
+        match minimal {
+            Some(minimal) => normalized(minimal),
+            None => self.clone(),
+        }
+    }
+}
+
+/// `automaton` with exactly one terminal state: its own when it has one, else a
+/// fresh one that every former terminal state reaches by an ε transition.
+fn normalized(mut automaton: Automaton) -> Automaton {
+    let terminals = automaton.terminals();
+    if terminals.len() != 1 {
+        let terminal = automaton.add_state(false, true);
+        for state in terminals {
+            automaton.states[state].terminal = false;
+            automaton.add_transition(state, None, terminal);
+        }
+    }
+    automaton
+}
+
 /// `ObjectPropertyInclusionManager.getMirroredCopy`: the reverse automaton,
 /// swapping initial/terminal flags and inverting every property label.
 pub fn mirrored_copy(automaton: &Automaton) -> Automaton {
@@ -247,31 +398,33 @@ pub fn automata_connector(bigger: &mut Automaton, smaller: &Automaton, from: Sta
     bigger.add_transition(old_final_of_smaller, None, to);
 }
 
+/// Whether `a` accepts `word` (tests only).
+#[cfg(test)]
+fn accepts(a: &Automaton, word: &[ObjectPropExpr]) -> bool {
+    let mut pending: Vec<_> = a.initials().into_iter().map(|s| (s, 0)).collect();
+    let mut seen = HashSet::new();
+    while let Some((s, pos)) = pending.pop() {
+        if !seen.insert((s, pos)) {
+            continue;
+        }
+        if pos == word.len() && a.is_terminal(s) {
+            return true;
+        }
+        for t in a.transitions.iter().filter(|t| t.start == s) {
+            match &t.label {
+                None => pending.push((t.end, pos)),
+                Some(label) if word.get(pos) == Some(label) => pending.push((t.end, pos + 1)),
+                _ => (),
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod read_off_tests {
     use super::*;
-    use horned_owl::model::{Build, ObjectPropertyExpression as OPE};
-
-    fn accepts(a: &Automaton, word: &[ObjectPropExpr]) -> bool {
-        let mut pending: Vec<_> = a.initials().into_iter().map(|s| (s, 0)).collect();
-        let mut seen = HashSet::new();
-        while let Some((s, pos)) = pending.pop() {
-            if !seen.insert((s, pos)) {
-                continue;
-            }
-            if pos == word.len() && a.is_terminal(s) {
-                return true;
-            }
-            for t in a.transitions.iter().filter(|t| t.start == s) {
-                match &t.label {
-                    None => pending.push((t.end, pos)),
-                    Some(label) if word.get(pos) == Some(label) => pending.push((t.end, pos + 1)),
-                    _ => (),
-                }
-            }
-        }
-        false
-    }
+    use horned_owl::model::Build;
 
     #[test]
     fn restricted_automata_preserve_live_words_and_epsilon_cycles() {
@@ -315,3 +468,134 @@ mod read_off_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod minimization_tests {
+    use super::*;
+    use horned_owl::model::Build;
+
+    fn labels() -> [ObjectPropExpr; 2] {
+        let b = Build::new_arc();
+        [
+            OPE::ObjectProperty(b.object_property("http://ex/l")),
+            OPE::ObjectProperty(b.object_property("http://ex/p")),
+        ]
+    }
+
+    /// Every word of up to `length` letters over `alphabet`.
+    fn words(alphabet: &[ObjectPropExpr], length: usize) -> Vec<Vec<ObjectPropExpr>> {
+        let mut words: Vec<Vec<ObjectPropExpr>> = vec![Vec::new()];
+        let mut frontier = words.clone();
+        for _ in 0..length {
+            frontier = frontier
+                .iter()
+                .flat_map(|w| alphabet.iter().map(move |l| [w.clone(), vec![l.clone()]].concat()))
+                .collect();
+            words.extend(frontier.iter().cloned());
+        }
+        words
+    }
+
+    /// `p+` as a two-state automaton: `initial -p-> final -ε-> initial`.
+    fn transitive(p: &ObjectPropExpr) -> Automaton {
+        let mut a = Automaton::new();
+        let initial = a.add_state(true, false);
+        let terminal = a.add_state(false, true);
+        a.add_transition(initial, Some(p.clone()), terminal);
+        a.add_transition(terminal, None, initial);
+        a
+    }
+
+    /// The automaton of `l` under `l ∘ p ⊑ l`, `p ∘ l ⊑ l`, `l ∘ l ⊑ l` and
+    /// `p ∘ p ⊑ p`, assembled as the role-box construction assembles it: a
+    /// skeleton with one path per chain, `p+` spliced in for each occurrence
+    /// of `p`, and an ε edge for the transitivity of `l`. Its language is
+    /// `p* l (l | p)*`.
+    fn located_in(l: &ObjectPropExpr, p: &ObjectPropExpr, splice_first: bool) -> Automaton {
+        let mut a = Automaton::new();
+        let initial = a.add_state(true, false);
+        let terminal = a.add_state(false, true);
+        let p_plus = transitive(p);
+        if splice_first {
+            automata_connector(&mut a, &p_plus, terminal, initial);
+            automata_connector(&mut a, &p_plus, initial, terminal);
+        }
+        a.add_transition(initial, Some(l.clone()), terminal);
+        a.add_transition(terminal, None, initial);
+        if !splice_first {
+            automata_connector(&mut a, &p_plus, initial, terminal);
+            automata_connector(&mut a, &p_plus, terminal, initial);
+        }
+        a
+    }
+
+    fn accepted(a: &Automaton, alphabet: &[ObjectPropExpr]) -> Vec<Vec<ObjectPropExpr>> {
+        words(alphabet, 5).into_iter().filter(|w| accepts(a, w)).collect()
+    }
+
+    #[test]
+    fn minimized_automaton_keeps_the_language_and_shrinks() {
+        let [l, p] = labels();
+        let original = located_in(&l, &p, false);
+        assert_eq!(original.states().len(), 6);
+        let minimal = original.minimized();
+        assert_eq!(accepted(&original, &[l.clone(), p.clone()]), accepted(&minimal, &[l.clone(), p.clone()]));
+        // `p* l (l | p)*`: before the first `l`, and after it.
+        assert_eq!(minimal.states().len(), 2);
+        assert_eq!(minimal.delta().len(), 4);
+        assert_eq!(minimal.initials(), vec![0]);
+        assert_eq!(minimal.terminals(), vec![1]);
+        assert!(minimal.delta().iter().all(|t| t.label.is_some()));
+
+        let p_plus = transitive(&p).minimized();
+        let only_p = std::slice::from_ref(&p);
+        assert_eq!(accepted(&transitive(&p), only_p), accepted(&p_plus, only_p));
+        assert_eq!((p_plus.states().len(), p_plus.delta().len()), (2, 2));
+    }
+
+    #[test]
+    fn minimized_automaton_depends_only_on_the_language() {
+        let [l, p] = labels();
+        let one = located_in(&l, &p, false).minimized();
+        let other = located_in(&l, &p, true).minimized();
+        assert_eq!(one.delta(), other.delta());
+        assert_eq!(one.initials(), other.initials());
+        assert_eq!(one.terminals(), other.terminals());
+        assert_eq!(one.minimized().delta(), one.delta());
+    }
+
+    #[test]
+    fn minimized_automaton_has_one_initial_and_one_terminal_state() {
+        let [l, p] = labels();
+        // `l | p+`: the minimal automaton has two terminal states, one that
+        // accepts only the empty word and one that also accepts `p*`.
+        let mut a = Automaton::new();
+        let initial = a.add_state(true, false);
+        let after_l = a.add_state(false, true);
+        let after_p = a.add_state(false, true);
+        a.add_transition(initial, Some(l.clone()), after_l);
+        a.add_transition(initial, Some(p.clone()), after_p);
+        a.add_transition(after_p, Some(p.clone()), after_p);
+        let minimal = a.minimized();
+        assert_eq!(accepted(&a, &[l.clone(), p.clone()]), accepted(&minimal, &[l, p]));
+        assert_eq!(minimal.initials().len(), 1);
+        assert_eq!(minimal.terminals().len(), 1);
+        assert_eq!(minimal.final_state(), minimal.states().len() - 1);
+        assert_eq!(minimal.delta().iter().filter(|t| t.label.is_none()).count(), 2);
+    }
+
+    #[test]
+    fn mirrored_minimized_automaton_accepts_the_inverse_words() {
+        let [l, p] = labels();
+        let minimal = located_in(&l, &p, false).minimized();
+        let mirrored = mirrored_copy(&minimal).minimized();
+        let inverse: Vec<ObjectPropExpr> = [&l, &p].iter().map(|x| inverse_property(x)).collect();
+        for word in words(&[l.clone(), p.clone()], 5) {
+            let reversed: Vec<ObjectPropExpr> = word.iter().rev().map(inverse_property).collect();
+            assert_eq!(accepts(&minimal, &word), accepts(&mirrored, &reversed), "{word:?}");
+        }
+        assert_eq!(mirrored.states().len(), 2);
+        assert!(mirrored.delta().iter().all(|t| inverse.contains(t.label.as_ref().unwrap())));
+    }
+}
+

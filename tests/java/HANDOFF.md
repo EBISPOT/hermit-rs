@@ -61,9 +61,11 @@ The role automata no longer keep HermiT's `buildInversePropertiesMap` flaw
 `SubObjectPropertyOf(R ObjectInverseOf(S))` as if `R` and `S` were inverses. With
 `TransitiveObjectProperty(S)` it then derives `Inv(S) <= R` in class reasoning,
 `isSubObjectPropertyExpressionOf` and the property classifiers. The automata are
-now built from the role box as a grammar, per class of equivalent roles. A
-brute-force comparison over random role boxes checks that each automaton accepts
-exactly the entailed role words. See `ROLE_AUTOMATON_CONSTRUCTION.md` and
+now built from the role box as a grammar, per class of equivalent roles, and
+each is kept in its minimal deterministic form, so a `∀R.C` over a role box the
+size of RO's becomes tens of clauses rather than thousands. A brute-force
+comparison over random role boxes checks that each automaton accepts exactly the
+entailed role words. See `ROLE_AUTOMATON_CONSTRUCTION.md` and
 `tests/inverse_transitive_automaton_tests.rs`.
 
 Two gaps that no imported case covers, found while fixing #26 (**resolved**,

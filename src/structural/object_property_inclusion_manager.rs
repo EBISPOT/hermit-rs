@@ -17,7 +17,10 @@
 // closing the inclusions under inverse and building one automaton per class of
 // equivalent roles. HermiT's structural regularity checks are kept; an
 // irregular role box they miss is rejected when its automata would depend on
-// each other.
+// each other. Every complete automaton is stored, spliced and rewritten from
+// in its minimal deterministic form (`Automaton::minimized`), so the number of
+// clauses a `∀R.C` becomes, and the number of state concepts a node can carry,
+// is that of the minimal automaton of `R`'s language.
 
 use std::collections::{HashMap, HashSet};
 
@@ -25,7 +28,7 @@ use horned_owl::model::{Build, ClassExpression as CE, Individual};
 
 use crate::graph::Graph;
 
-use super::automaton::{automata_connector, mirrored_copy, Automaton, State};
+use super::automaton::{automata_connector, label_order_key, mirrored_copy, Automaton, State};
 use super::owl_axioms::Fact;
 use super::{
     inverse_property, is_anonymous_property, ClassExpr, ExpressionManager, ObjectPropExpr,
@@ -40,11 +43,7 @@ const OWL_NOTHING: &str = "http://www.w3.org/2002/07/owl#Nothing";
 /// built in this order so that their state numbering, and therefore the
 /// clauses `rewrite_axioms` emits, do not depend on `HashMap` iteration order.
 fn prop_sort_key(ope: &ObjectPropExpr) -> (u8, String) {
-    use horned_owl::model::ObjectPropertyExpression as OPE;
-    match ope {
-        OPE::ObjectProperty(p) => (0, p.0.to_string()),
-        OPE::InverseObjectProperty(p) => (1, p.0.to_string()),
-    }
+    label_order_key(ope)
 }
 
 pub struct ObjectPropertyInclusionManager {
@@ -475,7 +474,8 @@ impl RoleBox {
                 return single_transition_automaton(property);
             }
             let automaton =
-                mirrored_copy(&self.complete_automaton(&named, complete, building, irregular));
+                mirrored_copy(&self.complete_automaton(&named, complete, building, irregular))
+                    .minimized();
             complete.insert(property.clone(), automaton.clone());
             return automaton;
         }
@@ -543,6 +543,13 @@ impl RoleBox {
             }
         }
         building.remove(property);
+        // The skeleton with its splices accepts the right words but repeats
+        // whole sub-automata for every occurrence of a role, and those copies
+        // multiply through every splice above them. Only the language matters
+        // to the clauses, so each complete automaton is the minimal
+        // deterministic one: `∀R.C` then costs one concept per state of that
+        // automaton, and every automaton spliced in higher up is small too.
+        let automaton = automaton.minimized();
         complete.insert(property.clone(), automaton.clone());
         automaton
     }
@@ -956,6 +963,40 @@ mod language_tests {
                 [named.clone(), inverse_property(&named)]
             })
             .collect()
+    }
+
+    /// `located_in ∘ part_of ⊑ located_in`, `part_of ∘ located_in ⊑ located_in`,
+    /// both transitive: the language of `located_in` is `part_of* located_in
+    /// (located_in | part_of)*`, two states, and that of `part_of` is
+    /// `part_of+`, two states. Spliced together without minimisation they are
+    /// six states with ε cycles.
+    #[test]
+    fn automata_are_minimal() {
+        let letters = letters();
+        let (located_in, part_of) = (&letters[0], &letters[2]);
+        let mut ontology: SetOntology<super::super::A> = SetOntology::new();
+        for role in [located_in, part_of] {
+            ontology.insert(Component::TransitiveObjectProperty(TransitiveObjectProperty(role.clone())));
+        }
+        for chain in [vec![located_in.clone(), part_of.clone()], vec![part_of.clone(), located_in.clone()]] {
+            ontology.insert(Component::SubObjectPropertyOf(SubObjectPropertyOf {
+                sub: SOPE::ObjectPropertyChain(chain),
+                sup: located_in.clone(),
+            }));
+        }
+        assert_eq!(check(&ontology, &letters), (None, None, true));
+        let mut normalization = OWLNormalization::new(OWLAxioms::new(), 0);
+        normalization.process_ontology(&ontology).expect("normalize");
+        let mut axioms = normalization.into_axioms();
+        let manager = ObjectPropertyInclusionManager::new(&mut axioms).expect("regular");
+        let size = |role: &ObjectPropExpr| {
+            let automaton = manager.automaton(role).expect("automaton");
+            (automaton.states().len(), automaton.delta().len())
+        };
+        assert_eq!(size(located_in), (2, 4));
+        assert_eq!(size(part_of), (2, 2));
+        assert_eq!(size(&inverse_property(located_in)), (2, 4));
+        assert_eq!(size(&inverse_property(part_of)), (2, 2));
     }
 
     #[test]
