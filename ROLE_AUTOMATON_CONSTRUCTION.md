@@ -27,7 +27,32 @@ automaton per class of equivalent roles, following Horrocks, Kutz and Sattler
   regular order, is replaced by that role's complete automaton. The automaton of
   `Inv(R)` is the mirror of `R`'s.
 
-The properties are built in `prop_sort_key` order, so the output is deterministic.
+Each complete automaton is minimised before it is stored, spliced into a larger
+one or rewritten from (`Automaton::minimized`): Brzozowski's construction gives the
+minimal deterministic automaton of its language, which is then brought to one
+initial and one terminal state. The skeleton with its splices repeats a whole
+sub-automaton for every occurrence of a role, and each copy is repeated again by
+every splice above it, so without this step the automata of a role box such as
+RO's run to over a thousand states each: a `∀R.C` costs one fresh concept per
+state and one clause per transition, and a node carries one state concept per
+copy its incoming words reach. The minimal automaton is the smallest that decides
+the same words, and it is the same automaton whatever shape it was assembled in.
+
+A state that holds of every node is eliminated from the clauses
+(`eliminate_universal_states`). The initial state of `⊤ ⊑ ∀R.C`, a range axiom on
+a complex role, is such a state, as are the final states of `∀R.⊥`, which is what a
+domain axiom `∃R.⊤ ⊑ C` becomes, and the states an ε transition leads from them to.
+Left in, each is derived on every node of every tableau and matched against the
+node's edges for every transition clause it occurs in: with the ABox loaded into
+each class test, as it is when the ontology has nominals, that is a pass over the
+whole ABox per state per test. A disjunction with such a state, or with `∀S.` of
+it, is a tautology and is dropped; its complement is a false disjunct and is
+dropped; `∀S.¬` of it is `∀S.⊥`. The transitions out of a universal initial state
+and into a universal final state then fire on their edge alone.
+
+The properties are built in `prop_sort_key` order, and a minimised automaton
+numbers its states in the order the subset construction discovers them, taking the
+labels in that same order, so the output is deterministic.
 HermiT's structural regularity checks (`buildPropertyOrdering`,
 `checkForRegularity`) are kept and reject the same role boxes. Those checks do not
 close over inverses or equivalences, so they accept a few role boxes whose classes
@@ -103,6 +128,12 @@ retains Java's default policy of rejecting queries on inconsistent inputs;
 
 * EFO STAR modules classify **deterministically** (identical across runs) and derive
   the valid inverse+chain subsumptions.
+* The cohort ontology (EBISPOT/cohort-ontology at 70919e1, its edit file merged
+  with its RO, OMO and NCIT imports and its components: 50 classes, 111 object
+  properties of which 16 are transitive and 52 have chains, 2,763 individuals)
+  clausifies to 6,020 deterministic clauses with the automata minimised, against
+  24,514 without; the largest automaton has 35 states instead of 1,606. `hermit -c`
+  on it takes 7.4 s wall on four cores instead of 5 m 36 s, with the same taxonomy.
 * The full `cargo test` suite passes: lib (312), `owl_wg_conformance`,
   `classification_tests`, `reasoner_tests`, `structural_tests`,
   `owlreasoner_api_tests`, `blocking_strategy_tests`, `tableau_tests`.
