@@ -7274,8 +7274,10 @@ fn clausify_ontology_with_description_graphs(
 /// concepts introduced by the object-property-inclusion rewriting cannot collide
 /// with those of the original ontology.
 ///
-/// The index is `original.get_all_atomic_concepts().len()` (Java:
-/// `originalDLOntology.getAllAtomicConcepts().size()`), threaded into:
+/// The index is `original.next_replacement_index()`: the atomic-concept count
+/// Java starts from (`originalDLOntology.getAllAtomicConcepts().size()`), or
+/// one past the highest fresh concept still in use where the rewriting of
+/// universal restrictions left gaps below the count. It is threaded into:
 ///   * the `OWLNormalization` (Reasoner.java:2068),
 ///   * `rewrite_negative_object_property_assertions` (Reasoner.java:2073), whose
 ///     returned next-index is captured and
@@ -7323,10 +7325,9 @@ fn create_delta_dl_ontology_with_manager(
             return Err("Internal error: unsupported extension axiom type.".to_string());
         }
     }
-    // Reasoner.java:2068 -- start normalization's replacement counter at the
-    // original ontology's atomic-concept count so fresh definition concepts do
-    // not collide.
-    let replacement_index = original.get_all_atomic_concepts().len();
+    // Reasoner.java:2068 -- start normalization's replacement counter past the
+    // original ontology's fresh concepts so the delta's do not collide.
+    let replacement_index = original.next_replacement_index();
     // Reasoner.java:2067 -- seed the defined-datatype IRIs from the original ontology
     // so the additional axioms' datatype-definition clausification sees them.
     let mut seed_axioms = OWLAxioms::new();
@@ -8806,7 +8807,7 @@ pub struct IncrementalReasoner {
     original_dl_ontology: Option<DLOntology>,
     /// `originalDLOntology.getAllAtomicConcepts().size()` -- the replacement index
     /// threaded into the additional/delta clausification (Reasoner.java:2072-2073).
-    original_atomic_concept_count: usize,
+    original_replacement_index: usize,
     /// Whether the most recent `flush` that applied changes took the INCREMENTAL
     /// (reduced-ABox) path (`Some(true)`), the full-rebuild fallback
     /// (`Some(false)`), or no flush has applied changes yet (`None`). Observable so
@@ -8934,7 +8935,7 @@ impl IncrementalReasoner {
             cached_consistent: None,
             dl_ontology: None,
             original_dl_ontology: None,
-            original_atomic_concept_count: 0,
+            original_replacement_index: 0,
             last_flush_was_incremental: None,
             precomputed_inferences: std::collections::HashSet::new(),
             object_property_index: None,
@@ -9221,8 +9222,8 @@ impl IncrementalReasoner {
     /// -- the replacement index threaded into the additional/delta clausification
     /// so its fresh `internal:all#`/`internal:def#` concepts cannot collide with
     /// the original's. `0` until the first clausification.
-    pub fn original_atomic_concept_count(&self) -> usize {
-        self.original_atomic_concept_count
+    pub fn original_replacement_index(&self) -> usize {
+        self.original_replacement_index
     }
 
     /// Clausifies the current owned ontology and caches it as both the
@@ -9230,7 +9231,7 @@ impl IncrementalReasoner {
     /// atomic-concept count for index threading.
     fn ensure_original_clausified(&mut self) {
         if let Ok(dl) = clausify_ontology(&self.ontology) {
-            self.original_atomic_concept_count = dl.get_all_atomic_concepts().len();
+            self.original_replacement_index = dl.next_replacement_index();
             // Clone the cheap interned facts/clauses into a second owned
             // `DLOntology` so both `original` and the working copy are available.
             let original = clausify_ontology(&self.ontology).ok();
@@ -9396,7 +9397,7 @@ impl IncrementalReasoner {
         // Java's incremental path reads the CURRENT `m_dlOntology` (its TBox
         // clauses, vocabulary, and facts), which has already absorbed any prior
         // incremental flush -- not a frozen original. The frozen
-        // `original_atomic_concept_count` is only used for index threading.
+        // `original_replacement_index` is only used for index threading.
         let current = match &self.dl_ontology {
             Some(o) => o,
             None => return Ok(None),
@@ -9472,7 +9473,7 @@ impl IncrementalReasoner {
         // does not build a delta -- the additional-DL-ontology fast path lives in
         // `getTableau(additionalAxioms)` / `is_consistent_with_additional_axioms`.)
         if let Ok(dl) = clausify_ontology(&self.ontology) {
-            self.original_atomic_concept_count = dl.get_all_atomic_concepts().len();
+            self.original_replacement_index = dl.next_replacement_index();
             let original = clausify_ontology(&self.ontology).ok();
             self.dl_ontology = Some(dl);
             self.original_dl_ontology = original;
@@ -10019,3 +10020,64 @@ mod java_tableau_tests;
 mod java_blocking_tests;
 #[cfg(test)]
 mod java_graph_tests;
+
+#[cfg(test)]
+mod replacement_index_tests {
+    use super::*;
+
+    /// A delta numbers its fresh concepts from the original ontology's
+    /// `next_replacement_index`, which lies past every fresh concept in use.
+    /// The atomic-concept count alone does not: the rewriting of universal
+    /// restrictions eliminates the states that hold of every node and leaves
+    /// their indices unused, so with few named classes the highest state in
+    /// use exceeds the count, and a delta numbered from the count would reuse
+    /// a permanent state.
+    #[test]
+    fn delta_numbering_starts_past_every_fresh_concept_in_use() {
+        // Six transitive roles, each with a range and a domain on the one class:
+        // every range's initial state and every domain's final state is
+        // eliminated, so twelve indices are unused below the highest one.
+        let roles: String = (1..=6)
+            .map(|i| {
+                format!(
+                    "Declaration(ObjectProperty(:R{i})) TransitiveObjectProperty(:R{i})\n\
+                     ObjectPropertyRange(:R{i} :C) ObjectPropertyDomain(:R{i} :C)\n"
+                )
+            })
+            .collect();
+        let text = format!(
+            "Prefix(:=<http://example.org/>)\n\
+             Ontology(<http://example.org/gaps>\n\
+             Declaration(Class(:C))\n\
+             {roles})\n"
+        );
+        let (onto, _): (
+            horned_owl::ontology::component_mapped::ComponentMappedOntology<
+                crate::structural::A,
+                horned_owl::model::AnnotatedComponent<crate::structural::A>,
+            >,
+            _,
+        ) = horned_owl::io::ofn::reader::read(
+            &mut std::io::Cursor::new(text),
+            horned_owl::io::ParserConfiguration::new(Build::new_arc()),
+        )
+        .expect("parse");
+        let dl = clausify_ontology(&onto.into()).expect("clausify");
+        let fresh: Vec<usize> = dl
+            .get_all_atomic_concepts()
+            .iter()
+            .filter_map(|c| {
+                let (family, index) = c.iri().strip_prefix("internal:")?.split_once('#')?;
+                (family == "all" || family == "def").then(|| index.parse::<usize>().ok()).flatten()
+            })
+            .collect();
+        let highest = *fresh.iter().max().expect("the role box rewrites universal restrictions");
+        assert!(dl.next_replacement_index() > highest);
+        assert!(
+            dl.get_all_atomic_concepts().len() <= highest,
+            "the count ({}) should lie within the numbering in use (highest {highest}) for this \
+             test to guard anything",
+            dl.get_all_atomic_concepts().len()
+        );
+    }
+}

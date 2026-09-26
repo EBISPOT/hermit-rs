@@ -296,7 +296,7 @@ fn complex_role_universal_no_internal_all_collision() {
     // so the replacement index threaded into any additional clausification is
     // non-trivial -- the replacement index is exercised here.
     assert!(
-        reasoner.original_atomic_concept_count() > 0,
+        reasoner.original_replacement_index() > 0,
         "the ∀(transitive r).C clausification introduces internal concepts"
     );
     // The TBox entails C(y): x is a D, so ∀r.C holds at x, and r(x,y) -> C(y).
