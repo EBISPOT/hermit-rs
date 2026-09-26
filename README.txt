@@ -15,6 +15,14 @@ IncrementalReasoner::object_property_instances. This shares consistency and
 complex-role read-off across the whole property sweep. Usage and validation:
 docs/object-property-instances.md.
 
+When the TBox has nominals, the ABox takes part in every class test. The reasoner
+saturates it once per test tableau and records a checkpoint branching point over
+the result; each later test backtracks to the checkpoint and asserts its own facts
+above it, so a test costs its own expansion rather than the ABox's. A clash whose
+dependency set names one of the ABox's own disjunction choices is not answered
+from the checkpoint, since backtracking into that choice would undo the test's
+facts: the test is run again on a freshly loaded ABox (Reasoner::run_test).
+
 The original Java project README follows.
 -----------------------------------------
 

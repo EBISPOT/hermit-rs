@@ -75,6 +75,13 @@ impl DependencySetOps for PermanentDependencySet {
     }
 }
 
+impl PermanentDependencySet {
+    /// The smallest branching point in the set, `-1` for the empty set.
+    pub fn get_minimum_branching_point(&self) -> i32 {
+        self.0.last().copied().unwrap_or(-1)
+    }
+}
+
 /// A temporary union of dependency sets (the Java `UnionDependencySet`), which
 /// can be created directly and turned into a permanent set by the factory.
 #[derive(Clone, Debug, Default)]

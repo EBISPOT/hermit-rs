@@ -90,6 +90,22 @@ pub struct Tableau {
     pub(crate) branching_points: Vec<crate::tableau::branching::BranchingPointData>,
     pub(crate) current_branching_point: i32,
     pub(crate) nonbacktrackable_branching_point: i32,
+    /// The branching point recorded once the ABox is saturated, when the
+    /// ontology has nominals and the ABox therefore takes part in every test.
+    /// A test starts by backtracking to it (`restore_abox_checkpoint`), which
+    /// undoes only what the previous test added.
+    pub(crate) abox_checkpoint: Option<i32>,
+    /// Set when a clash's dependency set names a branching point at or below the
+    /// ABox checkpoint, one of the ABox's own disjunction choices. Backtracking
+    /// into that choice would undo the test's facts with it, so the test is
+    /// answered again on a freshly loaded ABox instead (`Reasoner::run_test`).
+    pub(crate) abox_choice_clash: bool,
+    /// The retained capacity at the checkpoint. `is_oversized` measures a test's
+    /// growth beyond it, since the saturated ABox is kept on purpose.
+    pub(crate) abox_checkpoint_capacity: usize,
+    /// The ground-disjunction arena's length at the checkpoint. A restore trims
+    /// the slots the last test used, which backtracking only empties.
+    pub(crate) abox_checkpoint_disjunctions: usize,
     pub(crate) ground_disjunctions: Vec<Option<crate::tableau::branching::GroundDisjunctionData>>,
     pub(crate) first_ground_disjunction: Option<usize>,
     pub(crate) first_unprocessed_ground_disjunction: Option<usize>,
@@ -381,6 +397,10 @@ impl Tableau {
             branching_points: Vec::new(),
             current_branching_point: -1,
             nonbacktrackable_branching_point: -1,
+            abox_checkpoint: None,
+            abox_choice_clash: false,
+            abox_checkpoint_capacity: 0,
+            abox_checkpoint_disjunctions: 0,
             ground_disjunctions: Vec::new(),
             first_ground_disjunction: None,
             first_unprocessed_ground_disjunction: None,
@@ -1308,7 +1328,9 @@ impl Tableau {
         // tuple-slot arrays; well above a normal test's working set, so only a
         // genuine blow-up triggers a rebuild (normal tests keep clear-reuse).
         const OVERSIZE_LIMIT: usize = 8_000_000;
-        self.retained_capacity() > OVERSIZE_LIMIT
+        // The saturated ABox kept at the checkpoint is not a blow-up: only the
+        // growth beyond it counts.
+        self.retained_capacity().saturating_sub(self.abox_checkpoint_capacity) > OVERSIZE_LIMIT
     }
 
     pub fn clear(&mut self) {
@@ -1341,6 +1363,10 @@ impl Tableau {
         self.branching_points.clear();
         self.current_branching_point = -1;
         self.nonbacktrackable_branching_point = -1;
+        self.abox_checkpoint = None;
+        self.abox_choice_clash = false;
+        self.abox_checkpoint_capacity = 0;
+        self.abox_checkpoint_disjunctions = 0;
 
         // m_dependencySetFactory.clear().
         self.dependency_set_factory.clear();

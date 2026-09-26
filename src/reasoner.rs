@@ -54,6 +54,10 @@ fn leaf_build_max_workers() -> usize {
     }
 }
 
+/// Counts the tests answered again on a freshly loaded ABox (`Reasoner::run_test`).
+#[cfg(test)]
+static TEST_ABOX_RERUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 #[cfg(test)]
 thread_local! {
     static TEST_SATURATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -7780,7 +7784,7 @@ impl<'a> Reasoner<'a> {
     /// Returns `None` if the loaded ABox already clashes.
     /// Builds a fresh, fully-configured per-test tableau (the configuration-once
     /// half of HermiT's `m_tableau` setup). Does NOT load the ABox -- that is
-    /// re-done on every checkout, since `clear()` wipes it.
+    /// `checkout_test_tableau`'s job.
     fn build_test_tableau(&self, manager: &HyperresolutionManager) -> Tableau {
         // Thread the reasoner's configuration (incl. the existential
         // strategy) into every per-test tableau, matching HermiT's single
@@ -7799,20 +7803,31 @@ impl<'a> Reasoner<'a> {
 
     /// Checks out the reused per-test tableau (HermiT's single lifetime-scoped
     /// `m_tableau`). On the first checkout the tableau is built and cached; on
-    /// every subsequent checkout the cached tableau is `clear()`ed (firing
-    /// `tableauCleared`), reusing only the allocation. On every checkout -- first
-    /// and reused -- the permanent ABox is (re-)loaded when the ontology has
-    /// nominals (so a nominal `{a}` interacts with `a`'s asserted types; HermiT's
-    /// `loadPermanentABox = hasNominals()`), and `None` is returned on an
-    /// immediate ABox clash, exactly as the old `new_test_tableau` did.
+    /// every subsequent checkout the cached tableau is reused, `clear()`ed
+    /// (firing `tableauCleared`) unless it holds an ABox checkpoint to return to.
+    ///
+    /// When the ontology has nominals the permanent ABox takes part in every
+    /// test (a nominal `{a}` interacts with `a`'s asserted types; HermiT's
+    /// `loadPermanentABox = hasNominals()`). It is the same in every test, so it
+    /// is loaded and saturated once: the tableau is checkpointed over the
+    /// saturated ABox (`Tableau::push_abox_checkpoint`), and every later
+    /// checkout backtracks to the checkpoint, undoing only what the previous
+    /// test added. A test's facts are asserted above the checkpoint exactly as
+    /// they are on a freshly loaded ABox; `run_test` handles the one case the
+    /// checkpoint cannot answer, a clash that depends on an ABox disjunction
+    /// choice. The ABox is loaded without a checkpoint only when its saturation
+    /// is interrupted.
+    ///
+    /// Returns `None` when the ABox has no model, exactly as the old
+    /// `new_test_tableau` did on an immediate ABox clash.
     ///
     /// The returned [`TableauGuard`] returns the tableau to the cache on drop, so
     /// every caller's early-return / `?` paths keep the tableau for the next test.
     fn checkout_test_tableau(
         &self,
-        manager: &HyperresolutionManager,
+        manager: &mut HyperresolutionManager,
     ) -> Option<TableauGuard<'_>> {
-        let mut tableau = match self.test_tableau.borrow_mut().take() {
+        let (mut tableau, reused) = match self.test_tableau.borrow_mut().take() {
             Some(mut cached) => {
                 if cached.is_oversized() {
                     // A hard test grew the reused tableau's arrays to hundreds of
@@ -7842,29 +7857,82 @@ impl<'a> Reasoner<'a> {
                     if preserved_signature_cache.is_some() {
                         fresh.blocking_signature_cache = preserved_signature_cache;
                     }
-                    fresh
+                    (fresh, false)
                 } else {
-                    // Faithful port of HermiT reusing `m_tableau`: wipe per-test
-                    // state (and fire tableauCleared) instead of reallocating.
-                    cached.clear();
-                    cached
+                    (cached, true)
                 }
             }
-            None => self.build_test_tableau(manager),
+            None => (self.build_test_tableau(manager), false),
         };
-        // The ABox must be (re-)loaded after every clear(), which wipes it.
         if self.dl_ontology.has_nominals() {
-            self.load_abox(&mut tableau);
-            if tableau.contains_clash() {
-                // Return the tableau to the cache even on the clash early-return.
-                *self.test_tableau.borrow_mut() = Some(tableau);
-                return None;
+            if !(reused && tableau.restore_abox_checkpoint()) {
+                if reused {
+                    // Faithful port of HermiT reusing `m_tableau`: wipe per-test
+                    // state (and fire tableauCleared) instead of reallocating.
+                    tableau.clear();
+                }
+                self.load_abox(&mut tableau);
+                if tableau.contains_clash() {
+                    // Return the tableau to the cache even on the clash early-return.
+                    *self.test_tableau.borrow_mut() = Some(tableau);
+                    return None;
+                }
+                match run_calculus(&mut tableau, manager) {
+                    Ok(true) => tableau.push_abox_checkpoint(),
+                    Ok(false) => {
+                        // The ABox has no model: the ontology is inconsistent.
+                        *self.test_tableau.borrow_mut() = Some(tableau);
+                        return None;
+                    }
+                    Err(_) => {
+                        // Interrupted before the ABox was saturated (a positive
+                        // timeout only): the test saturates the loaded facts itself.
+                        tableau.clear();
+                        self.load_abox(&mut tableau);
+                    }
+                }
             }
+        } else if reused {
+            // Faithful port of HermiT reusing `m_tableau`: wipe per-test state
+            // (and fire tableauCleared) instead of reallocating.
+            tableau.clear();
         }
         Some(TableauGuard {
             cache: &self.test_tableau,
             tableau: Some(tableau),
         })
+    }
+
+    /// Runs one test on the checked-out tableau: `test` asserts its facts,
+    /// saturates, and reads its answer off the tableau. Returns `None` when the
+    /// ABox has no model, so there is no tableau to test on.
+    ///
+    /// With the ABox checkpoint in place, a clash whose dependency set names one
+    /// of the ABox's own disjunction choices cannot be backtracked from without
+    /// undoing the test's facts, so the calculus stops and marks the answer as
+    /// not established (`Tableau::abox_choice_clash`). The test is then run
+    /// again on a freshly loaded ABox, saturated together with the test's facts,
+    /// where backtracking reaches every choice; the next checkout rebuilds the
+    /// checkpoint.
+    fn run_test<R>(
+        &self,
+        manager: &mut HyperresolutionManager,
+        mut test: impl FnMut(&mut Tableau, &mut HyperresolutionManager) -> R,
+    ) -> Option<R> {
+        let mut guard = self.checkout_test_tableau(manager)?;
+        let tableau = &mut *guard;
+        let result = test(tableau, manager);
+        if !tableau.abox_choice_clash {
+            return Some(result);
+        }
+        #[cfg(test)]
+        TEST_ABOX_RERUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        tableau.clear();
+        self.load_abox(tableau);
+        if tableau.contains_clash() {
+            return None;
+        }
+        Some(test(tableau, manager))
     }
 
     /// Releases the cached per-test tableau *now* if a hard test grew it past the
@@ -7893,21 +7961,24 @@ impl<'a> Reasoner<'a> {
         concept: Concept,
         read_off: impl FnOnce(&Tableau, NodeId) -> R,
     ) -> Option<R> {
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let node = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(concept, node, &empty, true);
-        if tableau.contains_clash() {
-            return None;
-        }
-        // Route through `run_calculus` for the monitor/interrupt hooks.
-        // An interrupt (only with a positive timeout) is treated as "no model".
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-        let canonical = tableau.get_canonical_node(node);
-        Some(read_off(tableau, canonical))
+        let mut read_off = Some(read_off);
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let node = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(concept.clone(), node, &empty, true);
+            if tableau.contains_clash() {
+                return None;
+            }
+            // Route through `run_calculus` for the monitor/interrupt hooks.
+            // An interrupt (only with a positive timeout) is treated as "no model".
+            if !run_calculus(tableau, manager).unwrap_or(false) {
+                return None;
+            }
+            let canonical = tableau.get_canonical_node(node);
+            let read_off = read_off.take().expect("a model is read off once");
+            Some(read_off(tableau, canonical))
+        })
+        .flatten()
     }
 
     /// Faithful port of `DeterministicClassification.classify`'s per-element step:
@@ -7973,63 +8044,64 @@ impl<'a> Reasoner<'a> {
         Vec<std::collections::HashSet<crate::model::AtomicConcept>>,
     )> {
         use crate::tableau::dependency_set::DependencySetOps;
-        let mut guard = self.checkout_test_tableau(manager)?;
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let root = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(Concept::AtomicConcept(element.clone()), root, &empty, true);
-        if tableau.contains_clash() {
-            return None;
-        }
-        if !run_calculus(tableau, manager).unwrap_or(false) {
-            return None;
-        }
-
-        // `readKnownSubsumersFromRootNode`: only read deterministic subsumers when
-        // the root's merge chain to its canonical node carries an empty dependency
-        // set throughout (a non-deterministic merge makes the root label uncertain).
-        let canonical_root = tableau.get_canonical_node(root);
-        let mut root_deterministic = true;
-        let mut walk = root;
-        while let Some(into) = tableau.node(walk).get_merged_into() {
-            let det = tableau
-                .node(walk)
-                .get_merged_into_dependency_set()
-                .map_or(true, |d| d.is_empty());
-            if !det {
-                root_deterministic = false;
-                break;
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let root = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(Concept::AtomicConcept(element.clone()), root, &empty, true);
+            if tableau.contains_clash() {
+                return None;
             }
-            walk = into;
-        }
-        let empty_set = tableau.dependency_set_factory().empty_set();
-        let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
-            std::collections::HashSet::new();
-        if root_deterministic {
-            let labels =
-                read_off_node_concepts_matching(&*tableau, canonical_root, &empty_set, &include);
-            for label in labels {
-                if label.known {
-                    root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+            if !run_calculus(tableau, manager).unwrap_or(false) {
+                return None;
+            }
+
+            // `readKnownSubsumersFromRootNode`: only read deterministic subsumers when
+            // the root's merge chain to its canonical node carries an empty dependency
+            // set throughout (a non-deterministic merge makes the root label uncertain).
+            let canonical_root = tableau.get_canonical_node(root);
+            let mut root_deterministic = true;
+            let mut walk = root;
+            while let Some(into) = tableau.node(walk).get_merged_into() {
+                let det = tableau
+                    .node(walk)
+                    .get_merged_into_dependency_set()
+                    .map_or(true, |d| d.is_empty());
+                if !det {
+                    root_deterministic = false;
+                    break;
+                }
+                walk = into;
+            }
+            let empty_set = tableau.dependency_set_factory().empty_set();
+            let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
+                std::collections::HashSet::new();
+            if root_deterministic {
+                let labels =
+                    read_off_node_concepts_matching(&*tableau, canonical_root, &empty_set, &include);
+                for label in labels {
+                    if label.known {
+                        root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+                    }
                 }
             }
-        }
 
-        // `updatePossibleSubsumers`: the concept label of every active, unblocked node.
-        let mut node_labels: Vec<std::collections::HashSet<crate::model::AtomicConcept>> =
-            Vec::new();
-        let mut node = tableau.get_first_tableau_node();
-        while let Some(id) = node {
-            if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
-                let label: std::collections::HashSet<crate::model::AtomicConcept> =
-                    tableau.atomic_concepts_on_node_matching(id, &include).into_iter().collect();
-                if !label.is_empty() {
-                    node_labels.push(label);
+            // `updatePossibleSubsumers`: the concept label of every active, unblocked node.
+            let mut node_labels: Vec<std::collections::HashSet<crate::model::AtomicConcept>> =
+                Vec::new();
+            let mut node = tableau.get_first_tableau_node();
+            while let Some(id) = node {
+                if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
+                    let label: std::collections::HashSet<crate::model::AtomicConcept> =
+                        tableau.atomic_concepts_on_node_matching(id, &include).into_iter().collect();
+                    if !label.is_empty() {
+                        node_labels.push(label);
+                    }
                 }
+                node = tableau.node(id).get_next_tableau_node();
             }
-            node = tableau.node(id).get_next_tableau_node();
-        }
-        Some((root_known, node_labels))
+            Some((root_known, node_labels))
+        })
+        .flatten()
     }
 
     /// Reusable atomic-class subsumption test `sub ⊑ sup`: true iff `sub ⊓ ¬sup` is
@@ -8046,20 +8118,19 @@ impl<'a> Reasoner<'a> {
         }
         // An ABox clash means the ontology is inconsistent, so everything is
         // subsumed by everything.
-        let Some(mut guard) = self.checkout_test_tableau(manager) else {
-            return true;
-        };
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let node = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), node, &empty, true);
-        tableau.add_concept_assertion(Concept::from(sup.get_negation()), node, &empty, true);
-        if tableau.contains_clash() {
-            return true;
-        }
-        // An interrupt (positive timeout only) yields "no model found",
-        // i.e. a clash, so the subsumption holds.
-        !run_calculus(tableau, manager).unwrap_or(false)
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let node = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), node, &empty, true);
+            tableau.add_concept_assertion(Concept::from(sup.get_negation()), node, &empty, true);
+            if tableau.contains_clash() {
+                return true;
+            }
+            // An interrupt (positive timeout only) yields "no model found",
+            // i.e. a clash, so the subsumption holds.
+            !run_calculus(tableau, manager).unwrap_or(false)
+        })
+        .unwrap_or(true)
     }
 
     /// Reusable batched subsumption test `child ⊑ ⊔ candidates`
@@ -8074,25 +8145,24 @@ impl<'a> Reasoner<'a> {
         child: &crate::model::AtomicConcept,
         candidates: &std::collections::HashSet<crate::model::AtomicConcept>,
     ) -> bool {
-        let Some(mut guard) = self.checkout_test_tableau(manager) else {
-            return true;
-        };
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let node = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), node, &empty, true);
-        for candidate in candidates {
-            tableau.add_concept_assertion(
-                Concept::from(candidate.get_negation()),
-                node,
-                &empty,
-                true,
-            );
-        }
-        if tableau.contains_clash() {
-            return true;
-        }
-        !run_calculus(tableau, manager).unwrap_or(false)
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let node = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), node, &empty, true);
+            for candidate in candidates {
+                tableau.add_concept_assertion(
+                    Concept::from(candidate.get_negation()),
+                    node,
+                    &empty,
+                    true,
+                );
+            }
+            if tableau.contains_clash() {
+                return true;
+            }
+            !run_calculus(tableau, manager).unwrap_or(false)
+        })
+        .unwrap_or(true)
     }
 
     /// As [`atomic_subsumed_by_union`](Self::atomic_subsumed_by_union), but on a
@@ -8112,59 +8182,58 @@ impl<'a> Reasoner<'a> {
     ) -> (bool, std::collections::HashSet<crate::model::AtomicConcept>) {
         use crate::tableau::dependency_set::DependencySetOps;
         let empty_known = std::collections::HashSet::new();
-        let Some(mut guard) = self.checkout_test_tableau(manager) else {
-            return (true, empty_known);
-        };
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let root = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), root, &empty, true);
-        // The negated candidates carry a non-backtrackable dummy dependency set,
-        // so nothing derived from them is ever empty-dependency.
-        let dummy = DependencySet::Permanent(tableau.push_dummy_dependency_branching_point());
-        for candidate in candidates {
-            tableau.add_concept_assertion(
-                Concept::from(candidate.get_negation()),
-                root,
-                &dummy,
-                true,
-            );
-        }
-        if tableau.contains_clash() {
-            // Subsumed, but the root carries no usable (post-saturation) label.
-            return (true, empty_known);
-        }
-        let subsumed = !run_calculus(tableau, manager).unwrap_or(false);
-        if !subsumed {
-            return (false, empty_known);
-        }
-        // readKnownSubsumersFromRootNode: only read deterministic subsumers when
-        // the root's merge chain to its canonical node is empty-dependency throughout.
-        let canonical_root = tableau.get_canonical_node(root);
-        let mut root_deterministic = true;
-        let mut walk = root;
-        while let Some(into) = tableau.node(walk).get_merged_into() {
-            let det = tableau
-                .node(walk)
-                .get_merged_into_dependency_set()
-                .map_or(true, |d| d.is_empty());
-            if !det {
-                root_deterministic = false;
-                break;
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let root = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), root, &empty, true);
+            // The negated candidates carry a non-backtrackable dummy dependency set,
+            // so nothing derived from them is ever empty-dependency.
+            let dummy = DependencySet::Permanent(tableau.push_dummy_dependency_branching_point());
+            for candidate in candidates {
+                tableau.add_concept_assertion(
+                    Concept::from(candidate.get_negation()),
+                    root,
+                    &dummy,
+                    true,
+                );
             }
-            walk = into;
-        }
-        let mut known: std::collections::HashSet<crate::model::AtomicConcept> =
-            std::collections::HashSet::new();
-        if root_deterministic {
-            let empty_set = tableau.dependency_set_factory().empty_set();
-            for label in read_off_node_concepts(&*tableau, canonical_root, &empty_set) {
-                if label.known {
-                    known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+            if tableau.contains_clash() {
+                // Subsumed, but the root carries no usable (post-saturation) label.
+                return (true, std::collections::HashSet::new());
+            }
+            let subsumed = !run_calculus(tableau, manager).unwrap_or(false);
+            if !subsumed {
+                return (false, std::collections::HashSet::new());
+            }
+            // readKnownSubsumersFromRootNode: only read deterministic subsumers when
+            // the root's merge chain to its canonical node is empty-dependency throughout.
+            let canonical_root = tableau.get_canonical_node(root);
+            let mut root_deterministic = true;
+            let mut walk = root;
+            while let Some(into) = tableau.node(walk).get_merged_into() {
+                let det = tableau
+                    .node(walk)
+                    .get_merged_into_dependency_set()
+                    .map_or(true, |d| d.is_empty());
+                if !det {
+                    root_deterministic = false;
+                    break;
+                }
+                walk = into;
+            }
+            let mut known: std::collections::HashSet<crate::model::AtomicConcept> =
+                std::collections::HashSet::new();
+            if root_deterministic {
+                let empty_set = tableau.dependency_set_factory().empty_set();
+                for label in read_off_node_concepts(&*tableau, canonical_root, &empty_set) {
+                    if label.known {
+                        known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+                    }
                 }
             }
-        }
-        (subsumed, known)
+            (subsumed, known)
+        })
+        .unwrap_or((true, empty_known))
     }
 
     /// The subsumption test `sub ⊑ sup` together with the model read-off that
@@ -8194,68 +8263,66 @@ impl<'a> Reasoner<'a> {
         if sub == sup {
             return (true, None);
         }
-        let Some(mut guard) = self.checkout_test_tableau(manager) else {
-            // An inconsistent ABox subsumes everything.
-            return (true, None);
-        };
-        let tableau = &mut *guard;
-        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-        let root = tableau.create_new_named_node(&empty);
-        tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), root, &empty, true);
-        // `¬sup` carries a non-backtrackable dummy dependency set, so nothing derived
-        // from it is ever empty-dependency.
-        let dummy = DependencySet::Permanent(tableau.push_dummy_dependency_branching_point());
-        tableau.add_concept_assertion(Concept::from(sup.get_negation()), root, &dummy, true);
-        if tableau.contains_clash() {
-            return (true, None);
-        }
-        let subsumed = !run_calculus(tableau, manager).unwrap_or(false);
-        if subsumed {
-            return (true, None);
-        }
-
-        // readKnownSubsumersFromRootNode: read deterministic subsumers only when the
-        // root's merge chain to its canonical node is empty-dependency throughout.
-        let canonical_root = tableau.get_canonical_node(root);
-        let mut root_deterministic = true;
-        let mut walk = root;
-        while let Some(into) = tableau.node(walk).get_merged_into() {
-            let det = tableau
-                .node(walk)
-                .get_merged_into_dependency_set()
-                .map_or(true, |d| d.is_empty());
-            if !det {
-                root_deterministic = false;
-                break;
+        self.run_test(manager, |tableau, manager| {
+            let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+            let root = tableau.create_new_named_node(&empty);
+            tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), root, &empty, true);
+            // `¬sup` carries a non-backtrackable dummy dependency set, so nothing derived
+            // from it is ever empty-dependency.
+            let dummy = DependencySet::Permanent(tableau.push_dummy_dependency_branching_point());
+            tableau.add_concept_assertion(Concept::from(sup.get_negation()), root, &dummy, true);
+            if tableau.contains_clash() {
+                return (true, None);
             }
-            walk = into;
-        }
-        let empty_set = tableau.dependency_set_factory().empty_set();
-        let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
-            std::collections::HashSet::new();
-        if root_deterministic {
-            for label in read_off_node_concepts(&*tableau, canonical_root, &empty_set) {
-                if label.known {
-                    root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+            let subsumed = !run_calculus(tableau, manager).unwrap_or(false);
+            if subsumed {
+                return (true, None);
+            }
+
+            // readKnownSubsumersFromRootNode: read deterministic subsumers only when the
+            // root's merge chain to its canonical node is empty-dependency throughout.
+            let canonical_root = tableau.get_canonical_node(root);
+            let mut root_deterministic = true;
+            let mut walk = root;
+            while let Some(into) = tableau.node(walk).get_merged_into() {
+                let det = tableau
+                    .node(walk)
+                    .get_merged_into_dependency_set()
+                    .map_or(true, |d| d.is_empty());
+                if !det {
+                    root_deterministic = false;
+                    break;
+                }
+                walk = into;
+            }
+            let empty_set = tableau.dependency_set_factory().empty_set();
+            let mut root_known: std::collections::HashSet<crate::model::AtomicConcept> =
+                std::collections::HashSet::new();
+            if root_deterministic {
+                for label in read_off_node_concepts(&*tableau, canonical_root, &empty_set) {
+                    if label.known {
+                        root_known.insert(crate::model::AtomicConcept::create(label.concept_iri));
+                    }
                 }
             }
-        }
 
-        // prunePossibleSubsumers: the concept label of every active, unblocked node.
-        let mut node_labels: Vec<std::collections::HashSet<crate::model::AtomicConcept>> =
-            Vec::new();
-        let mut node = tableau.get_first_tableau_node();
-        while let Some(id) = node {
-            if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
-                let label: std::collections::HashSet<crate::model::AtomicConcept> =
-                    tableau.atomic_concepts_on_node(id).into_iter().collect();
-                if !label.is_empty() {
-                    node_labels.push(label);
+            // prunePossibleSubsumers: the concept label of every active, unblocked node.
+            let mut node_labels: Vec<std::collections::HashSet<crate::model::AtomicConcept>> =
+                Vec::new();
+            let mut node = tableau.get_first_tableau_node();
+            while let Some(id) = node {
+                if tableau.node(id).is_active() && !tableau.node(id).is_blocked() {
+                    let label: std::collections::HashSet<crate::model::AtomicConcept> =
+                        tableau.atomic_concepts_on_node(id).into_iter().collect();
+                    if !label.is_empty() {
+                        node_labels.push(label);
+                    }
                 }
+                node = tableau.node(id).get_next_tableau_node();
             }
-            node = tableau.node(id).get_next_tableau_node();
-        }
-        (false, Some((root_known, node_labels)))
+            (false, Some((root_known, node_labels)))
+        })
+        .unwrap_or((true, None))
     }
 
     /// Port of `Reasoner.getTableau(additionalAxioms)` +
@@ -10079,5 +10146,48 @@ mod replacement_index_tests {
              test to guard anything",
             dl.get_all_atomic_concepts().len()
         );
+    }
+}
+
+#[cfg(test)]
+mod abox_checkpoint_tests {
+    use super::*;
+    use horned_owl::model::AnnotatedComponent;
+    use horned_owl::ontology::component_mapped::ComponentMappedOntology;
+
+    fn load(text: &str) -> SetOntology<crate::structural::A> {
+        let (onto, _): (
+            ComponentMappedOntology<crate::structural::A, AnnotatedComponent<crate::structural::A>>,
+            _,
+        ) = horned_owl::io::ofn::reader::read(
+            &mut std::io::Cursor::new(text),
+            horned_owl::io::ParserConfiguration::new(Build::new_arc()),
+        )
+        .unwrap();
+        onto.into()
+    }
+
+    /// `a` is `C` or `D`. Whichever the saturated ABox holds, the class that
+    /// needs the other choice clashes with a fact that depends on the ABox's
+    /// branching point, so its answer is taken from a fresh ABox; both classes
+    /// come out satisfiable.
+    #[test]
+    fn a_clash_on_an_abox_choice_is_answered_on_a_fresh_abox() {
+        let onto = load(
+            "Prefix(:=<http://ex/>) Ontology(\
+             Declaration(Class(:C)) Declaration(Class(:D)) Declaration(Class(:NeedsNotC)) Declaration(Class(:NeedsNotD)) \
+             Declaration(ObjectProperty(:r)) Declaration(NamedIndividual(:a)) \
+             ClassAssertion(ObjectUnionOf(:C :D) :a) \
+             SubClassOf(:NeedsNotC ObjectIntersectionOf(ObjectHasValue(:r :a) ObjectAllValuesFrom(:r ObjectComplementOf(:C)))) \
+             SubClassOf(:NeedsNotD ObjectIntersectionOf(ObjectHasValue(:r :a) ObjectAllValuesFrom(:r ObjectComplementOf(:D)))))",
+        );
+        let before = TEST_ABOX_RERUNS.load(std::sync::atomic::Ordering::Relaxed);
+        let hierarchy = classify(&onto).unwrap();
+        let build = Build::new_arc();
+        for class in ["http://ex/NeedsNotC", "http://ex/NeedsNotD"] {
+            let node = hierarchy.node_for_element(&build.class(class)).unwrap();
+            assert_ne!(node, hierarchy.bottom_node(), "{class} is satisfiable");
+        }
+        assert!(TEST_ABOX_RERUNS.load(std::sync::atomic::Ordering::Relaxed) > before);
     }
 }

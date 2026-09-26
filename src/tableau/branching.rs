@@ -666,7 +666,20 @@ impl Tableau {
     pub(crate) fn push_dummy_dependency_branching_point(
         &mut self,
     ) -> crate::tableau::dependency_set::PermanentDependencySet {
-        let branching_point = BranchingPointData {
+        let branching_point = self.base_branching_point();
+        self.push_branching_point(branching_point);
+        // This branching point holds the per-test negations; backtracking must
+        // never start a next choice on it (it is not a real disjunction).
+        self.nonbacktrackable_branching_point = self.current_branching_point;
+        let empty = DependencySet::Permanent(self.dependency_set_factory.empty_set());
+        self.dependency_set_factory
+            .add_branching_point(&empty, self.current_branching_point)
+    }
+
+    /// A branching point that records the tableau's current state and offers
+    /// no choice of its own: the base `BranchingPoint` of `Tableau.isSatisfiable`.
+    fn base_branching_point(&self) -> BranchingPointData {
+        BranchingPointData {
             level: 0,
             last_tableau_node: self.last_tableau_node,
             last_merged_or_pruned_node: self.last_merged_or_pruned_node,
@@ -677,14 +690,55 @@ impl Tableau {
             current_index: 0,
             nominal_introduction: None,
             reuse: None,
-        };
+        }
+    }
+
+    /// Records the saturated ABox as the state every test starts from.
+    ///
+    /// When the ontology has nominals the ABox takes part in every test, and it
+    /// is the same in each. Once its facts are loaded and saturated, this pushes
+    /// a branching point over the result and marks it non-backtrackable: no fact
+    /// ever depends on it, so no clash backtracks to it, and
+    /// [`restore_abox_checkpoint`](Self::restore_abox_checkpoint) can return to
+    /// it between tests. A test's own facts are asserted above it with empty
+    /// dependency sets, as they are on a freshly loaded ABox, so the read-off of
+    /// deterministic (empty-dependency) consequences is unchanged.
+    pub(crate) fn push_abox_checkpoint(&mut self) {
+        debug_assert!(self.abox_checkpoint.is_none(), "the ABox is checkpointed once");
+        let branching_point = self.base_branching_point();
         self.push_branching_point(branching_point);
-        // This branching point holds the per-test negations; backtracking must
-        // never start a next choice on it (it is not a real disjunction).
         self.nonbacktrackable_branching_point = self.current_branching_point;
-        let empty = DependencySet::Permanent(self.dependency_set_factory.empty_set());
-        self.dependency_set_factory
-            .add_branching_point(&empty, self.current_branching_point)
+        self.abox_checkpoint = Some(self.current_branching_point);
+        self.abox_choice_clash = false;
+        self.abox_checkpoint_capacity = self.retained_capacity();
+        self.abox_checkpoint_disjunctions = self.ground_disjunctions.len();
+    }
+
+    /// Returns the tableau to its ABox checkpoint, undoing everything the last
+    /// test added: its nodes, tuples, merges, branching points and pending work.
+    /// Returns `false` when there is no checkpoint to return to (the tableau was
+    /// cleared, or the last test's answer had to be redone on a fresh ABox), in
+    /// which case the caller loads the ABox anew.
+    pub(crate) fn restore_abox_checkpoint(&mut self) -> bool {
+        let Some(checkpoint) = self.abox_checkpoint else {
+            return false;
+        };
+        if self.abox_choice_clash || self.current_branching_point < checkpoint {
+            return false;
+        }
+        self.backtrack_to(checkpoint);
+        self.nonbacktrackable_branching_point = checkpoint;
+        // Backtracking empties the ground-disjunction slots the test derived (a
+        // disjunction satisfied on derivation is emptied at once, the rest by the
+        // list walk above); trim them so the arena does not grow test by test.
+        while self.ground_disjunctions.len() > self.abox_checkpoint_disjunctions
+            && self.ground_disjunctions.last().is_some_and(|slot| slot.is_none())
+        {
+            self.ground_disjunctions.pop();
+        }
+        self.dependency_set_factory.remove_unused_sets();
+        self.pending_interrupt = None;
+        true
     }
 
     pub(crate) fn push_branching_point(&mut self, mut branching_point: BranchingPointData) {
@@ -1033,12 +1087,23 @@ impl Tableau {
     /// Dependency-directed backtracking after a clash. Returns whether a branch
     /// remains to try (false means unsatisfiable).
     pub fn backtrack_on_clash(&mut self) -> bool {
-        let clash_dependency_set = match &self.clash_dependency_set {
-            Some(d) => DependencySet::Permanent(d.clone()),
+        let (clash_dependency_set, minimum) = match &self.clash_dependency_set {
+            Some(d) => (DependencySet::Permanent(d.clone()), d.get_minimum_branching_point()),
             None => return false,
         };
         let new_current = clash_dependency_set.get_maximum_branching_point();
         if new_current <= self.nonbacktrackable_branching_point {
+            // A clash that depends on a choice made while the ABox was saturated
+            // (a branching point at or below the checkpoint) may go away under
+            // another choice, but backtracking there would undo the test's facts
+            // along with it. Flag it, whether that choice is the clash's newest
+            // branching point or lies under a test's own non-backtrackable one:
+            // the test is answered again on a fresh ABox.
+            if let Some(checkpoint) = self.abox_checkpoint {
+                if minimum >= 0 && minimum <= checkpoint {
+                    self.abox_choice_clash = true;
+                }
+            }
             return false;
         }
         self.backtrack_to(new_current);
@@ -1481,5 +1546,170 @@ mod reuse_branching_tests {
             !strategy.should_reuse(&AtomicConcept::create("http://example.org/C")),
             "the clashing filler must be marked don't-reuse-this-run"
         );
+    }
+}
+
+#[cfg(test)]
+mod abox_checkpoint_tests {
+    use crate::model::{AtomicConcept, AtomicRole, Concept, DLPredicate, Role};
+    use crate::tableau::dependency_set::DependencySet;
+    use crate::tableau::tableau::Tableau;
+
+    fn concept(iri: &str) -> Concept {
+        Concept::AtomicConcept(AtomicConcept::create(iri))
+    }
+
+    #[test]
+    fn restoring_the_checkpoint_undoes_what_a_test_added() {
+        let mut tableau = Tableau::new();
+        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+        let a = tableau.create_new_named_node(&empty);
+        tableau.add_concept_assertion(concept("http://ex/C"), a, &empty, true);
+        tableau.push_abox_checkpoint();
+        let checkpoint = tableau.current_branching_point;
+        assert_eq!(tableau.abox_checkpoint, Some(checkpoint));
+        assert_eq!(tableau.nonbacktrackable_branching_point, checkpoint);
+
+        // A test: a root of its own, an edge to the individual and a fact on it.
+        let x = tableau.create_new_named_node(&empty);
+        tableau.add_concept_assertion(concept("http://ex/X"), x, &empty, true);
+        tableau.add_role_assertion(
+            Role::AtomicRole(AtomicRole::create("http://ex/r")),
+            x,
+            a,
+            &empty,
+            true,
+        );
+        tableau.add_concept_assertion(concept("http://ex/D"), a, &empty, true);
+        assert_eq!(tableau.get_number_of_nodes_in_tableau(), 2);
+
+        assert!(tableau.restore_abox_checkpoint());
+        assert_eq!(tableau.get_number_of_nodes_in_tableau(), 1);
+        assert_eq!(tableau.current_branching_point, checkpoint);
+        assert_eq!(tableau.nonbacktrackable_branching_point, checkpoint);
+        assert!(tableau.contains_concept_assertion(&concept("http://ex/C"), a));
+        assert!(!tableau.contains_concept_assertion(&concept("http://ex/D"), a));
+        assert!(!tableau.contains_clash());
+        // The checkpoint stays for the next test.
+        assert!(tableau.restore_abox_checkpoint());
+        assert_eq!(tableau.get_number_of_nodes_in_tableau(), 1);
+    }
+
+    #[test]
+    fn restoring_the_checkpoint_trims_the_tests_disjunctions() {
+        let mut tableau = Tableau::new();
+        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+        let a = tableau.create_new_named_node(&empty);
+        tableau.push_abox_checkpoint();
+        let arena = tableau.ground_disjunctions.len();
+        for _ in 0..3 {
+            let x = tableau.create_new_named_node(&empty);
+            tableau.derive_disjunction(
+                vec![
+                    DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/C")),
+                    DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/D")),
+                ],
+                vec![x, x],
+                vec![true, true],
+                empty.clone(),
+            );
+            assert!(tableau.process_first_ground_disjunction());
+            assert!(tableau.restore_abox_checkpoint());
+            assert_eq!(tableau.ground_disjunctions.len(), arena);
+            assert_eq!(tableau.get_number_of_nodes_in_tableau(), 1);
+            assert!(tableau.node(a).is_active());
+        }
+    }
+
+    #[test]
+    fn a_clash_on_an_abox_choice_is_flagged_instead_of_backtracked() {
+        let mut tableau = Tableau::new();
+        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+        let a = tableau.create_new_named_node(&empty);
+        // The ABox's own disjunction C(a) ∨ D(a): processing it pushes branching
+        // point 0 and asserts its first disjunct with a dependency on it.
+        tableau.derive_disjunction(
+            vec![
+                DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/C")),
+                DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/D")),
+            ],
+            vec![a, a],
+            vec![true, true],
+            empty.clone(),
+        );
+        assert!(tableau.process_first_ground_disjunction());
+        assert_eq!(tableau.current_branching_point, 0);
+        let chosen = if tableau.contains_concept_assertion(&concept("http://ex/C"), a) {
+            "http://ex/C"
+        } else {
+            "http://ex/D"
+        };
+        tableau.push_abox_checkpoint();
+        assert_eq!(tableau.abox_checkpoint, Some(1));
+
+        // A test refutes the chosen disjunct: the clash depends on branching
+        // point 0, below the checkpoint, so it is flagged and not backtracked.
+        let negation = Concept::from(AtomicConcept::create(chosen).get_negation());
+        tableau.add_concept_assertion(negation, a, &empty, true);
+        assert!(tableau.contains_clash());
+        assert!(!tableau.backtrack_on_clash());
+        assert!(tableau.abox_choice_clash);
+        assert_eq!(tableau.current_branching_point, 1);
+        // The checkpoint is no longer trusted: the ABox is loaded afresh.
+        assert!(!tableau.restore_abox_checkpoint());
+        tableau.clear();
+        assert_eq!(tableau.abox_checkpoint, None);
+        assert!(!tableau.abox_choice_clash);
+    }
+
+    #[test]
+    fn a_clash_on_an_abox_choice_under_a_dummy_branching_point_is_flagged() {
+        let mut tableau = Tableau::new();
+        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+        let a = tableau.create_new_named_node(&empty);
+        tableau.derive_disjunction(
+            vec![
+                DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/C")),
+                DLPredicate::AtomicConcept(AtomicConcept::create("http://ex/D")),
+            ],
+            vec![a, a],
+            vec![true, true],
+            empty.clone(),
+        );
+        assert!(tableau.process_first_ground_disjunction());
+        let chosen = if tableau.contains_concept_assertion(&concept("http://ex/C"), a) {
+            "http://ex/C"
+        } else {
+            "http://ex/D"
+        };
+        tableau.push_abox_checkpoint();
+        // A test's negated candidates carry a dummy dependency above the
+        // checkpoint; the clash's newest branching point is that dummy, but it
+        // also depends on the ABox's choice, so it is flagged all the same.
+        let dummy = DependencySet::Permanent(tableau.push_dummy_dependency_branching_point());
+        let negation = Concept::from(AtomicConcept::create(chosen).get_negation());
+        tableau.add_concept_assertion(negation, a, &dummy, true);
+        assert!(tableau.contains_clash());
+        assert!(!tableau.backtrack_on_clash());
+        assert!(tableau.abox_choice_clash);
+    }
+
+    #[test]
+    fn a_clash_on_the_tests_own_facts_is_unsatisfiable() {
+        let mut tableau = Tableau::new();
+        let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
+        let a = tableau.create_new_named_node(&empty);
+        tableau.add_concept_assertion(concept("http://ex/C"), a, &empty, true);
+        tableau.push_abox_checkpoint();
+        let negation = Concept::from(AtomicConcept::create("http://ex/C").get_negation());
+        tableau.add_concept_assertion(negation, a, &empty, true);
+        assert!(tableau.contains_clash());
+        // Nothing depends on any branching point: the clash is final and the
+        // checkpoint stays usable.
+        assert!(!tableau.backtrack_on_clash());
+        assert!(!tableau.abox_choice_clash);
+        assert!(tableau.restore_abox_checkpoint());
+        assert!(!tableau.contains_clash());
+        assert!(tableau.contains_concept_assertion(&concept("http://ex/C"), a));
     }
 }
