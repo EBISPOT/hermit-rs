@@ -213,6 +213,22 @@ impl DLOntology {
     pub fn get_all_atomic_concepts(&self) -> &BTreeSet<AtomicConcept> {
         &self.all_atomic_concepts
     }
+    /// The first index free for the fresh concepts a delta clausification
+    /// mints: past the number of atomic concepts, which a dense numbering
+    /// would have reached, and past every `internal:<family>#<n>` concept the
+    /// ontology holds. The rewriting of universal restrictions leaves gaps in
+    /// its numbering (the states it eliminates), so the count alone could name
+    /// a state that is still in use.
+    pub fn next_replacement_index(&self) -> usize {
+        let past_internal = self
+            .all_atomic_concepts
+            .iter()
+            .filter_map(|concept| fresh_concept_index(concept.iri()))
+            .map(|index| index + 1)
+            .max()
+            .unwrap_or(0);
+        past_internal.max(self.all_atomic_concepts.len())
+    }
     pub fn contains_atomic_concept(&self, concept: &AtomicConcept) -> bool {
         self.all_atomic_concepts.contains(concept)
     }
@@ -510,4 +526,15 @@ impl std::fmt::Display for DLOntology {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string_prefixes(Prefixes::standard()))
     }
+}
+
+/// The index of a fresh concept `internal:<family>#<index>`, as the
+/// normalization and the universal-restriction rewriting name them; `None` for
+/// any other IRI, the nominal concepts `internal:nom#<iri>` among them.
+fn fresh_concept_index(iri: &str) -> Option<usize> {
+    let (family, index) = iri.strip_prefix("internal:")?.split_once('#')?;
+    if family.is_empty() || !family.bytes().all(|b| b.is_ascii_alphabetic()) {
+        return None;
+    }
+    index.parse().ok()
 }

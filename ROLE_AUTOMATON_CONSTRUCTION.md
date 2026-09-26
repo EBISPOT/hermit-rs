@@ -48,7 +48,11 @@ each class test, as it is when the ontology has nominals, that is a pass over th
 whole ABox per state per test. A disjunction with such a state, or with `∀S.` of
 it, is a tautology and is dropped; its complement is a false disjunct and is
 dropped; `∀S.¬` of it is `∀S.⊥`. The transitions out of a universal initial state
-and into a universal final state then fire on their edge alone.
+and into a universal final state then fire on their edge alone. The indices of the
+eliminated states stay unused, so a delta clausified on top of the ontology (the
+property-instance read-off's markers, an incremental addition) numbers its own
+fresh concepts from `DLOntology::next_replacement_index`, which lies past every
+fresh concept in use as well as past the atomic-concept count.
 
 The properties are built in `prop_sort_key` order, and a minimised automaton
 numbers its states in the order the subset construction discovers them, taking the

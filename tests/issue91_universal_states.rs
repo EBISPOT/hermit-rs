@@ -5,7 +5,9 @@
 //! a single edge, along a transitive chain, along a property chain, at the
 //! class level and at the instance level, and nothing must become universal.
 
-use hermit_rs::reasoner::{is_concept_satisfiable, is_entailed, is_subsumed_by};
+use hermit_rs::reasoner::{
+    is_concept_satisfiable, is_entailed, is_subsumed_by, ObjectPropertyInstanceIndex,
+};
 use horned_owl::model::{
     Build, ClassAssertion, ClassExpression as CE, Component, Individual, ObjectPropertyExpression as OPE,
 };
@@ -126,4 +128,28 @@ fn a_class_with_no_successors_over_the_role_is_still_closed() {
     assert!(!is_concept_satisfiable(&onto, g_with(some("R", thing()))).unwrap());
     assert!(!is_concept_satisfiable(&onto, g_with(some("P", some("R", thing())))).unwrap());
     assert!(is_concept_satisfiable(&onto, g_with(some("Q", thing()))).unwrap());
+}
+
+/// The property-instance index adds its marker axioms as a delta clausified on
+/// top of the ontology's clauses. Its fresh concepts must not reuse a state the
+/// eliminated universal states left a gap before (the read-off used to report
+/// a contradiction on a consistent ontology).
+#[test]
+fn property_instances_are_read_off_over_the_eliminated_states() {
+    let onto = ontology("");
+    let mut index = ObjectPropertyInstanceIndex::new(&onto).expect("index");
+    let mut pairs: Vec<(String, String)> = index
+        .object_property_instances(role("R"))
+        .expect("instances")
+        .into_iter()
+        .map(|(source, target)| (source.0.to_string(), target.0.to_string()))
+        .collect();
+    pairs.sort();
+    let expected: Vec<(String, String)> = [
+        ("a", "b"), ("a", "c"), ("a", "e"), ("b", "c"), ("b", "e"), ("d", "b"), ("d", "c"), ("d", "e"),
+    ]
+    .iter()
+    .map(|(s, t)| (format!("http://example.org/{s}"), format!("http://example.org/{t}")))
+    .collect();
+    assert_eq!(pairs, expected);
 }
