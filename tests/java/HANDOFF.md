@@ -63,7 +63,10 @@ The role automata no longer keep HermiT's `buildInversePropertiesMap` flaw
 `isSubObjectPropertyExpressionOf` and the property classifiers. The automata are
 now built from the role box as a grammar, per class of equivalent roles, and
 each is kept in its minimal deterministic form, so a `∀R.C` over a role box the
-size of RO's becomes tens of clauses rather than thousands. A brute-force
+size of RO's becomes tens of clauses rather than thousands, and a state that
+holds of every node (the initial state of a range axiom, the final states of a
+domain axiom) is eliminated from the clauses rather than derived on every node
+of every tableau (#91). A brute-force
 comparison over random role boxes checks that each automaton accepts exactly the
 entailed role words. See `ROLE_AUTOMATON_CONSTRUCTION.md` and
 `tests/inverse_transitive_automaton_tests.rs`.

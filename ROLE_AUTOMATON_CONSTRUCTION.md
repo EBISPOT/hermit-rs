@@ -38,6 +38,18 @@ state and one clause per transition, and a node carries one state concept per
 copy its incoming words reach. The minimal automaton is the smallest that decides
 the same words, and it is the same automaton whatever shape it was assembled in.
 
+A state that holds of every node is eliminated from the clauses
+(`eliminate_universal_states`). The initial state of `⊤ ⊑ ∀R.C`, a range axiom on
+a complex role, is such a state, as are the final states of `∀R.⊥`, which is what a
+domain axiom `∃R.⊤ ⊑ C` becomes, and the states an ε transition leads from them to.
+Left in, each is derived on every node of every tableau and matched against the
+node's edges for every transition clause it occurs in: with the ABox loaded into
+each class test, as it is when the ontology has nominals, that is a pass over the
+whole ABox per state per test. A disjunction with such a state, or with `∀S.` of
+it, is a tautology and is dropped; its complement is a false disjunct and is
+dropped; `∀S.¬` of it is `∀S.⊥`. The transitions out of a universal initial state
+and into a universal final state then fire on their edge alone.
+
 The properties are built in `prop_sort_key` order, and a minimised automaton
 numbers its states in the order the subset construction discovers them, taking the
 labels in that same order, so the output is deterministic.
