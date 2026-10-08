@@ -42,6 +42,31 @@ use super::A;
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 const RDF_PLAIN_LITERAL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral";
 
+/// HermiT's `UnsupportedDatatypeException` message for a literal whose datatype
+/// is outside the OWL 2 datatype map (`DatatypeRegistry.parseLiteral`), line for
+/// line.
+pub(crate) fn unsupported_literal_datatype_message(datatype_uri: &str) -> String {
+    format!(
+        "Literals can only use the datatypes from the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype '{datatype_uri}' is not part of the OWL 2 datatype map and \n\
+         HermiT cannot parse this literal."
+    )
+}
+
+/// HermiT's `UnsupportedDatatypeException` message for a data range over a
+/// datatype outside the OWL 2 datatype map that no `DatatypeDefinition` defines
+/// (`DatatypeRegistry.getHandlerFor`), line for line.
+pub(crate) fn unsupported_datatype_message(datatype_uri: &str) -> String {
+    format!(
+        "HermiT supports all and only the datatypes of the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype '{datatype_uri}' is not part of the OWL 2 datatype map and \n\
+         no custom datatype definition is given; \n\
+         therefore, HermiT cannot handle this datatype."
+    )
+}
+
 /// Faithful analogue of Java `OWLClausification.getConstant` /
 /// `DataRangeConverter.visit(OWLLiteral)` (and the identical
 /// `ReducedABoxOnlyClausification.getConstant`): build an interned constant from
@@ -80,11 +105,7 @@ pub(crate) fn build_validated_constant(
         if ignore_unsupported_datatypes {
             return Ok(Constant::create_unsupported_literal(&lexical_form));
         }
-        return Err(format!(
-            "Unsupported datatype '{datatype_uri}': literals can only use the datatypes \
-             of the OWL 2 datatype map. (HermiT rejects such ontologies unless unsupported \
-             datatypes are ignored.)"
-        ));
+        return Err(unsupported_literal_datatype_message(&datatype_uri));
     }
     // Supported datatype: a malformed LEXICAL form is the MalformedLiteralException
     // analogue, which is fatal regardless of ignore_unsupported_datatypes.
@@ -248,6 +269,31 @@ pub struct DataRangeConverter<'a> {
 }
 
 impl<'a> DataRangeConverter<'a> {
+    /// The refusal recorded so far, as HermiT throws it, if any: an unsupported
+    /// datatype (`UnsupportedDatatypeException`, unless
+    /// ignore_unsupported_datatypes), an unsupported facet
+    /// (`UnsupportedFacetException`), then a literal or resource inside a data range
+    /// that `parseLiteral` rethrows on (`MalformedLiteralException` /
+    /// `UnsupportedDatatypeException`).
+    fn take_refusal(&mut self) -> Result<(), String> {
+        if let Some(datatype) = &self.unsupported_datatype {
+            return Err(unsupported_datatype_message(datatype));
+        }
+        if let Some((datatype, facet)) = &self.unsupported_facet {
+            return Err(format!(
+                "Unsupported facet '{facet}' on datatype '{datatype}': HermiT's datatype \
+                 registry does not support this facet for this datatype."
+            ));
+        }
+        if let Some(message) = self.literal_error.take() {
+            return Err(message);
+        }
+        if let Some(message) = self.resource_error.take() {
+            return Err(message);
+        }
+        Ok(())
+    }
+
     fn new(ignore_unsupported_datatypes: bool, defined_datatype_iris: &'a HashSet<String>) -> Self {
         DataRangeConverter {
             ignore_unsupported_datatypes,
@@ -1457,6 +1503,9 @@ impl OWLClausification {
         for has_key in &axioms.has_keys {
             dl_clauses.insert(clausify_key(has_key));
         }
+        // HermiT throws the moment a class, data range or key axiom meets what it
+        // refuses, so such a refusal comes before any a fact meets.
+        converter.take_refusal()?;
 
         // Java's `m_facts` and `m_rules` are `HashSet`s, so equal entries never
         // produce duplicate clauses. The Rust container keeps insertion order in
@@ -1535,31 +1584,8 @@ impl OWLClausification {
             atomic_data_roles.insert(AtomicRole::create(data_property.0.to_string()));
         }
 
-        // Reject an ontology using an unsupported datatype, as HermiT throws
-        // UnsupportedDatatypeException by default (unless ignore_unsupported_datatypes).
-        if let Some(datatype) = &converter.unsupported_datatype {
-            return Err(format!(
-                "Unsupported datatype '{datatype}': it is not a recognized OWL 2 datatype and is \
-                 not defined by a DatatypeDefinition. (HermiT rejects such ontologies unless \
-                 unsupported datatypes are ignored.)"
-            ));
-        }
-        // Reject an unsupported facet, as HermiT throws UnsupportedFacetException.
-        if let Some((datatype, facet)) = &converter.unsupported_facet {
-            return Err(format!(
-                "Unsupported facet '{facet}' on datatype '{datatype}': HermiT's datatype \
-                 registry does not support this facet for this datatype."
-            ));
-        }
-        // Reject a literal (inside a data range) with a malformed lexical form of a
-        // supported datatype, or an unsupported datatype, as HermiT rethrows
-        // MalformedLiteralException / UnsupportedDatatypeException from parseLiteral.
-        if let Some(message) = converter.literal_error.take() {
-            return Err(message);
-        }
-        if let Some(message) = converter.resource_error.take() {
-            return Err(message);
-        }
+        // What the rules met.
+        converter.take_refusal()?;
         let all_unknown_datatype_restrictions =
             std::mem::take(&mut converter.all_unknown_datatype_restrictions);
         let defined_datatype_iris: HashSet<String> = axioms.defined_datatype_iris.clone();
@@ -1883,7 +1909,13 @@ mod tests {
     #[test]
     fn build_validated_constant_handles_unsupported_datatype() {
         let custom = "http://example.org/MyType";
-        assert!(super::build_validated_constant("v".into(), custom.into(), false).is_err());
+        assert_eq!(
+            super::build_validated_constant("v".into(), custom.into(), false).unwrap_err(),
+            "Literals can only use the datatypes from the OWL 2 datatype map, see \n\
+             http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+             The datatype 'http://example.org/MyType' is not part of the OWL 2 datatype map and \n\
+             HermiT cannot parse this literal."
+        );
         let anon = super::build_validated_constant("v".into(), custom.into(), true)
             .expect("ignore_unsupported_datatypes substitutes an anonymous constant");
         assert!(anon.is_anonymous());
