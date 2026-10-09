@@ -755,7 +755,7 @@ impl AxiomClausifier {
             // an abstract variable; the object (variable2) ranges over data
             // values and must NOT be restricted to named individuals.
             SwrlAtom::DataPropertyAtom { pred, args } => {
-                let v1 = to_variable_d(&args.0)?;
+                let v1 = to_variable_i(&args.0)?;
                 let v2 = to_variable_d(&args.1)?;
                 if !abstract_variables.contains(&v1) {
                     abstract_variables.push(v1.clone());
@@ -1748,7 +1748,7 @@ mod tests {
         o.insert(Component::Rule(Rule {
             body: vec![SwrlAtom::DataPropertyAtom {
                 pred: dp.clone(),
-                args: (dvar(&b, "urn:x"), dvar(&b, "urn:y")),
+                args: (ivar(&b, "urn:x"), dvar(&b, "urn:y")),
             }],
             head: vec![SwrlAtom::ClassAtom { pred: c_expr(&c), arg: ivar(&b, "urn:x") }],
         }));
@@ -1837,7 +1837,7 @@ mod tests {
         o.insert(Component::Rule(Rule {
             body: vec![SwrlAtom::DataPropertyAtom {
                 pred: dp.clone(),
-                args: (dvar(&b, "urn:x"), DArgument::Literal(Literal::Simple {
+                args: (ivar(&b, "urn:x"), DArgument::Literal(Literal::Simple {
                     literal: "7".to_string(),
                 })),
             }],
@@ -1874,6 +1874,80 @@ mod tests {
 
         let consistent = is_ontology_consistent(&o).expect("empty-body rule should become a fact");
         assert!(!consistent, "F-2: empty-body rule must assert C(a) as a fact");
+    }
+
+    /// A data-property atom's subject may be a named individual: `dp(a, ?y) ∧
+    /// D(?x) -> C(?x)` binds `a` through a fresh variable, so with `dp(a, "5")`,
+    /// `D(b)` and C disjoint from D the rule fires on `b` and clashes. Without
+    /// the assertion it does not fire.
+    #[test]
+    fn data_property_atom_with_an_individual_subject() {
+        let b = build();
+        let c = class(&b, "http://ex/C");
+        let d = class(&b, "http://ex/D");
+        let dp = dprop(&b, "http://ex/dp");
+        let a = named(&b, "http://ex/a");
+        let x = ind(&b, "http://ex/b");
+        let ontology = |asserted: bool| {
+            let mut o: SetOntology<A> = SetOntology::new();
+            o.insert(Component::DeclareDataProperty(horned_owl::model::DeclareDataProperty(dp.clone())));
+            if asserted {
+                o.insert(Component::DataPropertyAssertion(horned_owl::model::DataPropertyAssertion {
+                    dp: dp.clone(),
+                    from: Individual::Named(a.clone()),
+                    to: Literal::Simple { literal: "5".to_string() },
+                }));
+            }
+            o.insert(Component::ClassAssertion(horned_owl::model::ClassAssertion {
+                ce: c_expr(&d),
+                i: x.clone(),
+            }));
+            o.insert(Component::DisjointClasses(DisjointClasses(vec![c_expr(&c), c_expr(&d)])));
+            o.insert(Component::Rule(Rule {
+                body: vec![
+                    SwrlAtom::DataPropertyAtom {
+                        pred: dp.clone(),
+                        args: (IArgument::Individual(Individual::Named(a.clone())), dvar(&b, "urn:y")),
+                    },
+                    SwrlAtom::ClassAtom { pred: c_expr(&d), arg: ivar(&b, "urn:x") },
+                ],
+                head: vec![SwrlAtom::ClassAtom { pred: c_expr(&c), arg: ivar(&b, "urn:x") }],
+            }));
+            o
+        };
+        assert!(!is_ontology_consistent(&ontology(true)).expect("the rule is accepted"));
+        assert!(is_ontology_consistent(&ontology(false)).expect("the rule is accepted"));
+    }
+
+    /// An empty-body rule's data-property atom is a fact: `() -> dp(a, "2")`
+    /// with `dp(a, "1")` and dp functional is inconsistent, and `() -> dp(a,
+    /// "1")` is not. A variable in such a fact is refused.
+    #[test]
+    fn empty_body_data_property_atom_becomes_fact() {
+        let b = build();
+        let dp = dprop(&b, "http://ex/dp");
+        let a = named(&b, "http://ex/a");
+        let fact = |subject: IArgument<A>, value: &str| {
+            let mut o: SetOntology<A> = SetOntology::new();
+            o.insert(Component::FunctionalDataProperty(horned_owl::model::FunctionalDataProperty(dp.clone())));
+            o.insert(Component::DataPropertyAssertion(horned_owl::model::DataPropertyAssertion {
+                dp: dp.clone(),
+                from: Individual::Named(a.clone()),
+                to: Literal::Simple { literal: "1".to_string() },
+            }));
+            o.insert(Component::Rule(Rule {
+                body: vec![],
+                head: vec![SwrlAtom::DataPropertyAtom {
+                    pred: dp.clone(),
+                    args: (subject, DArgument::Literal(Literal::Simple { literal: value.to_string() })),
+                }],
+            }));
+            is_ontology_consistent(&o)
+        };
+        let named_a = || IArgument::Individual(Individual::Named(a.clone()));
+        assert!(!fact(named_a(), "2").expect("a named subject and a literal make a fact"));
+        assert!(fact(named_a(), "1").expect("a named subject and a literal make a fact"));
+        assert!(fact(ivar(&b, "urn:x"), "1").is_err(), "a variable cannot be a fact's subject");
     }
 
     fn c_expr(c: &Class<A>) -> CE {

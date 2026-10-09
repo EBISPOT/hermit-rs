@@ -136,7 +136,9 @@ fn blank_node_with_non_assertion_triples_stays_unparsed() {
 
 #[test]
 fn owl1_named_class_connectives_are_equivalences() {
-    // OWL 2 Mapping to RDF Graphs, Table 18.
+    // OWL 2 Mapping to RDF Graphs, Table 18. A connective keeps its operands as
+    // the document lists them: a union of one class and an empty intersection
+    // stand as stated.
     let c = parse_components(
         r#"<owl:Class rdf:about="urn:ex#A"/><owl:Class rdf:about="urn:ex#B"/>
         <owl:Class rdf:about="urn:ex#AB"><owl:intersectionOf rdf:parseType="Collection"><owl:Class rdf:about="urn:ex#A"/><owl:Class rdf:about="urn:ex#B"/></owl:intersectionOf></owl:Class>
@@ -148,8 +150,8 @@ fn owl1_named_class_connectives_are_equivalences() {
     let s = show(&c);
     for expected in [
         r#"EquivalentClasses([Class(Class(IRI("urn:ex#AB"))), ObjectIntersectionOf([Class(Class(IRI("urn:ex#A"))), Class(Class(IRI("urn:ex#B")))])])"#,
-        r#"EquivalentClasses([Class(Class(IRI("urn:ex#AorB"))), Class(Class(IRI("urn:ex#A")))])"#,
-        r#"EquivalentClasses([Class(Class(IRI("urn:ex#Top"))), Class(Class(IRI("http://www.w3.org/2002/07/owl#Thing")))])"#,
+        r#"EquivalentClasses([Class(Class(IRI("urn:ex#AorB"))), ObjectUnionOf([Class(Class(IRI("urn:ex#A")))])])"#,
+        r#"EquivalentClasses([Class(Class(IRI("urn:ex#Top"))), ObjectIntersectionOf([])])"#,
         r#"EquivalentClasses([Class(Class(IRI("urn:ex#NotA"))), ObjectComplementOf(Class(Class(IRI("urn:ex#A"))))])"#,
         r#"EquivalentClasses([Class(Class(IRI("urn:ex#I"))), ObjectOneOf([Named(NamedIndividual(IRI("urn:ex#i")))])])"#,
     ] {
