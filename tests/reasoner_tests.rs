@@ -1150,7 +1150,14 @@ fn unsupported_datatype_is_rejected() {
         },
         i: Individual::Named(a.clone()),
     }));
-    assert!(hermit_rs::reasoner::is_ontology_consistent(&o).is_err());
+    assert_eq!(
+        hermit_rs::reasoner::is_ontology_consistent(&o).unwrap_err(),
+        "HermiT supports all and only the datatypes of the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype 'http://example.org/MyType' is not part of the OWL 2 datatype map and \n\
+         no custom datatype definition is given; \n\
+         therefore, HermiT cannot handle this datatype."
+    );
 }
 
 #[test]
@@ -1206,8 +1213,15 @@ fn unsupported_datatype_literal_rejected_or_anonymized_by_config() {
         to: Literal::Datatype { literal: "v".to_string(), datatype_iri: custom.0.clone() },
     }));
 
-    // Default configuration: the ontology is rejected at clausification.
-    assert!(clausify_result(&ontology).is_err());
+    // Default configuration: the ontology is rejected at clausification, with
+    // HermiT's message.
+    assert_eq!(
+        clausify_result(&ontology).err().expect("the literal is refused"),
+        "Literals can only use the datatypes from the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype 'http://example.org/MyType' is not part of the OWL 2 datatype map and \n\
+         HermiT cannot parse this literal."
+    );
 
     // ignore_unsupported_datatypes: clausification succeeds (anonymous constant)
     // and the ontology is consistent.
@@ -1220,6 +1234,63 @@ fn unsupported_datatype_literal_rejected_or_anonymized_by_config() {
         .clausify("http://example.org/onto", &axioms, &expressivity)
         .expect("ignore_unsupported_datatypes accepts the unsupported-datatype literal");
     assert!(Reasoner::new(&dl).is_consistent());
+}
+
+#[test]
+fn configured_services_follow_the_unsupported_datatype_flag() {
+    // HermiT's Reasoner clausifies under its own Configuration. Under the default
+    // every service refuses a datatype outside the OWL 2 datatype map, the data
+    // range's message first (the TBox is clausified before the facts); under
+    // ignoreUnsupportedDatatypes every service reads past it.
+    use horned_owl::model::{DataProperty, DataPropertyAssertion, DataRange, Literal, SubClassOf};
+    use hermit_rs::configuration::Configuration as ReasonerConfiguration;
+    use hermit_rs::reasoner as services;
+    let build = Build::new_arc();
+    let p = build.data_property("http://example.org/p");
+    let a = build.class("http://example.org/A");
+    let b = build.class("http://example.org/B");
+    let i = build.named_individual("http://example.org/i");
+    let date = build.datatype("http://www.w3.org/2001/XMLSchema#date");
+    let mut o: SetOntology<_> = SetOntology::new();
+    o.insert(Component::SubClassOf(SubClassOf { sub: CE::Class(a.clone()), sup: CE::Class(b.clone()) }));
+    o.insert(Component::SubClassOf(SubClassOf {
+        sub: CE::Class(b.clone()),
+        sup: CE::DataSomeValuesFrom { dp: DataProperty(p.0.clone()), dr: DataRange::Datatype(date.clone()) },
+    }));
+    o.insert(Component::ClassAssertion(ClassAssertion {
+        ce: CE::Class(a.clone()),
+        i: Individual::Named(i.clone()),
+    }));
+    o.insert(Component::DataPropertyAssertion(DataPropertyAssertion {
+        dp: DataProperty(p.0.clone()),
+        from: Individual::Named(i.clone()),
+        to: Literal::Datatype { literal: "2020-01-01".to_string(), datatype_iri: date.0.clone() },
+    }));
+
+    let strict = ReasonerConfiguration::default();
+    let refusal = "HermiT supports all and only the datatypes of the OWL 2 datatype map, see \n\
+                   http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+                   The datatype 'http://www.w3.org/2001/XMLSchema#date' is not part of the OWL 2 datatype map and \n\
+                   no custom datatype definition is given; \n\
+                   therefore, HermiT cannot handle this datatype.";
+    assert_eq!(services::classify_with_configuration(&o, &strict).err().as_deref(), Some(refusal));
+    assert_eq!(services::is_ontology_consistent_with_configuration(&o, &strict).err().as_deref(), Some(refusal));
+    assert_eq!(services::realize_with_configuration(&o, &strict).err().as_deref(), Some(refusal));
+    let (sub, sup) = (CE::Class(a.clone()), CE::Class(b.clone()));
+    assert_eq!(
+        services::is_subsumed_by_with_configuration(&o, sub.clone(), sup.clone(), &strict).err().as_deref(),
+        Some(refusal)
+    );
+
+    let lenient = ReasonerConfiguration { ignore_unsupported_datatypes: true, ..ReasonerConfiguration::default() };
+    let h = services::classify_with_configuration(&o, &lenient).expect("the flag reads past xsd:date");
+    let a_node = h.node_for_element(&a).unwrap();
+    let b_node = h.node_for_element(&b).unwrap();
+    assert!(h.ancestor_nodes(a_node).contains(&b_node));
+    assert_eq!(services::is_ontology_consistent_with_configuration(&o, &lenient), Ok(true));
+    assert_eq!(services::is_subsumed_by_with_configuration(&o, sub, sup, &lenient), Ok(true));
+    let types = services::realize_with_configuration(&o, &lenient).expect("the flag reads past xsd:date");
+    assert!(types[&i].contains(&a));
 }
 
 #[test]

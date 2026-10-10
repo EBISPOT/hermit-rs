@@ -965,25 +965,23 @@ impl OWLNormalization {
                 // fact; unlike the ABox `visit(OWLObjectPropertyAssertionAxiom)` it
                 // does NOT record the property in objectPropertiesOccurringInOWLAxioms.
             }
-            SwrlAtomKind::DataPropertyAtom { args, .. } => {
-                // visit(SWRLDataPropertyAtom). Java requires the subject to be an
-                // SWRLIndividualArgument and the object a SWRLLiteralArgument,
-                // producing DataPropertyAssertion(dp, individual, literal).
-                //
-                // horned-owl models BOTH data-property arguments as `DArgument`s,
-                // which can only be a literal or a variable -- never an
-                // individual. An empty-body rule fact thus cannot carry the named
-                // individual subject HermiT requires, so this shape is not
-                // representable in horned-owl's SWRL model. A variable in a
-                // body-less rule head never occurs in the body, which HermiT
-                // already rejects.
-                let _ = args;
-                return Err(
-                    "A SWRL fact (empty-body rule) with a data-property atom is not representable: \
-                     horned-owl models the data-property subject as a literal/variable rather than \
-                     an individual."
-                        .into(),
-                );
+            SwrlAtomKind::DataPropertyAtom { pred, args } => {
+                // visit(SWRLDataPropertyAtom): the object must be a literal and
+                // the subject a named individual; the fact is their data
+                // property assertion.
+                let literal = match &args.1 {
+                    DArgument::Literal(l) => l.clone(),
+                    DArgument::Variable(_) => return Err(Self::var_head_error()),
+                };
+                let individual = match &args.0 {
+                    IArgument::Individual(i) => Self::require_named(i)?,
+                    IArgument::Variable(_) => return Err(Self::var_head_error()),
+                };
+                self.add_fact(Fact::DataPropertyAssertion {
+                    dp: pred.clone(),
+                    from: Individual::Named(individual),
+                    to: literal,
+                });
             }
             SwrlAtomKind::SameIndividualAtom(a1, a2) => {
                 let i1 = Self::iarg_named(a1)?;
@@ -1292,22 +1290,7 @@ impl OWLNormalization {
                 }
             }
             SwrlAtomKind::DataPropertyAtom { pred, args } => {
-                let variable1 = match &args.0 {
-                    DArgument::Variable(v) => nz
-                        .variable_representative
-                        .get(v)
-                        .cloned()
-                        .unwrap_or_else(|| v.clone()),
-                    DArgument::Literal(_) => {
-                        // Java models the subject as an SWRLIArgument; a literal
-                        // subject is not representable in OWL-API. In horned-owl
-                        // both args are DArguments, so a literal subject would be
-                        // ill-formed input. Treat it as unsupported.
-                        return Err("A SWRL rule contains a data property atom whose subject is \
-                                    a literal, which is not allowed."
-                            .into());
-                    }
-                };
+                let variable1 = self.rn_variable_for(nz, &args.0, body_work)?;
                 match &args.1 {
                     DArgument::Variable(v2) => {
                         let variable2 = nz
@@ -1319,7 +1302,7 @@ impl OWLNormalization {
                             nz.normalized_head_atoms.insert(SwrlAtomKind::DataPropertyAtom {
                                 pred: pred.clone(),
                                 args: (
-                                    DArgument::Variable(variable1),
+                                    IArgument::Variable(variable1),
                                     DArgument::Variable(variable2.clone()),
                                 ),
                             });
@@ -1328,7 +1311,7 @@ impl OWLNormalization {
                             nz.normalized_body_atoms.insert(SwrlAtomKind::DataPropertyAtom {
                                 pred: pred.clone(),
                                 args: (
-                                    DArgument::Variable(variable1),
+                                    IArgument::Variable(variable1),
                                     DArgument::Variable(variable2),
                                 ),
                             });
@@ -1339,7 +1322,7 @@ impl OWLNormalization {
                             nz.normalized_body_atoms.insert(SwrlAtomKind::DataPropertyAtom {
                                 pred: pred.clone(),
                                 args: (
-                                    DArgument::Variable(variable1),
+                                    IArgument::Variable(variable1),
                                     DArgument::Variable(fresh.clone()),
                                 ),
                             });
@@ -2054,7 +2037,7 @@ mod swrl_parity_tests {
         o.insert(Component::Rule(Rule {
             body: vec![SwrlAtom::DataPropertyAtom {
                 pred: dp.clone(),
-                args: (dvar(&b, "urn:x"), dvar(&b, "urn:y")),
+                args: (ivar(&b, "urn:x"), dvar(&b, "urn:y")),
             }],
             head: vec![SwrlAtom::DataRangeAtom {
                 pred: DataRange::Datatype(xsd_integer),

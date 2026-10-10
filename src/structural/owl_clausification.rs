@@ -42,6 +42,31 @@ use super::A;
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 const RDF_PLAIN_LITERAL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral";
 
+/// HermiT's `UnsupportedDatatypeException` message for a literal whose datatype
+/// is outside the OWL 2 datatype map (`DatatypeRegistry.parseLiteral`), line for
+/// line.
+pub(crate) fn unsupported_literal_datatype_message(datatype_uri: &str) -> String {
+    format!(
+        "Literals can only use the datatypes from the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype '{datatype_uri}' is not part of the OWL 2 datatype map and \n\
+         HermiT cannot parse this literal."
+    )
+}
+
+/// HermiT's `UnsupportedDatatypeException` message for a data range over a
+/// datatype outside the OWL 2 datatype map that no `DatatypeDefinition` defines
+/// (`DatatypeRegistry.getHandlerFor`), line for line.
+pub(crate) fn unsupported_datatype_message(datatype_uri: &str) -> String {
+    format!(
+        "HermiT supports all and only the datatypes of the OWL 2 datatype map, see \n\
+         http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+         The datatype '{datatype_uri}' is not part of the OWL 2 datatype map and \n\
+         no custom datatype definition is given; \n\
+         therefore, HermiT cannot handle this datatype."
+    )
+}
+
 /// Faithful analogue of Java `OWLClausification.getConstant` /
 /// `DataRangeConverter.visit(OWLLiteral)` (and the identical
 /// `ReducedABoxOnlyClausification.getConstant`): build an interned constant from
@@ -80,11 +105,7 @@ pub(crate) fn build_validated_constant(
         if ignore_unsupported_datatypes {
             return Ok(Constant::create_unsupported_literal(&lexical_form));
         }
-        return Err(format!(
-            "Unsupported datatype '{datatype_uri}': literals can only use the datatypes \
-             of the OWL 2 datatype map. (HermiT rejects such ontologies unless unsupported \
-             datatypes are ignored.)"
-        ));
+        return Err(unsupported_literal_datatype_message(&datatype_uri));
     }
     // Supported datatype: a malformed LEXICAL form is the MalformedLiteralException
     // analogue, which is fatal regardless of ignore_unsupported_datatypes.
@@ -248,6 +269,31 @@ pub struct DataRangeConverter<'a> {
 }
 
 impl<'a> DataRangeConverter<'a> {
+    /// The refusal recorded so far, as HermiT throws it, if any: an unsupported
+    /// datatype (`UnsupportedDatatypeException`, unless
+    /// ignore_unsupported_datatypes), an unsupported facet
+    /// (`UnsupportedFacetException`), then a literal or resource inside a data range
+    /// that `parseLiteral` rethrows on (`MalformedLiteralException` /
+    /// `UnsupportedDatatypeException`).
+    fn take_refusal(&mut self) -> Result<(), String> {
+        if let Some(datatype) = &self.unsupported_datatype {
+            return Err(unsupported_datatype_message(datatype));
+        }
+        if let Some((datatype, facet)) = &self.unsupported_facet {
+            return Err(format!(
+                "Unsupported facet '{facet}' on datatype '{datatype}': HermiT's datatype \
+                 registry does not support this facet for this datatype."
+            ));
+        }
+        if let Some(message) = self.literal_error.take() {
+            return Err(message);
+        }
+        if let Some(message) = self.resource_error.take() {
+            return Err(message);
+        }
+        Ok(())
+    }
+
     fn new(ignore_unsupported_datatypes: bool, defined_datatype_iris: &'a HashSet<String>) -> Self {
         DataRangeConverter {
             ignore_unsupported_datatypes,
@@ -709,7 +755,7 @@ impl AxiomClausifier {
             // an abstract variable; the object (variable2) ranges over data
             // values and must NOT be restricted to named individuals.
             SwrlAtom::DataPropertyAtom { pred, args } => {
-                let v1 = to_variable_d(&args.0)?;
+                let v1 = to_variable_i(&args.0)?;
                 let v2 = to_variable_d(&args.1)?;
                 if !abstract_variables.contains(&v1) {
                     abstract_variables.push(v1.clone());
@@ -1457,6 +1503,9 @@ impl OWLClausification {
         for has_key in &axioms.has_keys {
             dl_clauses.insert(clausify_key(has_key));
         }
+        // HermiT throws the moment a class, data range or key axiom meets what it
+        // refuses, so such a refusal comes before any a fact meets.
+        converter.take_refusal()?;
 
         // Java's `m_facts` and `m_rules` are `HashSet`s, so equal entries never
         // produce duplicate clauses. The Rust container keeps insertion order in
@@ -1535,31 +1584,8 @@ impl OWLClausification {
             atomic_data_roles.insert(AtomicRole::create(data_property.0.to_string()));
         }
 
-        // Reject an ontology using an unsupported datatype, as HermiT throws
-        // UnsupportedDatatypeException by default (unless ignore_unsupported_datatypes).
-        if let Some(datatype) = &converter.unsupported_datatype {
-            return Err(format!(
-                "Unsupported datatype '{datatype}': it is not a recognized OWL 2 datatype and is \
-                 not defined by a DatatypeDefinition. (HermiT rejects such ontologies unless \
-                 unsupported datatypes are ignored.)"
-            ));
-        }
-        // Reject an unsupported facet, as HermiT throws UnsupportedFacetException.
-        if let Some((datatype, facet)) = &converter.unsupported_facet {
-            return Err(format!(
-                "Unsupported facet '{facet}' on datatype '{datatype}': HermiT's datatype \
-                 registry does not support this facet for this datatype."
-            ));
-        }
-        // Reject a literal (inside a data range) with a malformed lexical form of a
-        // supported datatype, or an unsupported datatype, as HermiT rethrows
-        // MalformedLiteralException / UnsupportedDatatypeException from parseLiteral.
-        if let Some(message) = converter.literal_error.take() {
-            return Err(message);
-        }
-        if let Some(message) = converter.resource_error.take() {
-            return Err(message);
-        }
+        // What the rules met.
+        converter.take_refusal()?;
         let all_unknown_datatype_restrictions =
             std::mem::take(&mut converter.all_unknown_datatype_restrictions);
         let defined_datatype_iris: HashSet<String> = axioms.defined_datatype_iris.clone();
@@ -1722,7 +1748,7 @@ mod tests {
         o.insert(Component::Rule(Rule {
             body: vec![SwrlAtom::DataPropertyAtom {
                 pred: dp.clone(),
-                args: (dvar(&b, "urn:x"), dvar(&b, "urn:y")),
+                args: (ivar(&b, "urn:x"), dvar(&b, "urn:y")),
             }],
             head: vec![SwrlAtom::ClassAtom { pred: c_expr(&c), arg: ivar(&b, "urn:x") }],
         }));
@@ -1811,7 +1837,7 @@ mod tests {
         o.insert(Component::Rule(Rule {
             body: vec![SwrlAtom::DataPropertyAtom {
                 pred: dp.clone(),
-                args: (dvar(&b, "urn:x"), DArgument::Literal(Literal::Simple {
+                args: (ivar(&b, "urn:x"), DArgument::Literal(Literal::Simple {
                     literal: "7".to_string(),
                 })),
             }],
@@ -1850,6 +1876,80 @@ mod tests {
         assert!(!consistent, "F-2: empty-body rule must assert C(a) as a fact");
     }
 
+    /// A data-property atom's subject may be a named individual: `dp(a, ?y) ∧
+    /// D(?x) -> C(?x)` binds `a` through a fresh variable, so with `dp(a, "5")`,
+    /// `D(b)` and C disjoint from D the rule fires on `b` and clashes. Without
+    /// the assertion it does not fire.
+    #[test]
+    fn data_property_atom_with_an_individual_subject() {
+        let b = build();
+        let c = class(&b, "http://ex/C");
+        let d = class(&b, "http://ex/D");
+        let dp = dprop(&b, "http://ex/dp");
+        let a = named(&b, "http://ex/a");
+        let x = ind(&b, "http://ex/b");
+        let ontology = |asserted: bool| {
+            let mut o: SetOntology<A> = SetOntology::new();
+            o.insert(Component::DeclareDataProperty(horned_owl::model::DeclareDataProperty(dp.clone())));
+            if asserted {
+                o.insert(Component::DataPropertyAssertion(horned_owl::model::DataPropertyAssertion {
+                    dp: dp.clone(),
+                    from: Individual::Named(a.clone()),
+                    to: Literal::Simple { literal: "5".to_string() },
+                }));
+            }
+            o.insert(Component::ClassAssertion(horned_owl::model::ClassAssertion {
+                ce: c_expr(&d),
+                i: x.clone(),
+            }));
+            o.insert(Component::DisjointClasses(DisjointClasses(vec![c_expr(&c), c_expr(&d)])));
+            o.insert(Component::Rule(Rule {
+                body: vec![
+                    SwrlAtom::DataPropertyAtom {
+                        pred: dp.clone(),
+                        args: (IArgument::Individual(Individual::Named(a.clone())), dvar(&b, "urn:y")),
+                    },
+                    SwrlAtom::ClassAtom { pred: c_expr(&d), arg: ivar(&b, "urn:x") },
+                ],
+                head: vec![SwrlAtom::ClassAtom { pred: c_expr(&c), arg: ivar(&b, "urn:x") }],
+            }));
+            o
+        };
+        assert!(!is_ontology_consistent(&ontology(true)).expect("the rule is accepted"));
+        assert!(is_ontology_consistent(&ontology(false)).expect("the rule is accepted"));
+    }
+
+    /// An empty-body rule's data-property atom is a fact: `() -> dp(a, "2")`
+    /// with `dp(a, "1")` and dp functional is inconsistent, and `() -> dp(a,
+    /// "1")` is not. A variable in such a fact is refused.
+    #[test]
+    fn empty_body_data_property_atom_becomes_fact() {
+        let b = build();
+        let dp = dprop(&b, "http://ex/dp");
+        let a = named(&b, "http://ex/a");
+        let fact = |subject: IArgument<A>, value: &str| {
+            let mut o: SetOntology<A> = SetOntology::new();
+            o.insert(Component::FunctionalDataProperty(horned_owl::model::FunctionalDataProperty(dp.clone())));
+            o.insert(Component::DataPropertyAssertion(horned_owl::model::DataPropertyAssertion {
+                dp: dp.clone(),
+                from: Individual::Named(a.clone()),
+                to: Literal::Simple { literal: "1".to_string() },
+            }));
+            o.insert(Component::Rule(Rule {
+                body: vec![],
+                head: vec![SwrlAtom::DataPropertyAtom {
+                    pred: dp.clone(),
+                    args: (subject, DArgument::Literal(Literal::Simple { literal: value.to_string() })),
+                }],
+            }));
+            is_ontology_consistent(&o)
+        };
+        let named_a = || IArgument::Individual(Individual::Named(a.clone()));
+        assert!(!fact(named_a(), "2").expect("a named subject and a literal make a fact"));
+        assert!(fact(named_a(), "1").expect("a named subject and a literal make a fact"));
+        assert!(fact(ivar(&b, "urn:x"), "1").is_err(), "a variable cannot be a fact's subject");
+    }
+
     fn c_expr(c: &Class<A>) -> CE {
         CE::Class(c.clone())
     }
@@ -1883,7 +1983,13 @@ mod tests {
     #[test]
     fn build_validated_constant_handles_unsupported_datatype() {
         let custom = "http://example.org/MyType";
-        assert!(super::build_validated_constant("v".into(), custom.into(), false).is_err());
+        assert_eq!(
+            super::build_validated_constant("v".into(), custom.into(), false).unwrap_err(),
+            "Literals can only use the datatypes from the OWL 2 datatype map, see \n\
+             http://www.w3.org/TR/owl2-syntax/#Datatype_Maps. \n\
+             The datatype 'http://example.org/MyType' is not part of the OWL 2 datatype map and \n\
+             HermiT cannot parse this literal."
+        );
         let anon = super::build_validated_constant("v".into(), custom.into(), true)
             .expect("ignore_unsupported_datatypes substitutes an anonymous constant");
         assert!(anon.is_anonymous());

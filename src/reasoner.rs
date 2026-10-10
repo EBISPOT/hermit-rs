@@ -262,6 +262,15 @@ fn fresh_anonymous_individual(tag: &str) -> OwlIndividual<crate::structural::A> 
     OwlIndividual::Anonymous(AnonymousIndividual(build.iri(fresh_witness_iri(tag)).underlying()))
 }
 
+/// The node of the fresh individual a concept test asserts its concepts on.
+/// HermiT's tests name it `Individual.createAnonymous("fresh-individual")`, which
+/// `Tableau.getNodeForTerm` loads as an NI node: `internal:named` never holds on
+/// it, so a DL-safe rule or a key applies to it only through a named individual
+/// it is merged into, and a merge with a named node keeps the named node.
+fn fresh_test_node(tableau: &mut Tableau, empty: &DependencySet) -> NodeId {
+    tableau.create_new_ni_node(empty)
+}
+
 /// Maps a horned-owl individual to the DL-model `Individual`, exactly as
 /// clausification's `get_individual` does (named -> create, anonymous ->
 /// create_anonymous). Used to build per-test ABox atoms for the entailment
@@ -295,7 +304,9 @@ fn throw_inconsistent_ontology_exception_if_necessary(
     ontology: &SetOntology<crate::structural::A>,
     configuration: &crate::configuration::Configuration,
 ) -> Result<(), String> {
-    if configuration.throw_inconsistent_ontology_exception && !is_ontology_consistent(ontology)? {
+    if configuration.throw_inconsistent_ontology_exception
+        && !is_ontology_consistent_with_configuration(ontology, configuration)?
+    {
         return Err(INCONSISTENT_ONTOLOGY_ERROR.to_string());
     }
     Ok(())
@@ -2447,6 +2458,16 @@ fn is_datatype_definition_entailed(
 /// classified vocabulary (named classes / individuals) for classification and
 /// realisation.
 fn clausify_for_query(ontology: &SetOntology<crate::structural::A>) -> Result<DLOntology, String> {
+    clausify_for_query_with(ontology, &crate::configuration::Configuration::default())
+}
+
+/// As [`clausify_for_query`], clausifying under `configuration`, as HermiT's
+/// `Reasoner` clausifies under its own: an unsupported datatype is refused or
+/// read past as `configuration.ignore_unsupported_datatypes` says.
+fn clausify_for_query_with(
+    ontology: &SetOntology<crate::structural::A>,
+    configuration: &crate::configuration::Configuration,
+) -> Result<DLOntology, String> {
     use crate::structural::{
         BuiltInPropertyManager, Configuration, ObjectPropertyInclusionManager, OWLAxioms,
         OWLAxiomsExpressivity, OWLClausification, OWLNormalization,
@@ -2467,7 +2488,10 @@ fn clausify_for_query(ontology: &SetOntology<crate::structural::A>) -> Result<DL
     manager.rewrite_negative_object_property_assertions(&mut axioms, definitions_count);
     manager.rewrite_axioms(&mut axioms, 0)?;
     let expressivity = OWLAxiomsExpressivity::new(&axioms);
-    OWLClausification::new(Configuration::default()).clausify_with_description_graphs(
+    OWLClausification::new(Configuration {
+        ignore_unsupported_datatypes: configuration.ignore_unsupported_datatypes,
+    })
+    .clausify_with_description_graphs(
         "http://hermit-rs/anonymous-ontology",
         &axioms,
         &expressivity,
@@ -2551,7 +2575,7 @@ where
     // vocabulary (everything appearing in the axioms), minus owl:Thing/Nothing
     // and the auxiliary "internal:" concepts introduced during clausification.
     monitor.classification_phase("clausify");
-    let dl_ontology = clausify_for_query(ontology)?;
+    let dl_ontology = clausify_for_query_with(ontology, configuration)?;
     let mut element_set: HashSet<Class<crate::structural::A>> = HashSet::new();
     for concept in dl_ontology.get_all_atomic_concepts() {
         let iri = concept.iri();
@@ -4042,7 +4066,7 @@ pub(crate) fn build_class_instance_manager_with_configuration(
     use crate::tableau::dependency_set::DependencySetOps;
     use horned_owl::model::Class;
 
-    let dl_ontology = clausify_ontology(ontology)?;
+    let dl_ontology = clausify_ontology_with_configuration(ontology, configuration)?;
     let reasoner = Reasoner::with_configuration(&dl_ontology, configuration.clone());
 
     // (1) Initial consistency check + node read-off map. `None` => inconsistent.
@@ -5227,7 +5251,7 @@ pub fn instances_with_configuration(
     use std::collections::HashSet;
 
     let build = Build::new_arc();
-    let dl_ontology = clausify_for_query(ontology)?;
+    let dl_ontology = clausify_for_query_with(ontology, configuration)?;
 
     // Java getInstances() calls checkPreConditions(classExpression) as the
     // first statement INSIDE the `getAllIndividuals().size()>0` guard
@@ -5327,7 +5351,7 @@ pub fn instances_of_expression_with_configuration(
 
     use horned_owl::model::EquivalentClasses;
     let build = Build::new_arc();
-    let dl_ontology = clausify_for_query(ontology)?;
+    let dl_ontology = clausify_for_query_with(ontology, configuration)?;
 
     // Java: with zero individuals, getInstances returns the empty set without even
     // checking pre-conditions (Reasoner.java:1664, 1701-1702).
@@ -5384,7 +5408,7 @@ pub fn instances_of_expression_with_configuration(
         CE::Class(query_class.clone()),
         ce.clone(),
     ])));
-    let position_dl = clausify_for_query(&position_ontology)?;
+    let position_dl = clausify_for_query_with(&position_ontology, configuration)?;
     let position_reasoner = Reasoner::new(&position_dl);
     let position_manager = std::cell::RefCell::new(position_reasoner.new_manager());
     let position = hierarchy.find_position(&query_class, |parent, child| {
@@ -5425,7 +5449,7 @@ pub fn instances_of_expression_with_configuration(
         sub: CE::Class(query_class.clone()),
         sup: CE::ObjectComplementOf(Box::new(ce.clone())),
     }));
-    let test_dl = clausify_for_query(&test_ontology)?;
+    let test_dl = clausify_for_query_with(&test_ontology, configuration)?;
     let test_reasoner = Reasoner::new(&test_dl);
     let mut test_manager = test_reasoner.new_manager();
     let query_concept = crate::model::AtomicConcept::create("internal:query-concept");
@@ -5493,7 +5517,7 @@ pub fn realize_with_configuration(
     let build = Build::new_arc();
 
     // Named individuals of the clausified vocabulary (skipping internal ones).
-    let dl_ontology = clausify_for_query(ontology)?;
+    let dl_ontology = clausify_for_query_with(ontology, configuration)?;
     let mut individuals: Vec<NamedIndividual<crate::structural::A>> = Vec::new();
     for individual in dl_ontology.get_all_individuals() {
         let iri = individual.iri();
@@ -5586,14 +5610,14 @@ pub fn get_types_with_configuration(
     // result={topNode}, expanded by atomicConceptHierarchyNodeToNode to every
     // non-internal class equivalent to owl:Thing). The branch ignores
     // `direct`, exactly as Java does.
-    let dl_ontology = clausify_for_query(ontology)?;
+    let dl_ontology = clausify_for_query_with(ontology, configuration)?;
     let target_iri = individual.0.to_string();
     let is_defined = dl_ontology
         .get_all_individuals()
         .iter()
         .any(|i| i.iri() == target_iri);
     if !is_defined {
-        let top_node = classify(ontology)?.equivalent_elements_of(&thing);
+        let top_node = classify_with_configuration(ontology, configuration)?.equivalent_elements_of(&thing);
         if top_node.is_empty() {
             return Ok(std::iter::once(thing).collect());
         }
@@ -7147,7 +7171,7 @@ pub fn is_ontology_consistent_with_configuration(
     } else {
         None
     };
-    let dl_ontology = clausify_ontology(unfolded.as_ref().unwrap_or(ontology))?;
+    let dl_ontology = clausify_ontology_with_configuration(unfolded.as_ref().unwrap_or(ontology), configuration)?;
     Ok(Reasoner::with_configuration(&dl_ontology, configuration.clone()).is_consistent())
 }
 
@@ -7964,7 +7988,7 @@ impl<'a> Reasoner<'a> {
         let mut read_off = Some(read_off);
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(concept.clone(), node, &empty, true);
             if tableau.contains_clash() {
                 return None;
@@ -8046,7 +8070,7 @@ impl<'a> Reasoner<'a> {
         use crate::tableau::dependency_set::DependencySetOps;
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(element.clone()), root, &empty, true);
             if tableau.contains_clash() {
                 return None;
@@ -8120,7 +8144,7 @@ impl<'a> Reasoner<'a> {
         // subsumed by everything.
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), node, &empty, true);
             tableau.add_concept_assertion(Concept::from(sup.get_negation()), node, &empty, true);
             if tableau.contains_clash() {
@@ -8147,7 +8171,7 @@ impl<'a> Reasoner<'a> {
     ) -> bool {
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), node, &empty, true);
             for candidate in candidates {
                 tableau.add_concept_assertion(
@@ -8184,7 +8208,7 @@ impl<'a> Reasoner<'a> {
         let empty_known = std::collections::HashSet::new();
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), root, &empty, true);
             // The negated candidates carry a non-backtrackable dummy dependency set,
             // so nothing derived from them is ever empty-dependency.
@@ -8265,7 +8289,7 @@ impl<'a> Reasoner<'a> {
         }
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), root, &empty, true);
             // `¬sup` carries a non-backtrackable dummy dependency set, so nothing derived
             // from it is ever empty-dependency.

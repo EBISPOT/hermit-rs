@@ -64,10 +64,11 @@ web-time = "1"
 
 # horned-owl comes from the EBISPOT fork rather than crates.io: it widens
 # InverseObjectProperties to the OWL 2 spec-correct
-# (ObjectPropertyExpression, ObjectPropertyExpression), which the upstream
+# (ObjectPropertyExpression, ObjectPropertyExpression) and types a SWRL
+# data-property atom's subject as an individual argument, which the upstream
 # 4.0.0 release does not. Pinned by rev so a build is reproducible without the
 # lockfile; bump it when the fork's devel moves. owlmake consumes hermit-rs
 # under its own root patch on the same fork, which is the one Cargo applies
 # there.
 [patch.crates-io]
-horned-owl = { git = "https://github.com/EBISPOT/horned-owl", rev = "186a160" }
+horned-owl = { git = "https://github.com/EBISPOT/horned-owl", rev = "7d3a08e" }
