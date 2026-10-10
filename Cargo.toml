@@ -71,4 +71,4 @@ web-time = "1"
 # under its own root patch on the same fork, which is the one Cargo applies
 # there.
 [patch.crates-io]
-horned-owl = { git = "https://github.com/EBISPOT/horned-owl", rev = "7d3a08e" }
+horned-owl = { git = "https://github.com/EBISPOT/horned-owl", rev = "562477d" }
