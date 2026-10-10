@@ -262,6 +262,15 @@ fn fresh_anonymous_individual(tag: &str) -> OwlIndividual<crate::structural::A> 
     OwlIndividual::Anonymous(AnonymousIndividual(build.iri(fresh_witness_iri(tag)).underlying()))
 }
 
+/// The node of the fresh individual a concept test asserts its concepts on.
+/// HermiT's tests name it `Individual.createAnonymous("fresh-individual")`, which
+/// `Tableau.getNodeForTerm` loads as an NI node: `internal:named` never holds on
+/// it, so a DL-safe rule or a key applies to it only through a named individual
+/// it is merged into, and a merge with a named node keeps the named node.
+fn fresh_test_node(tableau: &mut Tableau, empty: &DependencySet) -> NodeId {
+    tableau.create_new_ni_node(empty)
+}
+
 /// Maps a horned-owl individual to the DL-model `Individual`, exactly as
 /// clausification's `get_individual` does (named -> create, anonymous ->
 /// create_anonymous). Used to build per-test ABox atoms for the entailment
@@ -7979,7 +7988,7 @@ impl<'a> Reasoner<'a> {
         let mut read_off = Some(read_off);
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(concept.clone(), node, &empty, true);
             if tableau.contains_clash() {
                 return None;
@@ -8061,7 +8070,7 @@ impl<'a> Reasoner<'a> {
         use crate::tableau::dependency_set::DependencySetOps;
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(element.clone()), root, &empty, true);
             if tableau.contains_clash() {
                 return None;
@@ -8135,7 +8144,7 @@ impl<'a> Reasoner<'a> {
         // subsumed by everything.
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), node, &empty, true);
             tableau.add_concept_assertion(Concept::from(sup.get_negation()), node, &empty, true);
             if tableau.contains_clash() {
@@ -8162,7 +8171,7 @@ impl<'a> Reasoner<'a> {
     ) -> bool {
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let node = tableau.create_new_named_node(&empty);
+            let node = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), node, &empty, true);
             for candidate in candidates {
                 tableau.add_concept_assertion(
@@ -8199,7 +8208,7 @@ impl<'a> Reasoner<'a> {
         let empty_known = std::collections::HashSet::new();
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(child.clone()), root, &empty, true);
             // The negated candidates carry a non-backtrackable dummy dependency set,
             // so nothing derived from them is ever empty-dependency.
@@ -8280,7 +8289,7 @@ impl<'a> Reasoner<'a> {
         }
         self.run_test(manager, |tableau, manager| {
             let empty = DependencySet::Permanent(tableau.dependency_set_factory().empty_set());
-            let root = tableau.create_new_named_node(&empty);
+            let root = fresh_test_node(tableau, &empty);
             tableau.add_concept_assertion(Concept::AtomicConcept(sub.clone()), root, &empty, true);
             // `¬sup` carries a non-backtrackable dummy dependency set, so nothing derived
             // from it is ever empty-dependency.
