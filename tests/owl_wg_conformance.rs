@@ -441,7 +441,7 @@ fn parse_one_inner(fmt: Format, src: &str) -> Result<O, String> {
             parser.parse_declarations().map_err(|e| format!("{e}"))?;
             let declarations = import_closure_declarations(&imports, &build)?;
             parser
-                .finish_parse(&[&declarations])
+                .finish_parse(&[declarations.j()])
                 .map_err(|e| format!("{e}"))?;
             let (rdfo, incomplete) = parser.parse().map_err(|e| format!("{e}"))?;
             // horned-owl's `is_complete()` is strict: it reports incomplete
